@@ -12,6 +12,9 @@ const items = [
 
 let collection = {};
 let rolls = 0;
+let isRolling = false;
+let tokens = 5;
+let tokenInterval;
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
@@ -19,61 +22,194 @@ function getRarityTag(chance) {
     if (chance < 1000) return '<span class="rarity-tag rarity-epic">Epic</span>';
     return '<span class="rarity-tag rarity-legendary">Legendary</span>';
 }
+
 function getGoldTag(type) {
     if (type === 'Rainbow') return '<span class="rarity-tag rarity-rainbow">Rainbow</span>';
     if (type === 'Gold') return '<span class="rarity-tag rarity-gold">Gold</span>';
     return '';
 }
 
-function rollItem() {
-    rolls++;
-    document.getElementById('rolls-count').innerText = rolls;
+function updateInventoryStats() {
+    const totalCards = Object.values(collection).reduce((sum, count) => sum + count, 0);
+    const uniqueCards = Object.keys(collection).length;
+    
+    document.getElementById('total-cards').innerText = `Total: ${totalCards}`;
+    document.getElementById('unique-cards').innerText = `Unique: ${uniqueCards}`;
+}
 
-    let winners = [];
-    for (let item of items) {
-        let roll = Math.floor(Math.random() * item.chance) + 1;
-        if (roll === 1) {
-            winners.push(item);
-        }
+function updateTokensDisplay() {
+    const tokensElement = document.getElementById('tokens-count');
+    const indicator = document.getElementById('tokens-indicator');
+    
+    tokensElement.innerText = tokens;
+    
+    // Changer la couleur selon l'état des tokens
+    if (tokens <= 3) {
+        // Rouge pour 3 tokens et moins
+        indicator.classList.add('low');
+        indicator.classList.remove('medium');
+        indicator.classList.remove('high');
+        indicator.classList.remove('max');
+    } else if (tokens >= 4 && tokens <= 6) {
+        // Orange pour 4 à 6 tokens
+        indicator.classList.remove('low');
+        indicator.classList.add('medium');
+        indicator.classList.remove('high');
+        indicator.classList.remove('max');
+    } else if (tokens >= 7 && tokens <= 9) {
+        // Vert pour 7 à 9 tokens
+        indicator.classList.remove('low');
+        indicator.classList.remove('medium');
+        indicator.classList.add('high');
+        indicator.classList.remove('max');
+    } else if (tokens >= 10) {
+        // Bleu pour 10 tokens
+        indicator.classList.remove('low');
+        indicator.classList.remove('medium');
+        indicator.classList.remove('high');
+        indicator.classList.add('max');
     }
+}
 
-    let selected;
-    if (winners.length === 0) {
-        selected = items.reduce((a, b) => (a.chance < b.chance ? a : b));
-    } else {
-        selected = winners.reduce((a, b) => (a.chance > b.chance ? a : b));
+function addToken() {
+    if (tokens < 10) { // Limite de 10 tokens
+        tokens++;
+        updateTokensDisplay();
+        saveCollection();
     }
+}
 
-    // Gold ou Rainbow
-    let type = '';
-    let isGold = Math.floor(Math.random() * 10) === 0;
-    if (isGold) {
-        type = (Math.floor(Math.random() * 10) === 0) ? 'Rainbow' : 'Gold';
+function startTokenRecharge() {
+    // Ajouter un token toutes les 5 secondes
+    tokenInterval = setInterval(() => {
+        addToken();
+        // Afficher le temps restant dans la console pour le débogage
+        console.log(`Token ajouté. Total: ${tokens}/10`);
+    }, 5000);
+}
+
+function stopTokenRecharge() {
+    if (tokenInterval) {
+        clearInterval(tokenInterval);
     }
-    let displayName = selected.name + (type ? ` (${type})` : '');
-    let chanceDisplay = type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
+}
 
-    // Affichage du dernier roll
-    document.getElementById('last-item').innerHTML = `
-        <div class="card-roll">
-            <span class="rarity-tag-container">
-                ${getRarityTag(chanceDisplay)}${getGoldTag(type)}
-            </span>
-            <img class="card-roll-img" src="Cards-Icons/${selected.name}.png" alt="${selected.name}">
-            <span class="card-roll-text">
+// Fonction pour obtenir le temps restant avant le prochain token
+function getTimeUntilNextToken() {
+    // Cette fonction peut être utilisée pour afficher un compte à rebours
+    // Pour l'instant, on retourne simplement 5 secondes
+    return 5;
+}
+
+function showRollAnimation() {
+    const animation = document.getElementById('roll-animation');
+    animation.classList.remove('hidden');
+}
+
+function hideRollAnimation() {
+    const animation = document.getElementById('roll-animation');
+    animation.classList.add('hidden');
+}
+
+function updateCardPreview(cardData) {
+    const preview = document.getElementById('card-preview');
+    const { selected, type, displayName, chanceDisplay } = cardData;
+    
+    preview.innerHTML = `
+        <div class="preview-card">
+            <span class="rarity-tag-container">${getGoldTag(type)}</span>
+            <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}">
+            <div class="preview-card-text">
                 ${displayName}<br>[1 in ${chanceDisplay}]
-            </span>
+            </div>
+            <span class="rarity-tag-container rarity-hidden">${getRarityTag(chanceDisplay)}</span>
         </div>
     `;
+}
 
-    // Comptage
-    if (!collection[displayName]) {
-        collection[displayName] = 1;
-    } else {
-        collection[displayName]++;
+function resetCardPreview() {
+    const preview = document.getElementById('card-preview');
+    preview.innerHTML = `
+        <div class="preview-placeholder">
+            <span>Cliquez ROLL! pour obtenir une carte</span>
+        </div>
+    `;
+}
+
+function rollItem() {
+    if (isRolling) return; // Empêche les rolls multiples
+    if (tokens <= 0) {
+        alert('Vous n\'avez plus de tokens ! Attendez qu\'ils se rechargent.');
+        return;
     }
+    
+    // Consommer un token
+    tokens--;
+    updateTokensDisplay();
+    
+    isRolling = true;
+    const rollButton = document.getElementById('roll-button');
+    rollButton.disabled = true;
+    
+    rolls++;
+    document.getElementById('rolls-count').innerText = rolls;
+    
+    // Sauvegarder immédiatement le compteur
     saveCollection();
-    updateCollection();
+
+    // Afficher l'animation de roll
+    showRollAnimation();
+
+    // Simuler le roll après 200ms (plus rapide)
+    setTimeout(() => {
+        let winners = [];
+        for (let item of items) {
+            let roll = Math.floor(Math.random() * item.chance) + 1;
+            if (roll === 1) {
+                winners.push(item);
+            }
+        }
+
+        let selected;
+        if (winners.length === 0) {
+            selected = items.reduce((a, b) => (a.chance < b.chance ? a : b));
+        } else {
+            selected = winners.reduce((a, b) => (a.chance > b.chance ? a : b));
+        }
+
+        // Gold ou Rainbow
+        let type = '';
+        let isGold = Math.floor(Math.random() * 10) === 0;
+        if (isGold) {
+            type = (Math.floor(Math.random() * 10) === 0) ? 'Rainbow' : 'Gold';
+        }
+        let displayName = selected.name + (type ? ` (${type})` : '');
+        let chanceDisplay = type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
+
+        // Cacher l'animation et afficher la carte
+        hideRollAnimation();
+        
+        // Mettre à jour l'aperçu de la carte
+        updateCardPreview({ selected, type, displayName, chanceDisplay });
+
+        // Comptage
+        if (!collection[displayName]) {
+            collection[displayName] = 1;
+        } else {
+            collection[displayName]++;
+        }
+        
+        saveCollection();
+        updateCollection();
+        updateInventoryStats();
+
+        // Réactiver le bouton après 200ms supplémentaires (plus rapide)
+        setTimeout(() => {
+            rollButton.disabled = false;
+            isRolling = false;
+        }, 200);
+
+    }, 200);
 }
 
 function updateCollection() {
@@ -115,10 +251,11 @@ function updateCollection() {
         let imgSrc = `Cards-Icons/${baseName}.png`;
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
         let cardDetail = `<span class=\"detail\">${displayName}<br>1 in ${chanceDisplay}<br>×${collection[name]}</span>`;
+        
         let li = document.createElement('li');
         li.innerHTML = `
             <div class=\"card-inventory\">
-                <span class=\"rarity-tag-container\">${rarityTag}${goldTag}</span>
+                <span class=\"rarity-tag-container\">${goldTag}</span>
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
@@ -128,6 +265,7 @@ function updateCollection() {
                         <span class=\"card-text\">${cardDetail}</span>
                     </div>
                 </div>
+                <span class=\"rarity-tag-container rarity-hidden\">${rarityTag}</span>
             </div>
         `;
         ul.appendChild(li);
@@ -137,16 +275,65 @@ function updateCollection() {
 // Sauvegarde l'inventaire dans localStorage
 function saveCollection() {
     localStorage.setItem('cards-collection', JSON.stringify(collection));
+    localStorage.setItem('cards-rolls', rolls.toString());
+    localStorage.setItem('cards-tokens', tokens.toString());
 }
 
 // Charge l'inventaire depuis localStorage
 function loadCollection() {
     const data = localStorage.getItem('cards-collection');
+    const rollsData = localStorage.getItem('cards-rolls');
+    const tokensData = localStorage.getItem('cards-tokens');
+    
     if (data) {
         collection = JSON.parse(data);
     }
+    
+    if (rollsData) {
+        rolls = parseInt(rollsData);
+        document.getElementById('rolls-count').innerText = rolls;
+    }
+    
+    if (tokensData) {
+        tokens = parseInt(tokensData);
+        // S'assurer que les tokens ne dépassent pas la limite
+        if (tokens > 10) tokens = 10;
+    } else {
+        tokens = 5; // Valeur par défaut pour les nouveaux utilisateurs
+    }
+    
+    updateTokensDisplay();
 }
 
 // Au chargement de la page, on restaure l'inventaire
 loadCollection();
 updateCollection();
+updateInventoryStats();
+resetCardPreview();
+
+// Démarrer la recharge de tokens
+startTokenRecharge();
+
+// Ajouter des styles CSS pour les animations
+const style = document.createElement('style');
+style.textContent = `
+    #last-item {
+        transition: all 0.3s ease;
+    }
+    
+    .card-inventory {
+        animation: fadeInUp 0.5s ease forwards;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+`;
+document.head.appendChild(style);
