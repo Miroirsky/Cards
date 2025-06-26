@@ -50,13 +50,13 @@ function updateTokensDisplay() {
         indicator.classList.remove('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 4 && tokens <= 6) {
+    } else if (tokens >= 4 && tokens <= 5) {
         // Orange pour 4 à 6 tokens
         indicator.classList.remove('low');
         indicator.classList.add('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 7 && tokens <= 9) {
+    } else if (tokens >= 6 && tokens <= 9) {
         // Vert pour 7 à 9 tokens
         indicator.classList.remove('low');
         indicator.classList.remove('medium');
