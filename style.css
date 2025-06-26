@@ -110,7 +110,7 @@ body {
 .card-flip-back {
     transform: rotateY(180deg);
     z-index: 3;
-    background: #787878;
+    background: #c0c0c0;
     border-radius: 10px;
 }
 .card-text {
