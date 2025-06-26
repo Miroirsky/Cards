@@ -31,10 +31,10 @@ function getGoldTag(type) {
 
 function updateInventoryStats() {
     const totalCards = Object.values(collection).reduce((sum, count) => sum + count, 0);
-    const uniqueCards = Object.keys(collection).length;
+    const unlockedCards = Object.keys(collection).length;
     
     document.getElementById('total-cards').innerText = `Total: ${totalCards}`;
-    document.getElementById('unique-cards').innerText = `Unique: ${uniqueCards}`;
+    document.getElementById('unlocked-cards').innerText = `Unlocked: ${unlockedCards}`;
 }
 
 function updateTokensDisplay() {
@@ -131,7 +131,7 @@ function resetCardPreview() {
     const preview = document.getElementById('card-preview');
     preview.innerHTML = `
         <div class="preview-placeholder">
-            <span>Cliquez ROLL! pour obtenir une carte</span>
+            <span>Click ROLL! to get a card</span>
         </div>
     `;
 }
@@ -251,7 +251,14 @@ function updateCollection() {
         let imgSrc = `Cards-Icons/${baseName}.png`;
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
         let cardDetail = `<span class=\"detail\">${displayName}<br>1 in ${chanceDisplay}<br>×${collection[name]}</span>`;
-        
+        // Déterminer la classe de rareté
+        let rarityClass = '';
+        if (type === 'Rainbow') rarityClass = 'rarity-rainbow';
+        else if (type === 'Gold') rarityClass = 'rarity-gold';
+        else if (chanceDisplay < 10) rarityClass = 'rarity-common';
+        else if (chanceDisplay < 100) rarityClass = 'rarity-rare';
+        else if (chanceDisplay < 1000) rarityClass = 'rarity-epic';
+        else rarityClass = 'rarity-legendary';
         let li = document.createElement('li');
         li.innerHTML = `
             <div class=\"card-inventory\">
@@ -261,9 +268,7 @@ function updateCollection() {
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
-                    <div class=\"card-flip-back\">
-                        <span class=\"card-text\">${cardDetail}</span>
-                    </div>
+                    <div class=\"card-flip-back ${rarityClass}\">\n<span class=\"card-text\">${cardDetail}</span>\n</div>
                 </div>
                 <span class=\"rarity-tag-container rarity-hidden\">${rarityTag}</span>
             </div>

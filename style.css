@@ -405,9 +405,9 @@ body {
 .card-flip-back {
     transform: rotateY(180deg);
     z-index: 3;
-    background: linear-gradient(135deg, #787878, #5a5a5a);
+    background: linear-gradient(135deg, #cfcfcf, #acacac);
     border-radius: 10px;
-    border: 2px solid #3498db;
+    /* border: 2px solid #3498db; */
 }
 
 .card-text {
@@ -580,6 +580,31 @@ body {
 @keyframes glow {
     0% { box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
     100% { box-shadow: 0 0 15px rgba(52, 152, 219, 0.6); }
+}
+
+.card-flip-back.rarity-common {
+    background: #95a5a6;
+    color: #2c3e50;
+}
+.card-flip-back.rarity-rare {
+    background: #3498db;
+    color: #fff;
+}
+.card-flip-back.rarity-epic {
+    background: #9b59b6;
+    color: #fff;
+}
+.card-flip-back.rarity-legendary {
+    background: #e74c3c;
+    color: #fff;
+}
+.card-flip-back.rarity-gold {
+    background: linear-gradient(45deg, #f39c12, #f1c40f);
+    color: #2c3e50;
+}
+.card-flip-back.rarity-rainbow {
+    background: linear-gradient(45deg, #e74c3c, #f39c12, #f1c40f, #27ae60, #3498db, #9b59b6);
+    color: #fff;
 }
 
 /* Responsive design */
