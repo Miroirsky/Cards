@@ -251,14 +251,12 @@ function updateCollection() {
         let imgSrc = `Cards-Icons/${baseName}.png`;
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
         let cardDetail = `<span class=\"detail\">${displayName}<br>1 in ${chanceDisplay}<br>×${collection[name]}</span>`;
-        // Déterminer la classe de rareté
+        // Déterminer la classe de rareté pour le dos
         let rarityClass = '';
         if (type === 'Rainbow') rarityClass = 'rarity-rainbow';
         else if (type === 'Gold') rarityClass = 'rarity-gold';
-        else if (chanceDisplay < 10) rarityClass = 'rarity-common';
-        else if (chanceDisplay < 100) rarityClass = 'rarity-rare';
-        else if (chanceDisplay < 1000) rarityClass = 'rarity-epic';
-        else rarityClass = 'rarity-legendary';
+        else if (type === 'Shiny') rarityClass = 'rarity-shiny';
+        // Les autres n'ont pas de classe spéciale (dos gris par défaut)
         let li = document.createElement('li');
         li.innerHTML = `
             <div class=\"card-inventory\">
@@ -268,7 +266,7 @@ function updateCollection() {
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
-                    <div class=\"card-flip-back ${rarityClass}\">\n<span class=\"card-text\">${cardDetail}</span>\n</div>
+                    <div class=\"card-flip-back${rarityClass ? ' ' + rarityClass : ''}\">\n<span class=\"card-text\">${cardDetail}</span>\n</div>
                 </div>
                 <span class=\"rarity-tag-container rarity-hidden\">${rarityTag}</span>
             </div>
@@ -310,11 +308,66 @@ function loadCollection() {
     updateTokensDisplay();
 }
 
+// Enregistrer la date de dernière connexion
+function saveLastConnection() {
+    const now = new Date();
+    localStorage.setItem('cards-last-connection', now.toISOString());
+}
+
+function displayLastConnection() {
+    const last = localStorage.getItem('cards-last-connection');
+    if (!last) return;
+    const date = new Date(last);
+    const el = document.getElementById('last-connection');
+    if (el) {
+        el.textContent = `Dernière connexion : ${date.toLocaleString()}`;
+    }
+}
+
+function gainTokensSinceLastConnection() {
+    const last = localStorage.getItem('cards-last-connection');
+    if (!last) return { tokensToAdd: 0, diffMinutes: 0, lastDate: null };
+    const now = new Date();
+    const lastDate = new Date(last);
+    const diffMs = now - lastDate;
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const tokensToAdd = Math.floor(diffSeconds / 50); // 1 token par 50 secondes
+    if (tokensToAdd > 0) {
+        tokens = Math.min(tokens + tokensToAdd, 10);
+        updateTokensDisplay();
+        saveCollection();
+    }
+    return { tokensToAdd, diffMinutes: Math.floor(diffSeconds / 60), lastDate };
+}
+
+function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate) {
+    const el = document.getElementById('last-connection');
+    const overlay = document.getElementById('blur-overlay');
+    if (!el || !lastDate || !overlay) return;
+    const dateStr = lastDate.toLocaleString();
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+    let timeStr = '';
+    if (hours > 0) timeStr += hours + 'h ';
+    timeStr += minutes + 'min';
+    el.innerHTML = `Dernière connexion : <b>${dateStr}</b><br>Temps écoulé : <b>${timeStr}</b><br>Tokens gagnés : <b>${tokensToAdd}</b><br><br><span style='font-size:0.9em;color:#888'>(Clique pour continuer)</span>`;
+    el.style.display = 'block';
+    overlay.style.display = 'block';
+    el.style.cursor = 'pointer';
+    el.onclick = function() {
+        el.style.display = 'none';
+        overlay.style.display = 'none';
+    };
+}
+
 // Au chargement de la page, on restaure l'inventaire
 loadCollection();
+const offlineInfo = gainTokensSinceLastConnection();
 updateCollection();
 updateInventoryStats();
 resetCardPreview();
+displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
+saveLastConnection();
 
 // Démarrer la recharge de tokens
 startTokenRecharge();

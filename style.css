@@ -406,8 +406,7 @@ body {
     transform: rotateY(180deg);
     z-index: 3;
     background: linear-gradient(135deg, #cfcfcf, #acacac);
-    border-radius: 10px;
-    /* border: 2px solid #3498db; */
+    color: #222;
 }
 
 .card-text {
@@ -605,6 +604,16 @@ body {
 .card-flip-back.rarity-rainbow {
     background: linear-gradient(45deg, #e74c3c, #f39c12, #f1c40f, #27ae60, #3498db, #9b59b6);
     color: #fff;
+}
+.card-flip-back.rarity-shiny {
+    background: linear-gradient(120deg, #fff700, #ff00cc, #00eaff, #fff700);
+    background-size: 200% 200%;
+    animation: shiny-move 2s linear infinite alternate;
+    color: #fff;
+}
+@keyframes shiny-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
 }
 
 /* Responsive design */
