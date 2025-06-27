@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.3.2</div>
+    <div class="update-text">Update 1.5</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     <div id="reset-confirm" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#e74c3c;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(231,76,60,0.15);display:none;">
         <div style='font-weight:bold;margin-bottom:1em;'>Voulez-vous vraiment réinitialiser toutes les données&nbsp;?</div>
@@ -27,7 +27,6 @@
         
         <div class="roll-content">
             <button class="roll-btn" id="roll-button" onclick="rollItem()">ROLL!</button>
-            
             <!-- Zone d'aperçu de la carte -->
             <div class="card-preview-container">
                 <div id="card-preview" class="card-preview">
@@ -51,7 +50,7 @@
     <!-- Interface Inventaire -->
     <div class="inventory-interface">
         <div class="inventory-header">
-            <h2>Collection</h2>
+            <h2>Inventory</h2>
             <div class="inventory-stats">
                 <span id="total-cards">Total: 0</span>
                 <span id="unlocked-cards">Unlocked: 0</span>

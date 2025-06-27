@@ -5,8 +5,8 @@ const items = [
     { name: "Bones", chance: 7 },
     { name: "Beach", chance: 10 },
     { name: "Snow Mountains", chance: 15 },
-    { name: "Sugar", chance: 20 },
-    { name: "Sword", chance: 25 },
+    { name: "Sugar", chance: 2, specialTag: "Sweet" },
+    { name: "Sword", chance: 25, specialTag: "Cutting" },
     { name: "Mars", chance: 50 }
 ];
 
@@ -14,8 +14,12 @@ let collection = {};
 let rolls = 0;
 let isRolling = false;
 let tokens = 5;
-let tokenInterval;
-let rollDelay = 5000;
+let tokenInterval = 500;
+let rollDelay = 200;
+
+let sugarRushCounter = 0;
+let sugarRushTrigger = 6;
+let sugarRushMax = 3;
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
@@ -29,6 +33,15 @@ function getGoldTag(type) {
     if (type === 'Shiny') return '<span class="rarity-tag rarity-shiny">Shiny</span>';
     if (type === 'Rainbow') return '<span class="rarity-tag rarity-rainbow">Rainbow</span>';
     if (type === 'Gold') return '<span class="rarity-tag rarity-gold">Gold</span>';
+    return '';
+}
+
+function getSpecialTag(item) {
+    if (item && item.specialTag) {
+        let tagClass = 'rarity-sweet';
+        if (item.name === 'Sword') tagClass = 'rarity-cutting';
+        return `<span class=\"rarity-tag ${tagClass}\">${item.specialTag}</span>`;
+    }
     return '';
 }
 
@@ -87,8 +100,7 @@ function startTokenRecharge() {
     tokenInterval = setInterval(() => {
         addToken();
         // Afficher le temps restant dans la console pour le débogage
-        console.log(`Token ajouté. Total: ${tokens}/10`);
-    }, rollDelay);
+    }, tokenInterval);
 }
 
 function stopTokenRecharge() {
@@ -117,10 +129,10 @@ function hideRollAnimation() {
 function updateCardPreview(cardData) {
     const preview = document.getElementById('card-preview');
     const { selected, type, displayName, chanceDisplay } = cardData;
-    
+    const specialTag = getSpecialTag(selected);
     preview.innerHTML = `
         <div class="preview-card">
-            <span class="rarity-tag-container">${getGoldTag(type)}</span>
+            <span class="rarity-tag-container">${getGoldTag(type)}${specialTag}</span>
             <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}">
             <div class="preview-card-text">
                 ${displayName}<br>[1 in ${chanceDisplay}]
@@ -179,6 +191,15 @@ function rollItem() {
         } else {
             selected = winners.reduce((a, b) => (a.chance > b.chance ? a : b));
         }
+        // Gestion du compteur Sweet (Sugar Rush) : 
+        let isSweet = selected.specialTag === "Sweet";
+        if (isSweet) {
+           sugarRushCounter += 4;
+        } else {
+           sugarRushCounter = Math.max(0, sugarRushCounter - 1);
+        }
+        updateSugarRushDisplay();
+
 
         // Gold ou Rainbow ou Shiny
         let type = '';
@@ -218,8 +239,8 @@ function rollItem() {
         setTimeout(() => {
             rollButton.disabled = false;
             isRolling = false;
-        }, 200);
-    }, 200);
+        }, rollDelay);
+    }, rollDelay);
 }
 
 function updateCollection() {
@@ -256,6 +277,7 @@ function updateCollection() {
         let chanceDisplay = type === 'Shiny' ? item.chance * 1000 : type === 'Rainbow' ? item.chance * 100 : type === 'Gold' ? item.chance * 10 : item.chance;
         let displayName = baseName;
         let goldTag = getGoldTag(type);
+        let specialTag = getSpecialTag(item);
         let rarityTag = getRarityTag(chanceDisplay);
         let imgSrc = `Cards-Icons/${baseName}.png`;
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
@@ -271,7 +293,7 @@ function updateCollection() {
             <div class=\"card-inventory\">
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
-                        <span class=\"rarity-tag-container\">${goldTag}</span>
+                        <span class=\"rarity-tag-container\">${goldTag}${specialTag}</span>
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
@@ -428,3 +450,35 @@ function showResetConfirm() {
         }
     };
 }
+
+function updateSugarRushDisplay() {
+	let sugarRushEffect = document.getElementById('sugar-rush-effect');
+	if (!sugarRushEffect) {
+		sugarRushEffect = document.createElement('img');
+		sugarRushEffect.src = "Effects-Icons/Sugar-Rush.png";
+		sugarRushEffect.id = 'sugar-rush-effect';
+		sugarRushEffect.alt = "Sugar Rush";
+		sugarRushEffect.style.position = 'fixed';
+		sugarRushEffect.style.zIndex = 400;
+		sugarRushEffect.style.right = '34px';
+		sugarRushEffect.style.bottom = '32px';
+		document.body.appendChild(sugarRushEffect);
+		sugarRushEffect.style.display = 'none';
+		sugarRushEffect.innerHTML = `<div id="sugar-rush-effect-max">5</div>`;
+	}
+	
+	if (sugarRushCounter >= sugarRushTrigger+sugarRushMax) {
+		sugarRushCounter = sugarRushTrigger+sugarRushMax
+	}
+    if (sugarRushCounter > 0) {
+		sugarRushEffect.style.display = 'block';
+		if (sugarRushCounter >= sugarRushTrigger) {
+			sugarRushEffect.className = `gradient-full`;
+		} else {
+			sugarRushEffect.className = `gradient-${sugarRushCounter}-6`;
+		}
+    } else {
+		sugarRushEffect.style.display = 'none';
+    }
+}
+updateSugarRushDisplay();
