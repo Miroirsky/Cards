@@ -15,13 +15,14 @@ let rolls = 0;
 let isRolling = false;
 let tokens = 5;
 let tokenInterval;
+let rollDelay = 5000;
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
     if (chance < 100) return '<span class="rarity-tag rarity-rare">Rare</span>';
     if (chance < 1000) return '<span class="rarity-tag rarity-epic">Epic</span>';
-    if (chance <= 10000) return '<span class="rarity-tag rarity-legendary">Legendary</span>';
-    return '<span class="rarity-tag rarity-mythic">Mythic</span>';
+    if (chance <= 10000) return '<span class="rarity-tag rarity-mythic">Mythic</span>';
+    return '<span class="rarity-tag rarity-legendary">Legendary</span>';
 }
 
 function getGoldTag(type) {
@@ -87,7 +88,7 @@ function startTokenRecharge() {
         addToken();
         // Afficher le temps restant dans la console pour le débogage
         console.log(`Token ajouté. Total: ${tokens}/10`);
-    }, 1000);
+    }, rollDelay);
 }
 
 function stopTokenRecharge() {
@@ -225,18 +226,18 @@ function updateCollection() {
     const ul = document.getElementById('collection-list');
     ul.innerHTML = '';
 
-    // Trie par rareté/chance affichée, puis nom, puis type (normale/Gold/Rainbow)
+    // Trier par chance affichée
     let rarityOrder = chance => (chance < 10 ? 0 : chance < 100 ? 1 : chance < 1000 ? 2 : 3);
     let typeOrder = t => t === 'Rainbow' ? 2 : t === 'Gold' ? 1 : 0;
     let sortedNames = Object.keys(collection).sort((a, b) => {
-        let typeA = a.endsWith('(Rainbow)') ? 'Rainbow' : a.endsWith('(Gold)') ? 'Gold' : '';
-        let typeB = b.endsWith('(Rainbow)') ? 'Rainbow' : b.endsWith('(Gold)') ? 'Gold' : '';
+        let typeA = a.endsWith('(Shiny)') ? 'Shiny' : a.endsWith('(Rainbow)') ? 'Rainbow' : a.endsWith('(Gold)') ? 'Gold' : '';
+        let typeB = b.endsWith('(Shiny)') ? 'Shiny' : b.endsWith('(Rainbow)') ? 'Rainbow' : b.endsWith('(Gold)') ? 'Gold' : '';
         let baseA = typeA ? a.replace(` (${typeA})`, '') : a;
         let baseB = typeB ? b.replace(` (${typeB})`, '') : b;
         let itemA = items.find(i => i.name === baseA);
         let itemB = items.find(i => i.name === baseB);
-        let chanceA = typeA === 'Rainbow' ? itemA.chance * 100 : typeA === 'Gold' ? itemA.chance * 10 : itemA.chance;
-        let chanceB = typeB === 'Rainbow' ? itemB.chance * 100 : typeB === 'Gold' ? itemB.chance * 10 : itemB.chance;
+        let chanceA = typeA === 'Shiny' ? itemA.chance * 100 : 'Rainbow' ? itemA.chance * 100 : typeA === 'Gold' ? itemA.chance * 10 : itemA.chance;
+        let chanceB = typeB === 'Shiny' ? itemB.chance * 100 : 'Rainbow' ? itemB.chance * 100 : typeB === 'Gold' ? itemB.chance * 10 : itemB.chance;
         // Par rareté affichée
         let rarityA = rarityOrder(chanceA);
         let rarityB = rarityOrder(chanceB);
@@ -250,10 +251,10 @@ function updateCollection() {
     });
 
     for (let name of sortedNames) {
-        let type = name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
+        let type = name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
         let baseName = type ? name.replace(` (${type})`, '') : name;
         let item = items.find(i => i.name === baseName);
-        let chanceDisplay = type === 'Rainbow' ? item.chance * 100 : type === 'Gold' ? item.chance * 10 : item.chance;
+        let chanceDisplay = type === 'Shiny' ? item.chance * 1000 : type === 'Rainbow' ? item.chance * 100 : type === 'Gold' ? item.chance * 10 : item.chance;
         let displayName = baseName;
         let goldTag = getGoldTag(type);
         let rarityTag = getRarityTag(chanceDisplay);
@@ -265,8 +266,6 @@ function updateCollection() {
         if (type === 'Rainbow') rarityClass = 'rarity-rainbow';
         else if (type === 'Gold') rarityClass = 'rarity-gold';
         else if (type === 'Shiny') rarityClass = 'rarity-shiny';
-        else if (chanceDisplay > 10000) rarityClass = 'rarity-mythic';
-        else if (chanceDisplay > 1000) rarityClass = 'rarity-legendary';
         // Les autres n'ont pas de classe spéciale (dos gris par défaut)
         let li = document.createElement('li');
         li.innerHTML = `
@@ -335,7 +334,7 @@ function gainTokensSinceLastConnection() {
     const lastDate = new Date(last);
     const diffMs = now - lastDate;
     const diffSeconds = Math.floor(diffMs / 1000);
-    const tokensToAdd = Math.floor(diffSeconds / 50); // 1 token par 50 secondes
+    const tokensToAdd = Math.floor(diffSeconds / (rollDelay / 100)); // Gagne des tokens 100X plus lentement que en ligne
     if (tokensToAdd > 0) {
         tokens = Math.min(tokens + tokensToAdd, 10);
         updateTokensDisplay();

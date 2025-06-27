@@ -548,6 +548,11 @@ body {
     color: white;
 }
 
+.rarity-mythic {
+    background: #c0392b;
+    color: #ffffff;
+}
+
 .rarity-legendary {
     background: #7c4a03;
     color: #ffe066;
@@ -593,11 +598,15 @@ body {
     background: #9b59b6;
     color: #fff;
 }
-.card-flip-back.rarity-legendary,
 .card-flip-back.rarity-mythic {
-    background: linear-gradient(135deg, #cfcfcf, #acacac);
-    color: #222;
+    background: #c0392b;
+    color: #fff;
 }
+.card-flip-back.rarity-legendary {
+    background: #4d2e00;
+    color: #fff;
+}
+
 .card-flip-back.rarity-gold {
     background: linear-gradient(45deg, #f39c12, #f1c40f);
     color: #2c3e50;
@@ -615,21 +624,6 @@ body {
 @keyframes shiny-move {
     0% { background-position: 0% 50%; }
     100% { background-position: 100% 50%; }
-}
-
-.rarity-mythic, .card-flip-back.rarity-mythic {
-    background: #c0392b;
-    color: #fff;
-}
-.card-flip-back.rarity-mythic {
-    background: linear-gradient(135deg, #c0392b, #e74c3c);
-}
-.rarity-legendary, .card-flip-back.rarity-legendary {
-    background: linear-gradient(45deg, #b97a56, #ffe066);
-    color: #4d2e00;
-}
-.card-flip-back.rarity-legendary {
-    background: linear-gradient(135deg, #b97a56, #ffe066);
 }
 
 /* Responsive design */
