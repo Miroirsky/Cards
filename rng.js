@@ -21,7 +21,7 @@ function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
     if (chance < 100) return '<span class="rarity-tag rarity-rare">Rare</span>';
     if (chance < 1000) return '<span class="rarity-tag rarity-epic">Epic</span>';
-    if (chance <= 10000) return '<span class="rarity-tag rarity-mythic">Mythic</span>';
+    if (chance < 10000) return '<span class="rarity-tag rarity-mythic">Mythic</span>';
     return '<span class="rarity-tag rarity-legendary">Legendary</span>';
 }
 
