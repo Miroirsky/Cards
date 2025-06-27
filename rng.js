@@ -53,14 +53,14 @@ function updateTokensDisplay() {
         indicator.classList.remove('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 4 && tokens <= 6) {
-        // Orange pour 4 à 6 tokens
+    } else if (tokens >= 4 && tokens <= 5) {
+        // Orange pour 4 à 5 tokens
         indicator.classList.remove('low');
         indicator.classList.add('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 7 && tokens <= 9) {
-        // Vert pour 7 à 9 tokens
+    } else if (tokens >= 6 && tokens <= 9) {
+        // Vert pour 6 à 9 tokens
         indicator.classList.remove('low');
         indicator.classList.remove('medium');
         indicator.classList.add('high');
@@ -195,7 +195,7 @@ function rollItem() {
             }
         }
         let displayName = selected.name + (type ? ` (${type})` : '');
-        let chanceDisplay = type === 'Shiny' ? selected.chance * 100 : type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
+        let chanceDisplay = type === 'Shiny' ? selected.chance * 1000 : type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
 
         // Cacher l'animation et afficher la carte
         hideRollAnimation();
@@ -226,28 +226,27 @@ function updateCollection() {
     const ul = document.getElementById('collection-list');
     ul.innerHTML = '';
 
-    // Trier par chance affichée
+    // Trier chaque carte indépendamment, sans regrouper les variantes
     let rarityOrder = chance => (chance < 10 ? 0 : chance < 100 ? 1 : chance < 1000 ? 2 : 3);
-    let typeOrder = t => t === 'Rainbow' ? 2 : t === 'Gold' ? 1 : 0;
+    let typeOrder = t => t === 'Shiny' ? 3 : t === 'Rainbow' ? 2 : t === 'Gold' ? 1 : 0;
     let sortedNames = Object.keys(collection).sort((a, b) => {
+        // Détecter le type pour chaque carte
         let typeA = a.endsWith('(Shiny)') ? 'Shiny' : a.endsWith('(Rainbow)') ? 'Rainbow' : a.endsWith('(Gold)') ? 'Gold' : '';
         let typeB = b.endsWith('(Shiny)') ? 'Shiny' : b.endsWith('(Rainbow)') ? 'Rainbow' : b.endsWith('(Gold)') ? 'Gold' : '';
         let baseA = typeA ? a.replace(` (${typeA})`, '') : a;
         let baseB = typeB ? b.replace(` (${typeB})`, '') : b;
         let itemA = items.find(i => i.name === baseA);
         let itemB = items.find(i => i.name === baseB);
-        let chanceA = typeA === 'Shiny' ? itemA.chance * 100 : 'Rainbow' ? itemA.chance * 100 : typeA === 'Gold' ? itemA.chance * 10 : itemA.chance;
-        let chanceB = typeB === 'Shiny' ? itemB.chance * 100 : 'Rainbow' ? itemB.chance * 100 : typeB === 'Gold' ? itemB.chance * 10 : itemB.chance;
+        let chanceA = typeA === 'Shiny' ? itemA.chance * 1000 : typeA === 'Rainbow' ? itemA.chance * 100 : typeA === 'Gold' ? itemA.chance * 10 : itemA.chance;
+        let chanceB = typeB === 'Shiny' ? itemB.chance * 1000 : typeB === 'Rainbow' ? itemB.chance * 100 : typeB === 'Gold' ? itemB.chance * 10 : itemB.chance;
         // Par rareté affichée
         let rarityA = rarityOrder(chanceA);
         let rarityB = rarityOrder(chanceB);
         if (rarityA !== rarityB) return rarityA - rarityB;
         // Par chance affichée croissante
         if (chanceA !== chanceB) return chanceA - chanceB;
-        // Par nom
-        if (baseA !== baseB) return baseA.localeCompare(baseB);
-        // Par type (normale, Gold, Rainbow)
-        return typeOrder(typeA) - typeOrder(typeB);
+        // Par nom complet (y compris le tag)
+        return a.localeCompare(b);
     });
 
     for (let name of sortedNames) {
@@ -270,15 +269,17 @@ function updateCollection() {
         let li = document.createElement('li');
         li.innerHTML = `
             <div class=\"card-inventory\">
-                <span class=\"rarity-tag-container\">${goldTag}</span>
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
+                        <span class=\"rarity-tag-container\">${goldTag}</span>
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
-                    <div class=\"card-flip-back${rarityClass ? ' ' + rarityClass : ''}\">\n<span class=\"card-text\">${cardDetail}</span>\n</div>
+                    <div class=\"card-flip-back${rarityClass ? ' ' + rarityClass : ''}\">\n
+                    <span class=\"card-text text-shown\">${cardDetail}</span>
+                    <span class=\"rarity-tag-container rarity-hidden\">${rarityTag}</span>
+                    \n</div>
                 </div>
-                <span class=\"rarity-tag-container rarity-hidden\">${rarityTag}</span>
             </div>
         `;
         ul.appendChild(li);
