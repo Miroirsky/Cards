@@ -20,10 +20,12 @@ function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
     if (chance < 100) return '<span class="rarity-tag rarity-rare">Rare</span>';
     if (chance < 1000) return '<span class="rarity-tag rarity-epic">Epic</span>';
-    return '<span class="rarity-tag rarity-legendary">Legendary</span>';
+    if (chance <= 10000) return '<span class="rarity-tag rarity-legendary">Legendary</span>';
+    return '<span class="rarity-tag rarity-mythic">Mythic</span>';
 }
 
 function getGoldTag(type) {
+    if (type === 'Shiny') return '<span class="rarity-tag rarity-shiny">Shiny</span>';
     if (type === 'Rainbow') return '<span class="rarity-tag rarity-rainbow">Rainbow</span>';
     if (type === 'Gold') return '<span class="rarity-tag rarity-gold">Gold</span>';
     return '';
@@ -50,13 +52,13 @@ function updateTokensDisplay() {
         indicator.classList.remove('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 4 && tokens <= 5) {
+    } else if (tokens >= 4 && tokens <= 6) {
         // Orange pour 4 à 6 tokens
         indicator.classList.remove('low');
         indicator.classList.add('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 6 && tokens <= 9) {
+    } else if (tokens >= 7 && tokens <= 9) {
         // Vert pour 7 à 9 tokens
         indicator.classList.remove('low');
         indicator.classList.remove('medium');
@@ -85,7 +87,7 @@ function startTokenRecharge() {
         addToken();
         // Afficher le temps restant dans la console pour le débogage
         console.log(`Token ajouté. Total: ${tokens}/10`);
-    }, 5000);
+    }, 1000);
 }
 
 function stopTokenRecharge() {
@@ -177,14 +179,22 @@ function rollItem() {
             selected = winners.reduce((a, b) => (a.chance > b.chance ? a : b));
         }
 
-        // Gold ou Rainbow
+        // Gold ou Rainbow ou Shiny
         let type = '';
         let isGold = Math.floor(Math.random() * 10) === 0;
+        let isRainbow = Math.floor(Math.random() * 10) === 0;
+        let isShiny = Math.floor(Math.random() * 10) === 0;
         if (isGold) {
-            type = (Math.floor(Math.random() * 10) === 0) ? 'Rainbow' : 'Gold';
+            type = 'Gold';
+            if (isRainbow) {
+                type = 'Rainbow';
+                if (isShiny) {
+                    type = 'Shiny';
+                }
+            }
         }
         let displayName = selected.name + (type ? ` (${type})` : '');
-        let chanceDisplay = type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
+        let chanceDisplay = type === 'Shiny' ? selected.chance * 100 : type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
 
         // Cacher l'animation et afficher la carte
         hideRollAnimation();
@@ -208,7 +218,6 @@ function rollItem() {
             rollButton.disabled = false;
             isRolling = false;
         }, 200);
-
     }, 200);
 }
 
@@ -256,6 +265,8 @@ function updateCollection() {
         if (type === 'Rainbow') rarityClass = 'rarity-rainbow';
         else if (type === 'Gold') rarityClass = 'rarity-gold';
         else if (type === 'Shiny') rarityClass = 'rarity-shiny';
+        else if (chanceDisplay > 10000) rarityClass = 'rarity-mythic';
+        else if (chanceDisplay > 1000) rarityClass = 'rarity-legendary';
         // Les autres n'ont pas de classe spéciale (dos gris par défaut)
         let li = document.createElement('li');
         li.innerHTML = `
@@ -308,21 +319,14 @@ function loadCollection() {
     updateTokensDisplay();
 }
 
-// Enregistrer la date de dernière connexion
+// Fonction pour enregistrer la date de dernière connexion
 function saveLastConnection() {
     const now = new Date();
     localStorage.setItem('cards-last-connection', now.toISOString());
 }
 
-function displayLastConnection() {
-    const last = localStorage.getItem('cards-last-connection');
-    if (!last) return;
-    const date = new Date(last);
-    const el = document.getElementById('last-connection');
-    if (el) {
-        el.textContent = `Dernière connexion : ${date.toLocaleString()}`;
-    }
-}
+// Enregistrer la date de dernière connexion à la déconnexion
+window.addEventListener('beforeunload', saveLastConnection);
 
 function gainTokensSinceLastConnection() {
     const last = localStorage.getItem('cards-last-connection');
@@ -367,7 +371,6 @@ updateCollection();
 updateInventoryStats();
 resetCardPreview();
 displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
-saveLastConnection();
 
 // Démarrer la recharge de tokens
 startTokenRecharge();
@@ -395,3 +398,33 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+function resetAllSave() {
+    localStorage.removeItem('cards-collection');
+    localStorage.removeItem('cards-rolls');
+    localStorage.removeItem('cards-tokens');
+    localStorage.removeItem('cards-last-connection');
+    location.reload();
+}
+
+function showResetConfirm() {
+    const overlay = document.getElementById('blur-overlay');
+    const popup = document.getElementById('reset-confirm');
+    if (overlay && popup) {
+        overlay.style.display = 'block';
+        popup.style.display = 'block';
+        // Empêche le scroll du fond
+        document.body.style.overflow = 'hidden';
+    }
+    // Gestion des boutons
+    document.getElementById('confirm-reset-btn').onclick = function() {
+        resetAllSave();
+    };
+    document.getElementById('cancel-reset-btn').onclick = function() {
+        if (overlay && popup) {
+            overlay.style.display = 'none';
+            popup.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    };
+}
