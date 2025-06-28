@@ -1,11 +1,11 @@
 const items = [
     { name: "Grass", chance: 2 },
     { name: "Bush", chance: 3 },
-    { name: "Tree", chance: 5 },
-    { name: "Bones", chance: 7 },
+    { name: "Tree", chance: 4 },
+    { name: "Bones", chance: 5 },
+    { name: "Sugar", chance: 7, specialTag: "Sweet" },
     { name: "Beach", chance: 10 },
     { name: "Snow Mountains", chance: 15 },
-    { name: "Sugar", chance: 20, specialTag: "Sweet" },
     { name: "Sword", chance: 25, specialTag: "Cutting" },
     { name: "Mars", chance: 50 }
 ];
@@ -16,10 +16,14 @@ let isRolling = false;
 let tokens = 5;
 let tokenInterval = 500;
 let rollDelay = 200;
+let luck = 1;
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
 let sugarRushMax = 3;
+let sugarRushBulk = 4;
+let sugarRushMultiplier = 0;
+let sugarRushMaxMultiplier = 2;
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
@@ -151,7 +155,37 @@ function resetCardPreview() {
     `;
 }
 
+function updateLuck() {
+    luck = (sugarRushMultiplier)
+
+    if (luck < 1) {
+        luck = 1
+    }
+
+	let luckDisplay = document.getElementById('luck-display');
+	if (!luckDisplay) {
+		luckDisplay = document.createElement('span');
+		luckDisplay.id = 'luck-display';
+		luckDisplay.style.position = 'fixed';
+		luckDisplay.style.zIndex = 402;
+		luckDisplay.style.right = '34px';
+		luckDisplay.style.bottom = '10px';
+		luckDisplay.style.fontSize = '1.1em';
+		luckDisplay.style.fontWeight = 'bold';
+		luckDisplay.style.color = '#3498db';
+		luckDisplay.style.textShadow = '0 0 6px #fff, 0 0 2px #3498db';
+		document.body.appendChild(luckDisplay);
+	}
+	if (luck > 0) {
+		luckDisplay.style.display = 'block';
+		luckDisplay.innerText = `Luck: X${luck}`;
+	} else {
+		luckDisplay.style.display = 'none';
+	}
+}
+
 function rollItem() {
+    updateLuck()
     if (isRolling) return; // Empêche les rolls multiples
     if (tokens <= 0) {
         alert('Vous n\'avez plus de tokens ! Attendez qu\'ils se rechargent.');
@@ -179,7 +213,8 @@ function rollItem() {
     setTimeout(() => {
         let winners = [];
         for (let item of items) {
-            let roll = Math.floor(Math.random() * item.chance) + 1;
+            let chance = Math.max(1, Math.round(item.chance / luck));
+            let roll = Math.floor(Math.random() * chance) + 1;
             if (roll === 1) {
                 winners.push(item);
             }
@@ -194,7 +229,7 @@ function rollItem() {
         // Gestion du compteur Sweet (Sugar Rush) : 
         let isSweet = selected.specialTag === "Sweet";
         if (isSweet) {
-           sugarRushCounter += 4;
+           sugarRushCounter += sugarRushBulk;
         } else {
            sugarRushCounter = Math.max(0, sugarRushCounter - 1);
         }
@@ -393,6 +428,7 @@ updateCollection();
 updateInventoryStats();
 resetCardPreview();
 displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
+updateLuck()
 
 // Démarrer la recharge de tokens
 startTokenRecharge();
@@ -453,6 +489,7 @@ function showResetConfirm() {
 
 function updateSugarRushDisplay() {
 	let sugarRushEffect = document.getElementById('sugar-rush-effect');
+	let sugarRushOverflow = document.getElementById('sugar-rush-overflow');
 	if (!sugarRushEffect) {
 		sugarRushEffect = document.createElement('img');
 		sugarRushEffect.src = "Effects-Icons/Sugar-Rush.png";
@@ -464,21 +501,47 @@ function updateSugarRushDisplay() {
 		sugarRushEffect.style.bottom = '32px';
 		document.body.appendChild(sugarRushEffect);
 		sugarRushEffect.style.display = 'none';
-		sugarRushEffect.innerHTML = `<div id="sugar-rush-effect-max">5</div>`;
 	}
-	
-	if (sugarRushCounter >= sugarRushTrigger+sugarRushMax) {
-		sugarRushCounter = sugarRushTrigger+sugarRushMax
+	if (!sugarRushOverflow) {
+		sugarRushOverflow = document.createElement('span');
+		sugarRushOverflow.id = 'sugar-rush-overflow';
+		sugarRushOverflow.style.position = 'fixed';
+		sugarRushOverflow.style.zIndex = 401;
+		sugarRushOverflow.style.right = '44px';
+		sugarRushOverflow.style.bottom = '68px';
+		sugarRushOverflow.style.fontSize = '1.3em';
+		sugarRushOverflow.style.fontWeight = 'bold';
+		sugarRushOverflow.style.color = '#ff69b4';
+		sugarRushOverflow.style.textShadow = '0 0 8px #fff, 0 0 2px #ff69b4';
+		document.body.appendChild(sugarRushOverflow);
+		sugarRushOverflow.style.display = 'none';
+	}
+	if (sugarRushCounter >= sugarRushTrigger + sugarRushMax) {
+		sugarRushCounter = sugarRushTrigger + sugarRushMax
 	}
     if (sugarRushCounter > 0) {
 		sugarRushEffect.style.display = 'block';
 		if (sugarRushCounter >= sugarRushTrigger) {
 			sugarRushEffect.className = `gradient-full`;
+            sugarRushMultiplier = sugarRushMaxMultiplier
+            updateLuck()
+			// Show overflow
+			let overflow = sugarRushCounter - sugarRushTrigger;
+			if (overflow > 0) {
+				sugarRushOverflow.innerText = `+${overflow}`;
+				sugarRushOverflow.style.display = 'block';
+			} else {
+				sugarRushOverflow.style.display = 'none';
+			}
 		} else {
+            sugarRushMultiplier = 0
+            updateLuck()
 			sugarRushEffect.className = `gradient-${sugarRushCounter}-6`;
+			sugarRushOverflow.style.display = 'none';
 		}
     } else {
 		sugarRushEffect.style.display = 'none';
+		sugarRushOverflow.style.display = 'none';
     }
 }
 updateSugarRushDisplay();

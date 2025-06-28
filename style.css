@@ -729,21 +729,18 @@ body {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-#sugar-rush-indicator {
-	height:48px;
-	vertical-align:middle;
-	filter:drop-shadow(0 0 8px #ffe47a88);
-}
-
 #sugar-rush-effect {
-	height:48px;
-	vertical-align:middle;
-	filter:drop-shadow(0 0 8px #ffe47a88);
+	height: 48px;
+	vertical-align: middle;
+	filter: drop-shadow(0 0 8px #ffe47a88);
 }
 
 #sugar-rush-effect-max {
-	height:5px;
-	vertical-align:middle;
+	height: 25px;
+    width: 25px;
+	position: fixed;
+	align-items: center;
+    display: block;
 }
 
 .gradient-1-6 {
