@@ -14,8 +14,8 @@ let collection = {};
 let rolls = 0;
 let isRolling = false;
 let tokens = 5;
-let tokenInterval = 500;
-let rollDelay = 200;
+let tokenInterval = 5000;
+let rollDelay = 2000;
 let luck = 1;
 
 let sugarRushCounter = 0;
