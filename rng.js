@@ -5,7 +5,7 @@ const items = [
     { name: "Bones", chance: 7 },
     { name: "Beach", chance: 10 },
     { name: "Snow Mountains", chance: 15 },
-    { name: "Sugar", chance: 2, specialTag: "Sweet" },
+    { name: "Sugar", chance: 20, specialTag: "Sweet" },
     { name: "Sword", chance: 25, specialTag: "Cutting" },
     { name: "Mars", chance: 50 }
 ];
