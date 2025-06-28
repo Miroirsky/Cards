@@ -17,6 +17,7 @@ let tokens = 5;
 let tokenInterval = 5000;
 let rollDelay = 2000;
 let luck = 1;
+let spinningCardsAnimationSpeed = 200;
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
@@ -24,6 +25,8 @@ let sugarRushMax = 3;
 let sugarRushBulk = 4;
 let sugarRushMultiplier = 0;
 let sugarRushMaxMultiplier = 2;
+
+let slotInterval = null;
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
@@ -120,14 +123,46 @@ function getTimeUntilNextToken() {
     return 5;
 }
 
+function getRandomItem() {
+    return items[Math.floor(Math.random() * items.length)];
+}
+
+function updateSpinningCards() {
+    const cards = document.querySelectorAll('.spinning-card');
+    cards.forEach(card => {
+        const item = getRandomItem();
+        card.innerHTML = `
+            <div style="position:relative;width:100%;height:100%;">
+                <img src="Cards-Icons/${item.name}.png" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:#fff;font-size:0.85em;font-weight:bold;text-align:center;text-shadow:0 0 4px #000;padding:2px 0;border-radius:0 0 10px 10px;">${item.name}</div>
+            </div>
+        `;
+    });
+}
+
+function clearSpinningCards() {
+    const cards = document.querySelectorAll('.spinning-card');
+    cards.forEach(card => {
+        card.innerHTML = '';
+    });
+}
+
 function showRollAnimation() {
     const animation = document.getElementById('roll-animation');
     animation.classList.remove('hidden');
+    updateSpinningCards();
+    if (slotInterval) clearInterval(slotInterval);
+    slotInterval = setInterval(updateSpinningCards, spinningCardsAnimationSpeed);
 }
 
 function hideRollAnimation() {
     const animation = document.getElementById('roll-animation');
     animation.classList.add('hidden');
+    if (slotInterval) {
+        clearInterval(slotInterval);
+        slotInterval = null;
+    }
+    clearSpinningCards();
 }
 
 function updateCardPreview(cardData) {
@@ -259,6 +294,22 @@ function rollItem() {
         // Mettre à jour l'aperçu de la carte
         updateCardPreview({ selected, type, displayName, chanceDisplay });
 
+        (function(){
+            // Calcul de la rareté
+            let thisRarity = '';
+            if (chanceDisplay < 10) thisRarity = 'common';
+            else if (chanceDisplay < 100) thisRarity = 'rare';
+            else if (chanceDisplay < 1000) thisRarity = 'epic';
+            else if (chanceDisplay < 10000) thisRarity = 'mythic';
+            else thisRarity = 'legendary';
+            let idx = rarityOrderMap[thisRarity];
+            let minIdx = loadRarityBarSetting();
+            if (idx >= minIdx) {
+                let audio = document.getElementById('notification-sound');
+                if(audio) { audio.currentTime = 0; audio.play(); }
+            }
+        })();
+
         // Comptage
         if (!collection[displayName]) {
             collection[displayName] = 1;
@@ -274,7 +325,7 @@ function rollItem() {
         setTimeout(() => {
             rollButton.disabled = false;
             isRolling = false;
-        }, rollDelay);
+        },);
     }, rollDelay);
 }
 
@@ -457,36 +508,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-function resetAllSave() {
-    localStorage.removeItem('cards-collection');
-    localStorage.removeItem('cards-rolls');
-    localStorage.removeItem('cards-tokens');
-    localStorage.removeItem('cards-last-connection');
-    location.reload();
-}
-
-function showResetConfirm() {
-    const overlay = document.getElementById('blur-overlay');
-    const popup = document.getElementById('reset-confirm');
-    if (overlay && popup) {
-        overlay.style.display = 'block';
-        popup.style.display = 'block';
-        // Empêche le scroll du fond
-        document.body.style.overflow = 'hidden';
-    }
-    // Gestion des boutons
-    document.getElementById('confirm-reset-btn').onclick = function() {
-        resetAllSave();
-    };
-    document.getElementById('cancel-reset-btn').onclick = function() {
-        if (overlay && popup) {
-            overlay.style.display = 'none';
-            popup.style.display = 'none';
-            document.body.style.overflow = '';
-        }
-    };
-}
-
 function updateSugarRushDisplay() {
 	let sugarRushEffect = document.getElementById('sugar-rush-effect');
 	let sugarRushOverflow = document.getElementById('sugar-rush-overflow');
@@ -545,3 +566,61 @@ function updateSugarRushDisplay() {
     }
 }
 updateSugarRushDisplay();
+
+// Gestion du menu paramètres
+document.getElementById('settings-btn').onclick = function() {
+    document.getElementById('settings-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+};
+document.getElementById('close-settings').onclick = function() {
+    document.getElementById('settings-modal').classList.remove('open');
+    document.body.style.overflow = '';
+};
+// Ferme si on clique en dehors du contenu
+document.getElementById('settings-modal').onclick = function(e) {
+    if (e.target === this) {
+        this.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+};
+
+// ----- Raretés utilisées pour la barre -----
+const rarityLevels = [
+    { key: 'common',    name: 'Common',    class: 'rarity-common',    order: 1 },
+    { key: 'rare',      name: 'Rare',      class: 'rarity-rare',      order: 2 },
+    { key: 'epic',      name: 'Epic',      class: 'rarity-epic',      order: 3 },
+    { key: 'mythic',    name: 'Mythic',    class: 'rarity-mythic',    order: 4 },
+    { key: 'legendary', name: 'Legendary', class: 'rarity-legendary', order: 5 }
+];
+const rarityOrderMap = {};
+rarityLevels.forEach((r, i) => rarityOrderMap[r.key] = i+1);
+
+// --- Chargement/sauvegarde seuil dans localStorage ---
+function loadRarityBarSetting() {
+    let idx = localStorage.getItem('rarity-notif-threshold');
+    return idx !== null ? parseInt(idx) : 3; // Par défaut "epic"
+}
+function saveRarityBarSetting(idx) {
+    localStorage.setItem('rarity-notif-threshold', idx.toString());
+}
+
+// --- Génération de la barre ---
+function renderRarityBar() {
+    const bar = document.getElementById('rarity-bar');
+    bar.innerHTML = '';
+    const selectedIdx = loadRarityBarSetting();
+    rarityLevels.forEach((r, idx) => {
+        const seg = document.createElement('div');
+        seg.className = 'rarity-bar-segment'
+            + (idx + 1 >= selectedIdx ? ' filled' : '')
+            + (idx + 1 === selectedIdx ? ' selected' : '');
+        seg.setAttribute('data-idx', idx + 1);
+        seg.innerHTML = `<span class="rarity-tag ${r.class}">${r.name}</span>`;
+        seg.onclick = function() {
+            saveRarityBarSetting(idx + 1);
+            renderRarityBar();
+        };
+        bar.appendChild(seg);
+    });
+}
+renderRarityBar();

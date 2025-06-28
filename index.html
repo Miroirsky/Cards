@@ -8,14 +8,8 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.6</div>
+    <div class="update-text">Update 1.6.2</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
-    <div id="reset-confirm" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#e74c3c;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(231,76,60,0.15);display:none;">
-        <div style='font-weight:bold;margin-bottom:1em;'>Voulez-vous vraiment réinitialiser toutes les données&nbsp;?</div>
-        <button id="confirm-reset-btn" style="margin:0 1em;padding:0.5em 1.5em;font-size:1em;background:#e74c3c;color:#fff;border:none;border-radius:20px;cursor:pointer;">Oui, tout effacer</button>
-        <button id="cancel-reset-btn" style="margin:0 1em;padding:0.5em 1.5em;font-size:1em;background:#aaa;color:#fff;border:none;border-radius:20px;cursor:pointer;">Annuler</button>
-    </div>
-    <button id="reset-save-btn" onclick="showResetConfirm()" style="position:fixed;top:70px;right:20px;z-index:2002;padding:0.7em 1.5em;font-size:1em;background:#e74c3c;color:#fff;border:none;border-radius:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer;">Reset Save</button>
     
     <!-- Interface Roll -->
     <div class="roll-interface">
@@ -61,7 +55,26 @@
             <ul id="collection-list"></ul>
         </div>
     </div>
+    <!-- Bouton paramètres -->
+    <button id="settings-btn" class="settings-btn" title="Settings">
+        <img src="icons/Parameters-Icon.png" alt="Settings" />
+    </button>
 
+    <!-- Menu de paramètres (modal cachée au départ) -->
+    <div id="settings-modal" class="settings-modal">
+        <div class="settings-content">
+            <span id="close-settings" class="close-settings">&times;</span>
+            <h2>Settings</h2>
+            <div class="settings-section">
+                <div class="rarity-bar-settings">
+                    <label class="settings-label"><b>Notification sonore à partir de :</b></label>
+                    <div id="rarity-bar"></div>
+                </div>
+                <audio id="notification-sound" src="Roll-Notification.mp3" preload="auto"></audio>
+            </div>
+        </div>
+        <audio id="notification-sound" src="Roll-Notification.mp3" preload="auto"></audio>
+    </div>
     <script src="rng.js"></script>
 </body>
 </html>
