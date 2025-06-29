@@ -1,39 +1,152 @@
 const items = [
-    { name: "Grass", chance: 2 },
-    { name: "Bush", chance: 3 },
-    { name: "Tree", chance: 4 },
-    { name: "Bones", chance: 5 },
-    { name: "Sugar", chance: 7, specialTag: "Sweet" },
-    { name: "Beach", chance: 10 },
-    { name: "Snow Mountains", chance: 15 },
-    { name: "Sword", chance: 25, specialTag: "Cutting" },
-    { name: "Mars", chance: 50 }
+    { name: "Grass", chance: 2, rollable: true, color: "#4caf50" },
+    { name: "Bush", chance: 3, rollable: true, color: "#388e3c" },
+    { name: "Tree", chance: 4, rollable: true, color: "#795548" },
+    { name: "Bones", chance: 5, rollable: true, color: "#e0e0e0" },
+    { name: "Sugar", chance: 7, rollable: true, specialTag: "Sweet", color: "#d1d1d1" },
+    { name: "Beach", chance: 10, rollable: true, color: "#ffe082" },
+    { name: "Snow Mountains", chance: 15, rollable: true, color: "#b3e5fc" },
+    { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting", color: "#b0bec5" },
+    { name: "Mars", chance: 50, rollable: true, color: "#d84315" }
 ];
 
 let collection = {};
 let rolls = 0;
 let isRolling = false;
 let tokens = 5;
-let tokenInterval = 5000;
-let rollDelay = 2000;
+let tokenInterval = 1000;
+let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
-let sugarRushMax = 3;
+let sugarRushMax = 4;
 let sugarRushBulk = 4;
 let sugarRushMultiplier = 0;
 let sugarRushMaxMultiplier = 2;
 
 let slotInterval = null;
 
+// Table de crafts simulés
+const craftRecipes = [
+    {
+        require: [ { name: "Grass (Gold)", qty: 1 } ],
+        result: [ { name: "Grass", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Grass (Rainbow)", qty: 1 } ],
+        result: [ { name: "Grass (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Grass (Shiny)", qty: 1 } ],
+        result: [ { name: "Grass (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bush (Gold)", qty: 1 } ],
+        result: [ { name: "Bush", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bush (Rainbow)", qty: 1 } ],
+        result: [ { name: "Bush (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bush (Shiny)", qty: 1 } ],
+        result: [ { name: "Bush (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Tree (Gold)", qty: 1 } ],
+        result: [ { name: "Tree", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Tree (Rainbow)", qty: 1 } ],
+        result: [ { name: "Tree (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Tree (Shiny)", qty: 1 } ],
+        result: [ { name: "Tree (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bones (Gold)", qty: 1 } ],
+        result: [ { name: "Bones", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bones (Rainbow)", qty: 1 } ],
+        result: [ { name: "Bones (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Bones (Shiny)", qty: 1 } ],
+        result: [ { name: "Bones (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sugar (Gold)", qty: 1 } ],
+        result: [ { name: "Sugar", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sugar (Rainbow)", qty: 1 } ],
+        result: [ { name: "Sugar (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sugar (Shiny)", qty: 1 } ],
+        result: [ { name: "Sugar (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Beach (Gold)", qty: 1 } ],
+        result: [ { name: "Beach", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Beach (Rainbow)", qty: 1 } ],
+        result: [ { name: "Beach (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Beach (Shiny)", qty: 1 } ],
+        result: [ { name: "Beach (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Snow Mountain (Gold)", qty: 1 } ],
+        result: [ { name: "Snow Mountain", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Snow Mountain (Rainbow)", qty: 1 } ],
+        result: [ { name: "Snow Mountain (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Snow Mountain (Shiny)", qty: 1 } ],
+        result: [ { name: "Snow Mountain (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sword (Gold)", qty: 1 } ],
+        result: [ { name: "Sword", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sword (Rainbow)", qty: 1 } ],
+        result: [ { name: "Sword (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Sword (Shiny)", qty: 1 } ],
+        result: [ { name: "Sword (Rainbow)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Mars (Gold)", qty: 1 } ],
+        result: [ { name: "Mars", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Mars (Rainbow)", qty: 1 } ],
+        result: [ { name: "Mars (Gold)", qty: 5 } ]
+    },
+    {
+        require: [ { name: "Mars (Shiny)", qty: 1 } ],
+        result: [ { name: "Mars (Rainbow)", qty: 5 } ]
+    }
+    // Ajoutez d'autres recettes ici si besoin
+];
+
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
     if (chance < 100) return '<span class="rarity-tag rarity-rare">Rare</span>';
     if (chance < 1000) return '<span class="rarity-tag rarity-epic">Epic</span>';
-    if (chance < 10000) return '<span class="rarity-tag rarity-mythic">Mythic</span>';
-    return '<span class="rarity-tag rarity-legendary">Legendary</span>';
+    if (chance < 10000) return '<span class="rarity-tag rarity-legendary">Legendary</span>';
+    return '<span class="rarity-tag rarity-mythic">Mythic</span>';
 }
 
 function getGoldTag(type) {
@@ -219,6 +332,81 @@ function updateLuck() {
 	}
 }
 
+function animateTokenOrb() {
+    const tokenIndicator = document.getElementById('tokens-indicator');
+    const rollButton = document.getElementById('roll-button');
+    if (!tokenIndicator || !rollButton) return;
+
+    const orb = document.createElement('div');
+    orb.className = 'token-orb-animation roll';
+    document.body.appendChild(orb);
+
+    // Position de départ (centre de l'indicateur de tokens)
+    const startRect = tokenIndicator.getBoundingClientRect();
+    const endRect = rollButton.getBoundingClientRect();
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+    orb.style.left = (startRect.left + startRect.width/2 + scrollX) + 'px';
+    orb.style.top = (startRect.top + startRect.height/2 + scrollY) + 'px';
+
+    // Forcer le layout pour l'animation
+    orb.offsetWidth;
+
+    // Position d'arrivée (centre du bouton roll)
+    orb.style.transition = 'all 0.7s cubic-bezier(0.4,1.6,0.4,1)';
+    orb.style.left = (endRect.left + endRect.width/2 + scrollX) + 'px';
+    orb.style.top = (endRect.top + endRect.height/2 + scrollY) + 'px';
+    orb.style.opacity = 1;
+
+    setTimeout(() => {
+        orb.style.opacity = 0;
+    }, 600);
+    setTimeout(() => {
+        orb.remove();
+    }, 900);
+}
+
+function animateCardToInventoryOrb(cardName) {
+    const preview = document.getElementById('card-preview');
+    const collectionList = document.getElementById('collection-list');
+    if (!preview || !collectionList) return;
+    let cardElem = null;
+    for (const li of collectionList.children) {
+        if (li.innerHTML.includes(cardName)) {
+            cardElem = li;
+            break;
+        }
+    }
+    let card = null;
+    for (let item of items) {
+        if (item.name === cardName) {
+            card = item;
+            break;
+        }
+    }
+    if (!cardElem) return;
+    const previewRect = preview.getBoundingClientRect();
+    const cardRect = cardElem.getBoundingClientRect();
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+    const orb = document.createElement('div');
+    orb.className = 'token-orb-animation';
+    const size = 26;
+    orb.style.width = size + 'px';
+    orb.style.height = size + 'px';
+    orb.style.left = (previewRect.left + previewRect.width/2 + scrollX - size/2) + 'px';
+    orb.style.top = (previewRect.top + previewRect.height/2 + scrollY - size/2) + 'px';
+    document.body.appendChild(orb);
+    orb.offsetWidth;
+    orb.style.transition = 'all 0.8s cubic-bezier(0.4,1.6,0.4,1)';
+    orb.style.left = (cardRect.left + cardRect.width/2 + scrollX - size/2) + 'px';
+    orb.style.top = (cardRect.top + cardRect.height/2 + scrollY - size/2) + 'px';
+    orb.style.opacity = 1;
+    orb.style.background = card.color;
+    setTimeout(() => { orb.style.opacity = 0; }, 700);
+    setTimeout(() => { orb.remove(); }, 1000);
+}
+
 function rollItem() {
     updateLuck()
     if (isRolling) return; // Empêche les rolls multiples
@@ -230,6 +418,7 @@ function rollItem() {
     // Consommer un token
     tokens--;
     updateTokensDisplay();
+    animateTokenOrb();
     
     isRolling = true;
     const rollButton = document.getElementById('roll-button');
@@ -244,20 +433,23 @@ function rollItem() {
     // Afficher l'animation de roll
     showRollAnimation();
 
-    // Simuler le roll après 200ms (plus rapide)
+    // Simuler le roll
     setTimeout(() => {
         let winners = [];
         for (let item of items) {
-            let chance = Math.max(1, Math.round(item.chance / luck));
-            let roll = Math.floor(Math.random() * chance) + 1;
-            if (roll === 1) {
-                winners.push(item);
+            if (item.rollable === true) {
+                let chance = Math.max(1, Math.round(item.chance / luck));
+                let roll = Math.floor(Math.random() * chance) + 1;
+                if (roll === 1) {
+                    winners.push(item);
+                }
             }
         }
-
         let selected;
         if (winners.length === 0) {
-            selected = items.reduce((a, b) => (a.chance < b.chance ? a : b));
+            // Ne choisir que parmi les cartes rollable:true
+            const rollableItems = items.filter(item => item.rollable === true);
+            selected = rollableItems.reduce((a, b) => (a.chance < b.chance ? a : b));
         } else {
             selected = winners.reduce((a, b) => (a.chance > b.chance ? a : b));
         }
@@ -269,7 +461,6 @@ function rollItem() {
            sugarRushCounter = Math.max(0, sugarRushCounter - 1);
         }
         updateSugarRushDisplay();
-
 
         // Gold ou Rainbow ou Shiny
         let type = '';
@@ -290,7 +481,7 @@ function rollItem() {
 
         // Cacher l'animation et afficher la carte
         hideRollAnimation();
-        
+
         // Mettre à jour l'aperçu de la carte
         updateCardPreview({ selected, type, displayName, chanceDisplay });
 
@@ -320,6 +511,11 @@ function rollItem() {
         saveCollection();
         updateCollection();
         updateInventoryStats();
+
+        // Animation d'orbe de la preview vers l'inventaire
+        setTimeout(() => {
+            animateCardToInventoryOrb(displayName);
+        }, 250);
 
         // Réactiver le bouton après 200ms supplémentaires (plus rapide)
         setTimeout(() => {
@@ -392,6 +588,8 @@ function updateCollection() {
         `;
         ul.appendChild(li);
     }
+
+    if (window.updateCraftButtons) window.updateCraftButtons();
 }
 
 // Sauvegarde l'inventaire dans localStorage
@@ -508,6 +706,18 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+function fillBackground(object, filling) {
+    if (Math.round(filling * 10) >= 10) {
+        object.className = `gradient-full`;
+    } else {
+        if (Math.round(filling * 10) <= 0) {
+            object.className = `gradient-empty`;
+        } else {
+            object.className = `gradient-${Math.round(filling * 10)}-10`;
+        }
+    }
+}
+
 function updateSugarRushDisplay() {
 	let sugarRushEffect = document.getElementById('sugar-rush-effect');
 	let sugarRushOverflow = document.getElementById('sugar-rush-overflow');
@@ -543,7 +753,7 @@ function updateSugarRushDisplay() {
     if (sugarRushCounter > 0) {
 		sugarRushEffect.style.display = 'block';
 		if (sugarRushCounter >= sugarRushTrigger) {
-			sugarRushEffect.className = `gradient-full`;
+			
             sugarRushMultiplier = sugarRushMaxMultiplier
             updateLuck()
 			// Show overflow
@@ -557,9 +767,9 @@ function updateSugarRushDisplay() {
 		} else {
             sugarRushMultiplier = 0
             updateLuck()
-			sugarRushEffect.className = `gradient-${sugarRushCounter}-6`;
 			sugarRushOverflow.style.display = 'none';
 		}
+		fillBackground(sugarRushEffect, sugarRushCounter / sugarRushTrigger);
     } else {
 		sugarRushEffect.style.display = 'none';
 		sugarRushOverflow.style.display = 'none';
@@ -576,7 +786,6 @@ document.getElementById('close-settings').onclick = function() {
     document.getElementById('settings-modal').classList.remove('open');
     document.body.style.overflow = '';
 };
-// Ferme si on clique en dehors du contenu
 document.getElementById('settings-modal').onclick = function(e) {
     if (e.target === this) {
         this.classList.remove('open');
@@ -624,3 +833,144 @@ function renderRarityBar() {
     });
 }
 renderRarityBar();
+
+function animateCraftOrb(cardName, craftBtn, qty) {
+    // Trouver la carte correspondante dans la collection
+    const collectionList = document.getElementById('collection-list');
+    if (!collectionList) return;
+    let cardElem = null;
+    for (const li of collectionList.children) {
+        if (li.innerHTML.includes(cardName)) {
+            cardElem = li;
+            break;
+        }
+    }
+    if (!cardElem || !craftBtn) return;
+    const cardRect = cardElem.getBoundingClientRect();
+    const btnRect = craftBtn.getBoundingClientRect();
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+    const orb = document.createElement('div');
+    orb.className = 'token-orb-animation';
+    let card = null;
+    for (let item of items) {
+        if (item.name === cardName) {
+            card = item;
+            break;
+        }
+    }
+    // Taille de base 32px, augmente avec la racine carrée de la quantité (max 80px)
+    const minSize = 32;
+    const maxSize = 80;
+    const size = Math.min(maxSize, minSize + (Math.sqrt(qty)-1)*18); // sqrt(qty), +18px par racine au-dessus de 1
+    orb.style.width = size + 'px';
+    orb.style.height = size + 'px';
+    orb.style.left = (cardRect.left + cardRect.width/2 + scrollX - size/2) + 'px';
+    orb.style.top = (cardRect.top + cardRect.height/2 + scrollY - size/2) + 'px';
+    document.body.appendChild(orb);
+    orb.offsetWidth;
+    orb.style.transition = 'all 0.7s cubic-bezier(0.4,1.6,0.4,1)';
+    orb.style.left = (btnRect.left + btnRect.width/2 + scrollX - size/2) + 'px';
+    orb.style.top = (btnRect.top + btnRect.height/2 + scrollY - size/2) + 'px';
+    orb.style.opacity = 1;
+    orb.style.background = card.color;
+    setTimeout(() => { orb.style.opacity = 0; }, 600);
+    setTimeout(() => { orb.remove(); }, 900);
+}
+
+function simulateCraft(recipeIndex) {
+    const recipe = craftRecipes[recipeIndex];
+    if (!recipe) return { success: false, message: "Recette inconnue." };
+    // Vérifier si le joueur a assez de ressources
+    for (let req of recipe.require) {
+        if (!collection[req.name] || collection[req.name] < req.qty) {
+            return { success: false, message: `Pas assez de ${req.name}` };
+        }
+    }
+    // Animation d'orbe pour chaque ressource consommée, taille selon la quantité
+    const craftBtn = document.getElementById(`craft-btn-${recipeIndex}`);
+    if (craftBtn) {
+        recipe.require.forEach(req => {
+            animateCraftOrb(req.name, craftBtn, req.qty);
+        });
+    }
+    // Retirer les ressources requises
+    for (let req of recipe.require) {
+        collection[req.name] -= req.qty;
+        if (collection[req.name] <= 0) delete collection[req.name];
+    }
+    // Ajouter les résultats
+    for (let res of recipe.result) {
+        if (!collection[res.name]) collection[res.name] = 0;
+        collection[res.name] += res.qty;
+    }
+    saveCollection();
+    updateCollection();
+    updateInventoryStats && updateInventoryStats();
+    return { success: true, message: "Craft réussi !" };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Affichage de toutes les recettes de craft
+    const craftListDiv = document.getElementById('craft-list');
+    const craftResultDiv = document.getElementById('craft-result');
+    if (craftListDiv && craftRecipes.length > 0) {
+        craftListDiv.innerHTML = '';
+        craftRecipes.forEach((recipe, idx) => {
+            let reqs = recipe.require.map(r => `${r.qty} × ${r.name}`).join(' + ');
+            let ress = recipe.result.map(r => `${r.qty} × ${r.name}`).join(' + ');
+            const craftDiv = document.createElement('div');
+            craftDiv.style.marginBottom = '1em';
+            craftDiv.innerHTML = `<b>${reqs}</b> → <b>${ress}</b> `;
+            const btn = document.createElement('button');
+            btn.className = 'roll-btn';
+            btn.innerText = 'CRAFT';
+            btn.onclick = function() {
+                const res = simulateCraft(idx);
+                craftResultDiv.innerText = res.message;
+                setTimeout(() => { craftResultDiv.innerText = ''; }, 2000);
+                updateCraftButtons();
+            };
+            btn.id = `craft-btn-${idx}`;
+            craftDiv.appendChild(btn);
+            craftListDiv.appendChild(craftDiv);
+        });
+        updateCraftButtons();
+    }
+
+    function updateCraftButtons() {
+        craftRecipes.forEach((recipe, idx) => {
+            const btn = document.getElementById(`craft-btn-${idx}`);
+            let canCraft = recipe.require.every(req => collection[req.name] && collection[req.name] >= req.qty);
+            btn.disabled = !canCraft;
+            if (!canCraft) {
+                btn.style.opacity = 0.5;
+                btn.style.cursor = 'not-allowed';
+            } else {
+                btn.style.opacity = 1;
+                btn.style.cursor = 'pointer';
+            }
+        });
+    }
+
+    // Rendre updateCraftButtons accessible globalement pour updateCollection
+    window.updateCraftButtons = updateCraftButtons;
+});
+
+// --- Reset Save ---
+function resetSave() {
+    if (confirm('Êtes-vous sûr de vouloir réinitialiser votre sauvegarde ? Cette action est irréversible.')) {
+        localStorage.removeItem('cards-collection');
+        localStorage.removeItem('cards-rolls');
+        localStorage.removeItem('cards-tokens');
+        localStorage.removeItem('cards-last-connection');
+        localStorage.removeItem('rarity-notif-threshold');
+        location.reload();
+    }
+}
+
+// Ajout du listener pour le bouton reset save
+const resetBtn = document.getElementById('reset-save-btn');
+if (resetBtn) {
+    resetBtn.onclick = resetSave;
+}
