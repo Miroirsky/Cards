@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.10</div>
+    <div class="update-text">Update 1.11</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -16,6 +16,12 @@
         <div class="roll-header">
             <div id="rolls-indicator">Rolls: <span id="rolls-count">0</span></div>
             <div id="tokens-indicator">Tokens: <span id="tokens-count">10</span></div>
+            <div id="xp-bar-container" style="width: 220px; height: 22px; background: #222; border-radius: 10px; margin: 0.5em auto 0.5em auto; overflow: hidden; box-shadow: 0 2px 8px #0002; position: relative; display: flex; align-items: center; justify-content: center;">
+                <div id="xp-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4ecdc4, #f9d423); border-radius: 10px 0 0 10px; transition: width 0.4s; position: absolute; left: 0; top: 0;"></div>
+                <span id="xp-bar-label" style="position: relative; z-index: 2; color: #fff; font-weight: bold; width: 100%; text-align: center; pointer-events: none; text-shadow: 0 1px 4px #000, 0 0 2px #222; font-size: 1em;">
+                    Level: <span id="level-count">1</span> | XP: <span id="xp-count">0</span>/<span id="xp-next">50</span>
+                </span>
+            </div>
             <h1>Basic Roller</h1>
         </div>
         

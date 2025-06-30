@@ -38,6 +38,10 @@ let sugarRushMaxMultiplier = 2;
 
 let slotInterval = null;
 
+let xp = 0;
+let level = 1;
+let xpNext = 50;
+
 // Crafting
 const craftRecipes = [
     // Add more recipe here
@@ -73,6 +77,7 @@ function updateInventoryStats() {
     
     document.getElementById('total-cards').innerText = `Total: ${totalCards}`;
     document.getElementById('unlocked-cards').innerText = `Unlocked: ${unlockedCards}`;
+    updateLevelXpDisplay();
 }
 
 function updateTokensDisplay() {
@@ -339,7 +344,7 @@ function rollItem() {
     saveCollection();
 
     // Afficher l'animation de roll
-    showRollAnimation();
+    // showRollAnimation();
 
     // Simuler le roll
     setTimeout(() => {
@@ -387,6 +392,10 @@ function rollItem() {
         let displayName = selected.name + (type ? ` (${type})` : '');
         let chanceDisplay = type === 'Shiny' ? selected.chance * 1000 : type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
 
+        // XP gain: sqrt(roll chance)
+        let xpGain = Math.floor(Math.sqrt(chanceDisplay));
+        gainXp(xpGain);
+
         // Cacher l'animation et afficher la carte
         hideRollAnimation();
 
@@ -399,8 +408,8 @@ function rollItem() {
             if (chanceDisplay < 10) thisRarity = 'common';
             else if (chanceDisplay < 100) thisRarity = 'rare';
             else if (chanceDisplay < 1000) thisRarity = 'epic';
-            else if (chanceDisplay < 10000) thisRarity = 'mythic';
-            else thisRarity = 'legendary';
+            else if (chanceDisplay < 10000) thisRarity = 'legendary';
+            else thisRarity = 'mythic';
             let idx = rarityOrderMap[thisRarity];
             let minIdx = loadRarityBarSetting();
             if (idx >= minIdx) {
@@ -681,7 +690,7 @@ function updateCollection() {
                 };
                 cardDiv.addEventListener('mousedown', (e) => {
                     startX = e.clientX; startY = e.clientY;
-                    pressTimer = setTimeout(showPopup, 500);
+                    pressTimer = setTimeout(showPopup, 1000);
                 });
                 cardDiv.addEventListener('mouseup', () => {
                     clearTimeout(pressTimer);
@@ -819,6 +828,9 @@ function saveCollection() {
     localStorage.setItem('cards-collection', JSON.stringify(collection));
     localStorage.setItem('cards-rolls', rolls.toString());
     localStorage.setItem('cards-tokens', tokens.toString());
+    localStorage.setItem('cards-xp', xp.toString());
+    localStorage.setItem('cards-level', level.toString());
+    localStorage.setItem('cards-xpNext', xpNext.toString());
 }
 
 // Charge l'inventaire depuis localStorage
@@ -826,6 +838,9 @@ function loadCollection() {
     const data = localStorage.getItem('cards-collection');
     const rollsData = localStorage.getItem('cards-rolls');
     const tokensData = localStorage.getItem('cards-tokens');
+    const xpData = localStorage.getItem('cards-xp');
+    const levelData = localStorage.getItem('cards-level');
+    const xpNextData = localStorage.getItem('cards-xpNext');
     
     if (data) {
         collection = JSON.parse(data);
@@ -844,7 +859,20 @@ function loadCollection() {
         tokens = 10; // Valeur par défaut pour les nouveaux utilisateurs
     }
     
+    if (xpData) {
+        xp = parseInt(xpData);
+    }
+    
+    if (levelData) {
+        level = parseInt(levelData);
+    }
+    
+    if (xpNextData) {
+        xpNext = parseInt(xpNextData);
+    }
+    
     updateTokensDisplay();
+    updateLevelXpDisplay();
 }
 
 // Fonction pour enregistrer la date de dernière connexion
@@ -1020,8 +1048,8 @@ const rarityLevels = [
     { key: 'common',    name: 'Common',    class: 'rarity-common',    order: 1 },
     { key: 'rare',      name: 'Rare',      class: 'rarity-rare',      order: 2 },
     { key: 'epic',      name: 'Epic',      class: 'rarity-epic',      order: 3 },
-    { key: 'mythic',    name: 'Mythic',    class: 'rarity-mythic',    order: 4 },
-    { key: 'legendary', name: 'Legendary', class: 'rarity-legendary', order: 5 }
+    { key: 'legendary', name: 'Legendary', class: 'rarity-legendary', order: 4 },
+    { key: 'mythic',    name: 'Mythic',    class: 'rarity-mythic',    order: 5 }
 ];
 const rarityOrderMap = {};
 rarityLevels.forEach((r, i) => rarityOrderMap[r.key] = i+1);
@@ -1054,3 +1082,75 @@ function renderRarityBar() {
         bar.appendChild(seg);
     });
 }
+
+function calculateXpNext(level) {
+    // Example: next = 50 + 25 * (level-1) * sqrt(level)
+    return Math.floor(50 + 25 * (level - 1) * Math.sqrt(level));
+}
+
+function gainXp(amount) {
+    xp += amount;
+    let leveledUp = false;
+    while (xp >= xpNext) {
+        xp -= xpNext;
+        level++;
+        xpNext = calculateXpNext(level);
+        leveledUp = true;
+    }
+    updateLevelXpDisplay();
+    if (leveledUp) {
+        // Optionally, show a level up notification
+        // alert(`Level up! You are now level ${level}`);
+    }
+}
+
+function updateLevelXpDisplay() {
+    const levelCount = document.getElementById('level-count');
+    const xpCount = document.getElementById('xp-count');
+    const xpNextSpan = document.getElementById('xp-next');
+    if (levelCount) levelCount.innerText = level;
+    if (xpCount) xpCount.innerText = xp;
+    if (xpNextSpan) xpNextSpan.innerText = xpNext;
+    // Update XP bar
+    const xpBar = document.getElementById('xp-bar');
+    if (xpBar) {
+        let percent = Math.max(0, Math.min(1, xp / xpNext));
+        xpBar.style.width = (percent * 100) + '%';
+    }
+}
+
+// Add this at the end of the file or after DOMContentLoaded
+const resetBtn = document.getElementById('reset-save-btn');
+if (resetBtn) {
+    resetBtn.onclick = function() {
+        if (confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
+            localStorage.removeItem('cards-collection');
+            localStorage.removeItem('cards-rolls');
+            localStorage.removeItem('cards-tokens');
+            localStorage.removeItem('cards-xp');
+            localStorage.removeItem('cards-level');
+            localStorage.removeItem('cards-xpNext');
+            localStorage.removeItem('cards-last-connection');
+            // Optionally reset rarity bar threshold
+            // localStorage.removeItem('rarity-notif-threshold');
+            // Reset in-memory variables
+            collection = {};
+            rolls = 0;
+            tokens = 10;
+            xp = 0;
+            level = 1;
+            xpNext = 50;
+            updateTokensDisplay();
+            updateLevelXpDisplay();
+            updateCollection();
+            updateInventoryStats();
+            resetCardPreview();
+            alert('Progress has been reset!');
+            // Optionally reload the page
+            // location.reload();
+        }
+    };
+}
+
+// On page load, call renderRarityBar
+renderRarityBar();
