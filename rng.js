@@ -343,9 +343,6 @@ function rollItem() {
     // Sauvegarder immédiatement le compteur
     saveCollection();
 
-    // Afficher l'animation de roll
-    // showRollAnimation();
-
     // Simuler le roll
     setTimeout(() => {
         let winners = [];
