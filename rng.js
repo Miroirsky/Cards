@@ -13,8 +13,9 @@ const items = [
 let collection = {};
 let rolls = 0;
 let isRolling = false;
-let tokens = 5;
-let tokenInterval = 1000;
+let tokens = 10;
+let tokenInterval = 5000;
+let maxToken = 20;
 let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
@@ -69,38 +70,44 @@ function updateTokensDisplay() {
     const tokensElement = document.getElementById('tokens-count');
     const indicator = document.getElementById('tokens-indicator');
     
-    tokensElement.innerText = tokens;
+    tokensElement.innerText = `${tokens} / ${maxToken}`;
     
     // Changer la couleur selon l'état des tokens
-    if (tokens <= 3) {
-        // Rouge pour 3 tokens et moins
+    if (tokens <= 25 / 100 * maxToken) {
+        indicator.classList.add('very-low');
+        indicator.classList.remove('low');
+        indicator.classList.remove('medium');
+        indicator.classList.remove('high');
+        indicator.classList.remove('max');
+    } else if (tokens <= 50 / 100 * maxToken) {
+        indicator.classList.remove('very-low');
         indicator.classList.add('low');
         indicator.classList.remove('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 4 && tokens <= 5) {
-        // Orange pour 4 à 5 tokens
+    } else if (tokens <= 75 / 100 * maxToken) {
+        indicator.classList.remove('very-low');
         indicator.classList.remove('low');
         indicator.classList.add('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens >= 6 && tokens <= 9) {
-        // Vert pour 6 à 9 tokens
-        indicator.classList.remove('low');
-        indicator.classList.remove('medium');
-        indicator.classList.add('high');
-        indicator.classList.remove('max');
-    } else if (tokens >= 10) {
-        // Bleu pour 10 tokens
+    } else if (tokens === maxToken) {
+        indicator.classList.remove('very-low');
         indicator.classList.remove('low');
         indicator.classList.remove('medium');
         indicator.classList.remove('high');
         indicator.classList.add('max');
+    } else {
+        indicator.classList.remove('very-low');
+        indicator.classList.remove('low');
+        indicator.classList.remove('medium');
+        indicator.classList.add('high');
+        indicator.classList.remove('max');
     }
 }
 
 function addToken() {
-    if (tokens < 10) { // Limite de 10 tokens
+    if (tokens < maxToken) { // Limite de 10 tokens
         tokens++;
         updateTokensDisplay();
         saveCollection();
@@ -799,9 +806,9 @@ function loadCollection() {
     if (tokensData) {
         tokens = parseInt(tokensData);
         // S'assurer que les tokens ne dépassent pas la limite
-        if (tokens > 10) tokens = 10;
+        if (tokens > maxToken) tokens = maxToken;
     } else {
-        tokens = 5; // Valeur par défaut pour les nouveaux utilisateurs
+        tokens = 10; // Valeur par défaut pour les nouveaux utilisateurs
     }
     
     updateTokensDisplay();
@@ -825,7 +832,7 @@ function gainTokensSinceLastConnection() {
     const diffSeconds = Math.floor(diffMs / 1000);
     const tokensToAdd = Math.floor(diffSeconds / (rollDelay / 100)); // Gagne des tokens 100X plus lentement que en ligne
     if (tokensToAdd > 0) {
-        tokens = Math.min(tokens + tokensToAdd, 10);
+        tokens = Math.min(tokens + tokensToAdd, maxToken);
         updateTokensDisplay();
         saveCollection();
     }

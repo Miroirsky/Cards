@@ -61,29 +61,35 @@ body {
     margin-left: 1em;
 }
 
-#tokens-indicator.low {
+#tokens-indicator.very-low {
     color: #e74c3c;
     background: rgba(231, 76, 60, 0.1);
     border-color: #e74c3c;
     animation: pulse 1s ease-in-out infinite;
 }
 
-#tokens-indicator.medium {
+#tokens-indicator.low {
     color: #f39c12;
     background: rgba(243, 156, 18, 0.1);
     border-color: #f39c12;
 }
 
-#tokens-indicator.high {
+#tokens-indicator.medium {
     color: #27ae60;
     background: rgba(39, 174, 96, 0.1);
     border-color: #27ae60;
 }
 
-#tokens-indicator.max {
+#tokens-indicator.high {
     color: #3498db;
     background: rgba(52, 152, 219, 0.1);
     border-color: #3498db;
+}
+
+#tokens-indicator.max {
+    color: #8a34db;
+    background: rgb(138, 52, 219, 0.1);
+    border-color: #8a34db;
     animation: glow 2s ease-in-out infinite alternate;
 }
 
@@ -605,8 +611,8 @@ body {
     50% { opacity: 0.7; }
 }
 @keyframes glow {
-    0% { box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
-    100% { box-shadow: 0 0 15px rgba(52, 152, 219, 0.6); }
+    0% { box-shadow: 0 0 5px rgb(138, 52, 219, 0.4); }
+    100% { box-shadow: 0 0 15px rgb(138, 52, 219, 0.7); }
 }
 @keyframes shiny-move {
     0% { background-position: 0% 50%; }
