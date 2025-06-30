@@ -10,6 +10,15 @@ const items = [
     { name: "Mars", chance: 50, rollable: true, color: "#d84315" }
 ];
 
+const cardsGroupes = [
+    { name: "Nature", content: ["Grass", "Bush", "Tree"], color: "rgb(6, 65, 11)" },
+    { name: "Biomes", content: ["Snow Mountains", "Beach", "Tree"], color: "rgb(129, 148, 131)" },
+    { name: "Food", content: ["Sugar"], color: "rgb(216, 177, 47)" },
+    { name: "Planets", content: ["Mars"], color: "rgb(54, 54, 54)" },
+    { name: "Weapons", content: ["Sword"], color: "rgb(30, 30, 30)" },
+    { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" }
+];
+
 let collection = {};
 let rolls = 0;
 let isRolling = false;
@@ -310,7 +319,7 @@ function rollItem() {
     updateLuck()
     if (isRolling) return; // Empêche les rolls multiples
     if (tokens <= 0) {
-        alert('Vous n\'avez plus de tokens ! Attendez qu\'ils se rechargent.');
+        alert('You doesn\'t have any tokens ! Wait until you have more.');
         return;
     }
     
@@ -526,12 +535,36 @@ function updateCollection() {
                                 <b style='font-size:1.25em;'>${displayName}</b><br>
                                 ${rarityTag}<br>${goldTag}${specialTag}<br>
                                 <button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
-    <button id='decompressor-btn' style='margin-left:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button><br>
+                                <button id='decompressor-btn' style='margin-left:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button><br>
                                 <span style='font-size:0.9em;color:#888'>(Tap anywhere to close)</span>
                             </div>
                         </div>`;
                     overlay.style.display = 'block';
                     popup.style.display = 'block';
+                    let groupeDisplay = document.createElement('div')
+                    groupeDisplay.id = `groupe-display`
+                    groupeDisplay.style.background = "none"
+                    popup.appendChild(groupeDisplay)
+                    for (let groupe of cardsGroupes) {
+                        for (let card of groupe.content) {
+                            if (card === baseName) {
+                                let div = document.createElement('div')
+                                div.innerText = groupe.name
+                                div.style.background = groupe.color
+                                div.style.color = "#fff"
+                                div.style.border = "none"
+                                div.style.width = "5em"
+                                div.style.display = "inline-block"
+                                div.style.padding = "2px 6px"
+                                div.style.borderRadius = "8px"
+                                div.style.fontSize = "0.7em"
+                                div.style.fontWeight = "bold"
+                                div.style.textTransform = "uppercase"
+                                div.style.marginLeft = "2px"
+                                groupeDisplay.appendChild(div)
+                            }
+                        }
+                    }
                     const closePopup = () => {
                         overlay.style.display = 'none';
                         popup.style.display = 'none';
