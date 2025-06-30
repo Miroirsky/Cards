@@ -14,7 +14,7 @@ let collection = {};
 let rolls = 0;
 let isRolling = false;
 let tokens = 5;
-let tokenInterval = 5000;
+let tokenInterval = 1000;
 let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
@@ -28,117 +28,9 @@ let sugarRushMaxMultiplier = 2;
 
 let slotInterval = null;
 
-// Table de crafts simulés
+// Crafting
 const craftRecipes = [
-    {
-        require: [ { name: "Grass (Gold)", qty: 1 } ],
-        result: [ { name: "Grass", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Grass (Rainbow)", qty: 1 } ],
-        result: [ { name: "Grass (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Grass (Shiny)", qty: 1 } ],
-        result: [ { name: "Grass (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bush (Gold)", qty: 1 } ],
-        result: [ { name: "Bush", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bush (Rainbow)", qty: 1 } ],
-        result: [ { name: "Bush (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bush (Shiny)", qty: 1 } ],
-        result: [ { name: "Bush (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Tree (Gold)", qty: 1 } ],
-        result: [ { name: "Tree", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Tree (Rainbow)", qty: 1 } ],
-        result: [ { name: "Tree (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Tree (Shiny)", qty: 1 } ],
-        result: [ { name: "Tree (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bones (Gold)", qty: 1 } ],
-        result: [ { name: "Bones", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bones (Rainbow)", qty: 1 } ],
-        result: [ { name: "Bones (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Bones (Shiny)", qty: 1 } ],
-        result: [ { name: "Bones (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sugar (Gold)", qty: 1 } ],
-        result: [ { name: "Sugar", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sugar (Rainbow)", qty: 1 } ],
-        result: [ { name: "Sugar (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sugar (Shiny)", qty: 1 } ],
-        result: [ { name: "Sugar (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Beach (Gold)", qty: 1 } ],
-        result: [ { name: "Beach", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Beach (Rainbow)", qty: 1 } ],
-        result: [ { name: "Beach (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Beach (Shiny)", qty: 1 } ],
-        result: [ { name: "Beach (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Snow Mountain (Gold)", qty: 1 } ],
-        result: [ { name: "Snow Mountain", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Snow Mountain (Rainbow)", qty: 1 } ],
-        result: [ { name: "Snow Mountain (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Snow Mountain (Shiny)", qty: 1 } ],
-        result: [ { name: "Snow Mountain (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sword (Gold)", qty: 1 } ],
-        result: [ { name: "Sword", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sword (Rainbow)", qty: 1 } ],
-        result: [ { name: "Sword (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Sword (Shiny)", qty: 1 } ],
-        result: [ { name: "Sword (Rainbow)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Mars (Gold)", qty: 1 } ],
-        result: [ { name: "Mars", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Mars (Rainbow)", qty: 1 } ],
-        result: [ { name: "Mars (Gold)", qty: 5 } ]
-    },
-    {
-        require: [ { name: "Mars (Shiny)", qty: 1 } ],
-        result: [ { name: "Mars (Rainbow)", qty: 5 } ]
-    }
-    // Ajoutez d'autres recettes ici si besoin
+    // Add more recipe here
 ];
 
 function getRarityTag(chance) {
@@ -586,10 +478,300 @@ function updateCollection() {
                 </div>
             </div>
         `;
+        // Remove animation class if present
+        setTimeout(() => {
+            const cardDiv = li.querySelector('.card-inventory');
+            if (cardDiv) cardDiv.style.animation = 'none';
+        }, 0);
+        // Add long-press event for card info popup
+        setTimeout(() => { // Wait for DOM
+            const cardDiv = li.querySelector('.card-inventory');
+            if (cardDiv) {
+                let pressTimer = null;
+                let startX = 0, startY = 0;
+                const showPopup = () => {
+                    let overlay = document.getElementById('blur-overlay');
+                    let popup = document.getElementById('card-info-popup');
+                    if (!popup) {
+                        popup = document.createElement('div');
+                        popup.id = 'card-info-popup';
+                        popup.style.position = 'fixed';
+                        popup.style.top = '50%';
+                        popup.style.left = '50%';
+                        popup.style.transform = 'translate(-50%,-50%)';
+                        popup.style.fontSize = '1.2em';
+                        popup.style.color = '#3498db';
+                        popup.style.background = 'rgba(255,255,255,0.97)';
+                        popup.style.padding = '2em 2.5em';
+                        popup.style.borderRadius = '25px';
+                        popup.style.zIndex = '2001';
+                        popup.style.textAlign = 'center';
+                        popup.style.boxShadow = '0 8px 40px rgba(52,152,219,0.15)';
+                        popup.style.display = 'none';
+                        document.body.appendChild(popup);
+                    }
+                    popup.innerHTML = `
+                        <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
+                            <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
+                                <img src='${imgSrc}' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+                            </div>
+                            <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
+                                <b style='font-size:1.25em;'>${displayName}</b><br>
+                                ${rarityTag}<br>${goldTag}${specialTag}<br>
+                                <button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
+    <button id='decompressor-btn' style='margin-left:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button><br>
+                                <span style='font-size:0.9em;color:#888'>(Tap anywhere to close)</span>
+                            </div>
+                        </div>`;
+                    overlay.style.display = 'block';
+                    popup.style.display = 'block';
+                    const closePopup = () => {
+                        overlay.style.display = 'none';
+                        popup.style.display = 'none';
+                        let comp = document.getElementById('compressor-popup');
+                        if (comp) comp.style.display = 'none';
+                    };
+                    overlay.onclick = closePopup;
+                    popup.onclick = closePopup;
+                    // Prevent closing when clicking compressor button
+                    document.getElementById('compressor-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        showCompressorMenu(baseName, type);
+                    };
+        var decompressBtn = document.getElementById('decompressor-btn');
+        if (decompressBtn) decompressBtn.onclick = (e) => {
+            e.stopPropagation();
+            showDecompressorMenu(baseName, type);
+        };
+    
+                    function showCompressorMenu(cardName, cardType) {
+                        let comp = document.getElementById('compressor-popup');
+                        if (!comp) {
+                            comp = document.createElement('div');
+                            comp.id = 'compressor-popup';
+                            comp.style.position = 'fixed';
+                            comp.style.top = '50%';
+                            comp.style.left = '50%';
+                            comp.style.transform = 'translate(-50%,-50%)';
+                            comp.style.fontSize = '1.1em';
+                            comp.style.color = '#222';
+                            comp.style.background = 'rgba(255,255,255,0.99)';
+                            comp.style.padding = '2em 2.5em';
+                            comp.style.borderRadius = '25px';
+                            comp.style.zIndex = '2002';
+                            comp.style.textAlign = 'center';
+                            comp.style.boxShadow = '0 8px 40px rgba(52,152,219,0.15)';
+                            comp.style.minWidth = '220px';
+                            comp.style.maxWidth = '90vw';
+                            comp.style.maxHeight = '80vh';
+                            comp.style.overflowY = 'auto';
+                            comp.style.display = 'none';
+                            document.body.appendChild(comp);
+                        }
+                        // Determine compression rules
+                        let nextType = '', needed = 25, canCompress = 0, owned = 0, resultName = '', resultType = '';
+                        if (!cardType) { nextType = 'Gold'; resultType = 'Gold'; resultName = cardName + ' (Gold)'; }
+                        else if (cardType === 'Gold') { nextType = 'Rainbow'; resultType = 'Rainbow'; resultName = cardName + ' (Rainbow)'; }
+                        else if (cardType === 'Rainbow') { nextType = 'Shiny'; resultType = 'Shiny'; resultName = cardName + ' (Shiny)'; }
+                        else { nextType = null; }
+                        owned = collection[cardType ? cardName + ' (' + cardType + ')' : cardName] || 0;
+                        if (nextType) canCompress = Math.floor(owned / needed);
+                        comp.innerHTML = `
+                            <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
+                                <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
+                                    <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+                                </div>
+                                <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
+                                    <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
+                                    <span style='color:#888;'>You own: ${owned}</span><br>
+                                    ${nextType ? `<span style='color:#3498db;'>${needed} → 1 ${nextType}</span><br>` : '<span style="color:#e74c3c;">Max rarity</span><br>'}
+                                    ${nextType && canCompress > 0 ? `<button id='do-compress-btn' style='margin:1em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#27ae60;color:white;border:none;cursor:pointer;'>Compress ${needed} → 1 ${nextType} (${canCompress}x)</button>` : ''}
+                                    ${nextType && canCompress > 0 ? `<button id='do-compress-all-btn' style='margin:0.5em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#e67e22;color:white;border:none;cursor:pointer;'>Compress All (${canCompress}x)</button>` : ''}
+                                    <button id='cancel-compress-btn' style='margin-top:0.7em;padding:0.4em 1.2em;font-size:0.95em;border-radius:8px;background:#aaa;color:white;border:none;cursor:pointer;'>Cancel</button>
+                                </div>
+                            </div>
+                        `;
+                        comp.style.display = 'block';
+                        popup.style.display = 'none';
+                        // Cancel button
+                        document.getElementById('cancel-compress-btn').onclick = function(ev) {
+                            ev.stopPropagation();
+                            comp.style.display = 'none';
+                            popup.style.display = 'block';
+                        };
+                        // Compression logic
+                        if (nextType && canCompress > 0) {
+                            document.getElementById('do-compress-btn').onclick = function(ev) {
+                                ev.stopPropagation();
+                                // Remove cards
+                                collection[cardType ? cardName + ' (' + cardType + ')' : cardName] -= needed;
+                                if (collection[cardType ? cardName + ' (' + cardType + ')' : cardName] <= 0) delete collection[cardType ? cardName + ' (' + cardType + ')' : cardName];
+                                // Add new card
+                                if (!collection[resultName]) collection[resultName] = 0;
+                                collection[resultName] += 1;
+                                saveCollection();
+                                updateCollection();
+                                // Refresh compressor menu
+                                showCompressorMenu(cardName, cardType);
+                            };
+                            // Compress All logic
+                            document.getElementById('do-compress-all-btn').onclick = function(ev) {
+                                ev.stopPropagation();
+                                let totalCompress = canCompress;
+                                // Remove all possible
+                                collection[cardType ? cardName + ' (' + cardType + ')' : cardName] -= needed * totalCompress;
+                                if (collection[cardType ? cardName + ' (' + cardType + ')' : cardName] <= 0) delete collection[cardType ? cardName + ' (' + cardType + ')' : cardName];
+                                // Add all new cards
+                                if (!collection[resultName]) collection[resultName] = 0;
+                                collection[resultName] += totalCompress;
+                                saveCollection();
+                                updateCollection();
+                                // Refresh compressor menu
+                                showCompressorMenu(cardName, cardType);
+                            };
+                        }
+                        // Prevent closing compressor by clicking inside
+                        comp.onclick = function(ev) { ev.stopPropagation(); };
+                        overlay.onclick = function() {
+                            comp.style.display = 'none';
+                            overlay.style.display = 'none';
+                            popup.style.display = 'none';
+                        };
+                    }
+                };
+                cardDiv.addEventListener('mousedown', (e) => {
+                    startX = e.clientX; startY = e.clientY;
+                    pressTimer = setTimeout(showPopup, 500);
+                });
+                cardDiv.addEventListener('mouseup', () => {
+                    clearTimeout(pressTimer);
+                });
+                cardDiv.addEventListener('mouseleave', () => {
+                    clearTimeout(pressTimer);
+                });
+                // Touch support
+                cardDiv.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+                        pressTimer = setTimeout(showPopup, 500);
+                    }
+                });
+                cardDiv.addEventListener('touchend', () => {
+                    clearTimeout(pressTimer);
+                });
+                cardDiv.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 1) {
+                        const dx = Math.abs(e.touches[0].clientX - startX);
+                        const dy = Math.abs(e.touches[0].clientY - startY);
+                        if (dx > 10 || dy > 10) clearTimeout(pressTimer);
+                    }
+                });
+            }
+        }, 0);
         ul.appendChild(li);
     }
 
     if (window.updateCraftButtons) window.updateCraftButtons();
+}
+
+
+function showDecompressorMenu(cardName, cardType) {
+    let comp = document.getElementById('compressor-popup');
+    if (!comp) {
+        comp = document.createElement('div');
+        comp.id = 'compressor-popup';
+        comp.style.position = 'fixed';
+        comp.style.top = '50%';
+        comp.style.left = '50%';
+        comp.style.transform = 'translate(-50%,-50%)';
+        comp.style.fontSize = '1.1em';
+        comp.style.color = '#222';
+        comp.style.background = 'rgba(255,255,255,0.99)';
+        comp.style.padding = '2em 2.5em';
+        comp.style.borderRadius = '25px';
+        comp.style.zIndex = '2002';
+        comp.style.textAlign = 'center';
+        comp.style.boxShadow = '0 8px 40px rgba(52,152,219,0.15)';
+        comp.style.minWidth = '220px';
+        comp.style.maxWidth = '90vw';
+        comp.style.maxHeight = '80vh';
+        comp.style.overflowY = 'auto';
+        comp.style.display = 'none';
+        document.body.appendChild(comp);
+    }
+    let prevType = '', decompressQty = 5, resultName = '', owned = 0;
+    if (cardType === 'Gold')      { prevType = ''; resultName = cardName; }
+    else if (cardType === 'Rainbow') { prevType = 'Gold'; resultName = cardName + ' (Gold)'; }
+    else if (cardType === 'Shiny')   { prevType = 'Rainbow'; resultName = cardName + ' (Rainbow)'; }
+    else {
+        comp.innerHTML = "<b>Pas de rareté supérieure à décompresser.</b>";
+        comp.style.display = 'block';
+        return;
+    }
+    owned = collection[cardType ? cardName + ' (' + cardType + ')' : cardName] || 0;
+    comp.innerHTML = `
+        <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
+            <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
+                <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+            </div>
+            <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
+                <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
+                <span style='color:#888;'>You own: ${owned}</span><br>
+                <span style='color:#16a085;'>1 → ${decompressQty} ${resultName}</span><br>
+                ${(owned > 0) ? `<button id='do-decompress-btn' style='margin:1em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompress 1 → ${decompressQty} (${resultName})</button>` : ''}
+                ${(owned > 0) ? `<button id='do-decompress-all-btn' style='margin:0.5em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#2980b9;color:white;border:none;cursor:pointer;'>Decompress All (${owned} → ${owned*decompressQty})</button>` : ''}
+                <button id='cancel-decompress-btn' style='margin-top:0.7em;padding:0.4em 1.2em;font-size:0.95em;border-radius:8px;background:#aaa;color:white;border:none;cursor:pointer;'>Cancel</button>
+            </div>
+        </div>
+    `;
+    comp.style.display = 'block';
+    let popup = document.getElementById('card-info-popup');
+    if (popup) popup.style.display = 'none';
+
+    // Cancel button
+    document.getElementById('cancel-decompress-btn').onclick = function(ev) {
+        ev.stopPropagation();
+        comp.style.display = 'none';
+        if (popup) popup.style.display = 'block';
+    };
+
+    // Decompress One
+    if (owned > 0) {
+        document.getElementById('do-decompress-btn').onclick = function(ev) {
+            ev.stopPropagation();
+            // Retirer 1 carte rare
+            collection[cardType ? cardName + ' (' + cardType + ')' : cardName] -= 1;
+            if (collection[cardType ? cardName + ' (' + cardType + ')' : cardName] <= 0) delete collection[cardType ? cardName + ' (' + cardType + ')' : cardName];
+            // Ajouter 5 cartes de rareté inférieure
+            if (!collection[resultName]) collection[resultName] = 0;
+            collection[resultName] += decompressQty;
+            saveCollection();
+            updateCollection();
+            showDecompressorMenu(cardName, cardType); // refresh
+        };
+        // Decompress All
+        document.getElementById('do-decompress-all-btn').onclick = function(ev) {
+            ev.stopPropagation();
+            let total = owned;
+            // Retirer toutes les cartes rares
+            collection[cardType ? cardName + ' (' + cardType + ')' : cardName] -= total;
+            if (collection[cardType ? cardName + ' (' + cardType + ')' : cardName] <= 0) delete collection[cardType ? cardName + ' (' + cardType + ')' : cardName];
+            // Ajouter (owned*decompressQty) cartes de rareté inférieure
+            if (!collection[resultName]) collection[resultName] = 0;
+            collection[resultName] += total * decompressQty;
+            saveCollection();
+            updateCollection();
+            showDecompressorMenu(cardName, cardType); // refresh
+        };
+    }
+    // Empêche la fermeture du menu en cliquant dedans
+    comp.onclick = function(ev) { ev.stopPropagation(); };
+    let overlay = document.getElementById('blur-overlay');
+    overlay.onclick = function() {
+        comp.style.display = 'none';
+        if (popup) popup.style.display = 'none';
+        overlay.style.display = 'none';
+    };
 }
 
 // Sauvegarde l'inventaire dans localStorage
@@ -831,146 +1013,4 @@ function renderRarityBar() {
         };
         bar.appendChild(seg);
     });
-}
-renderRarityBar();
-
-function animateCraftOrb(cardName, craftBtn, qty) {
-    // Trouver la carte correspondante dans la collection
-    const collectionList = document.getElementById('collection-list');
-    if (!collectionList) return;
-    let cardElem = null;
-    for (const li of collectionList.children) {
-        if (li.innerHTML.includes(cardName)) {
-            cardElem = li;
-            break;
-        }
-    }
-    if (!cardElem || !craftBtn) return;
-    const cardRect = cardElem.getBoundingClientRect();
-    const btnRect = craftBtn.getBoundingClientRect();
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
-    const orb = document.createElement('div');
-    orb.className = 'token-orb-animation';
-    let card = null;
-    for (let item of items) {
-        if (item.name === cardName) {
-            card = item;
-            break;
-        }
-    }
-    // Taille de base 32px, augmente avec la racine carrée de la quantité (max 80px)
-    const minSize = 32;
-    const maxSize = 80;
-    const size = Math.min(maxSize, minSize + (Math.sqrt(qty)-1)*18); // sqrt(qty), +18px par racine au-dessus de 1
-    orb.style.width = size + 'px';
-    orb.style.height = size + 'px';
-    orb.style.left = (cardRect.left + cardRect.width/2 + scrollX - size/2) + 'px';
-    orb.style.top = (cardRect.top + cardRect.height/2 + scrollY - size/2) + 'px';
-    document.body.appendChild(orb);
-    orb.offsetWidth;
-    orb.style.transition = 'all 0.7s cubic-bezier(0.4,1.6,0.4,1)';
-    orb.style.left = (btnRect.left + btnRect.width/2 + scrollX - size/2) + 'px';
-    orb.style.top = (btnRect.top + btnRect.height/2 + scrollY - size/2) + 'px';
-    orb.style.opacity = 1;
-    orb.style.background = card.color;
-    setTimeout(() => { orb.style.opacity = 0; }, 600);
-    setTimeout(() => { orb.remove(); }, 900);
-}
-
-function simulateCraft(recipeIndex) {
-    const recipe = craftRecipes[recipeIndex];
-    if (!recipe) return { success: false, message: "Recette inconnue." };
-    // Vérifier si le joueur a assez de ressources
-    for (let req of recipe.require) {
-        if (!collection[req.name] || collection[req.name] < req.qty) {
-            return { success: false, message: `Pas assez de ${req.name}` };
-        }
-    }
-    // Animation d'orbe pour chaque ressource consommée, taille selon la quantité
-    const craftBtn = document.getElementById(`craft-btn-${recipeIndex}`);
-    if (craftBtn) {
-        recipe.require.forEach(req => {
-            animateCraftOrb(req.name, craftBtn, req.qty);
-        });
-    }
-    // Retirer les ressources requises
-    for (let req of recipe.require) {
-        collection[req.name] -= req.qty;
-        if (collection[req.name] <= 0) delete collection[req.name];
-    }
-    // Ajouter les résultats
-    for (let res of recipe.result) {
-        if (!collection[res.name]) collection[res.name] = 0;
-        collection[res.name] += res.qty;
-    }
-    saveCollection();
-    updateCollection();
-    updateInventoryStats && updateInventoryStats();
-    return { success: true, message: "Craft réussi !" };
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Affichage de toutes les recettes de craft
-    const craftListDiv = document.getElementById('craft-list');
-    const craftResultDiv = document.getElementById('craft-result');
-    if (craftListDiv && craftRecipes.length > 0) {
-        craftListDiv.innerHTML = '';
-        craftRecipes.forEach((recipe, idx) => {
-            let reqs = recipe.require.map(r => `${r.qty} × ${r.name}`).join(' + ');
-            let ress = recipe.result.map(r => `${r.qty} × ${r.name}`).join(' + ');
-            const craftDiv = document.createElement('div');
-            craftDiv.style.marginBottom = '1em';
-            craftDiv.innerHTML = `<b>${reqs}</b> → <b>${ress}</b> `;
-            const btn = document.createElement('button');
-            btn.className = 'roll-btn';
-            btn.innerText = 'CRAFT';
-            btn.onclick = function() {
-                const res = simulateCraft(idx);
-                craftResultDiv.innerText = res.message;
-                setTimeout(() => { craftResultDiv.innerText = ''; }, 2000);
-                updateCraftButtons();
-            };
-            btn.id = `craft-btn-${idx}`;
-            craftDiv.appendChild(btn);
-            craftListDiv.appendChild(craftDiv);
-        });
-        updateCraftButtons();
-    }
-
-    function updateCraftButtons() {
-        craftRecipes.forEach((recipe, idx) => {
-            const btn = document.getElementById(`craft-btn-${idx}`);
-            let canCraft = recipe.require.every(req => collection[req.name] && collection[req.name] >= req.qty);
-            btn.disabled = !canCraft;
-            if (!canCraft) {
-                btn.style.opacity = 0.5;
-                btn.style.cursor = 'not-allowed';
-            } else {
-                btn.style.opacity = 1;
-                btn.style.cursor = 'pointer';
-            }
-        });
-    }
-
-    // Rendre updateCraftButtons accessible globalement pour updateCollection
-    window.updateCraftButtons = updateCraftButtons;
-});
-
-// --- Reset Save ---
-function resetSave() {
-    if (confirm('Êtes-vous sûr de vouloir réinitialiser votre sauvegarde ? Cette action est irréversible.')) {
-        localStorage.removeItem('cards-collection');
-        localStorage.removeItem('cards-rolls');
-        localStorage.removeItem('cards-tokens');
-        localStorage.removeItem('cards-last-connection');
-        localStorage.removeItem('rarity-notif-threshold');
-        location.reload();
-    }
-}
-
-// Ajout du listener pour le bouton reset save
-const resetBtn = document.getElementById('reset-save-btn');
-if (resetBtn) {
-    resetBtn.onclick = resetSave;
 }
