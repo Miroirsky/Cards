@@ -83,6 +83,7 @@ function updateInventoryStats() {
 function updateTokensDisplay() {
     const tokensElement = document.getElementById('tokens-count');
     const indicator = document.getElementById('tokens-indicator');
+    const rollButton = document.getElementById('roll-button');
     
     tokensElement.innerText = `${tokens} / ${maxToken}`;
     
@@ -117,6 +118,20 @@ function updateTokensDisplay() {
         indicator.classList.remove('medium');
         indicator.classList.add('high');
         indicator.classList.remove('max');
+    }
+    // Désactiver et griser le bouton roll si plus de tokens
+    if (rollButton) {
+        if (tokens <= 0) {
+            rollButton.disabled = true;
+            rollButton.style.background = 'linear-gradient(90deg, #bdbdbd, #757575)';
+            rollButton.style.color = '#888';
+            rollButton.style.cursor = 'not-allowed';
+        } else {
+            rollButton.disabled = false;
+            rollButton.style.background = '';
+            rollButton.style.color = '';
+            rollButton.style.cursor = 'pointer';
+        }
     }
 }
 
@@ -324,7 +339,7 @@ function rollItem() {
     updateLuck()
     if (isRolling) return; // Empêche les rolls multiples
     if (tokens <= 0) {
-        alert('You doesn\'t have any tokens ! Wait until you have more.');
+        // Ne rien faire, le bouton est désactivé
         return;
     }
     
@@ -1114,6 +1129,7 @@ function updateLevelXpDisplay() {
         let percent = Math.max(0, Math.min(1, xp / xpNext));
         xpBar.style.width = (percent * 100) + '%';
     }
+    updateUnlockables();
 }
 
 // Add this at the end of the file or after DOMContentLoaded
@@ -1151,3 +1167,91 @@ if (resetBtn) {
 
 // On page load, call renderRarityBar
 renderRarityBar();
+
+// Add after DOMContentLoaded or at the end of the file
+function createAutoRollButton() {
+    let btn = document.getElementById('auto-roll-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'auto-roll-btn';
+        btn.innerText = 'Auto Roll';
+        // Positionnement à côté du bouton roll
+        btn.style.position = 'relative';
+        btn.style.right = 'unset';
+        btn.style.bottom = 'unset';
+        btn.style.marginLeft = '1em';
+        btn.style.zIndex = 1;
+        btn.style.background = 'linear-gradient(90deg, #4ecdc4, #f9d423)'; // Par défaut
+        btn.style.color = '#222';
+        btn.style.fontWeight = 'bold';
+        btn.style.fontSize = '1.1em';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '12px';
+        btn.style.padding = '0.7em 2.2em';
+        btn.style.boxShadow = '0 2px 12px #0002';
+        btn.style.cursor = 'pointer';
+        btn.style.display = 'none';
+        // Insérer juste après le bouton roll principal
+        const rollBtn = document.getElementById('roll-button');
+        if (rollBtn && rollBtn.parentNode) {
+            rollBtn.parentNode.insertBefore(btn, rollBtn.nextSibling);
+        } else {
+            document.body.appendChild(btn);
+        }
+    }
+    // Couleur par défaut (désactivé)
+    btn.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
+    function activateAutoRoll() {
+        if (isRolling) return;
+        btn.disabled = true;
+        let autoRolling = true;
+        // Quand activé, bouton vert
+        btn.style.background = 'linear-gradient(90deg, #27ae60, #2ecc40)';
+        function doAutoRoll() {
+            if (!autoRolling) {
+                btn.disabled = false;
+                // Quand désactivé, bouton rouge
+                btn.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
+                btn.onclick = activateAutoRoll; // Permet de réactiver
+                return;
+            }
+            if (tokens <= 0) {
+                setTimeout(doAutoRoll, 500);
+                return;
+            }
+            rollItem();
+            setTimeout(() => {
+                if (isRolling) {
+                    setTimeout(doAutoRoll, rollDelay);
+                } else {
+                    doAutoRoll();
+                }
+            }, rollDelay + 50);
+        }
+        doAutoRoll();
+        // Stop auto roll si on reclique
+        btn.onclick = function() {
+            autoRolling = false;
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
+            btn.onclick = activateAutoRoll; // Permet de réactiver
+        };
+    }
+    btn.onclick = activateAutoRoll;
+}
+
+// Show/hide auto roll button based on level
+function updateUnlockables() {
+    let btn = document.getElementById('auto-roll-btn');
+    if (!btn) return;
+    if (level >= 5) {
+        btn.style.display = 'block';
+        btn.disabled = false;
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+// Call these on page load and after level up
+createAutoRollButton();
+updateUnlockables();
