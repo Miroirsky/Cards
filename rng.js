@@ -1,13 +1,14 @@
 const items = [
-    { name: "Grass", chance: 2, rollable: true, color: "#4caf50" },
-    { name: "Bush", chance: 3, rollable: true, color: "#388e3c" },
-    { name: "Tree", chance: 4, rollable: true, color: "#795548" },
-    { name: "Bones", chance: 5, rollable: true, color: "#e0e0e0" },
-    { name: "Sugar", chance: 7, rollable: true, specialTag: "Sweet", color: "#d1d1d1" },
-    { name: "Beach", chance: 10, rollable: true, color: "#ffe082" },
-    { name: "Snow Mountains", chance: 15, rollable: true, color: "#b3e5fc" },
-    { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting", color: "#b0bec5" },
-    { name: "Mars", chance: 50, rollable: true, color: "#d84315" }
+    { name: "Grass", chance: 2, rollable: true },
+    { name: "Bush", chance: 3, rollable: true },
+    { name: "Tree", chance: 4, rollable: true },
+    { name: "Bones", chance: 5, rollable: true },
+    { name: "Sugar", chance: 7, rollable: true, specialTag: "Sweet" },
+    { name: "Beach", chance: 10, rollable: true },
+    { name: "Snow Mountains", chance: 15, rollable: true },
+    { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting" },
+    { name: "Mars", chance: 50, rollable: true },
+    { name: "Infinity", chance: 1000000000, rollable: true }
 ];
 
 const cardsGroupes = [
@@ -260,81 +261,6 @@ function updateLuck() {
 	}
 }
 
-function animateTokenOrb() {
-    const tokenIndicator = document.getElementById('tokens-indicator');
-    const rollButton = document.getElementById('roll-button');
-    if (!tokenIndicator || !rollButton) return;
-
-    const orb = document.createElement('div');
-    orb.className = 'token-orb-animation roll';
-    document.body.appendChild(orb);
-
-    // Position de départ (centre de l'indicateur de tokens)
-    const startRect = tokenIndicator.getBoundingClientRect();
-    const endRect = rollButton.getBoundingClientRect();
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
-    orb.style.left = (startRect.left + startRect.width/2 + scrollX) + 'px';
-    orb.style.top = (startRect.top + startRect.height/2 + scrollY) + 'px';
-
-    // Forcer le layout pour l'animation
-    orb.offsetWidth;
-
-    // Position d'arrivée (centre du bouton roll)
-    orb.style.transition = 'all 0.7s cubic-bezier(0.4,1.6,0.4,1)';
-    orb.style.left = (endRect.left + endRect.width/2 + scrollX) + 'px';
-    orb.style.top = (endRect.top + endRect.height/2 + scrollY) + 'px';
-    orb.style.opacity = 1;
-
-    setTimeout(() => {
-        orb.style.opacity = 0;
-    }, 600);
-    setTimeout(() => {
-        orb.remove();
-    }, 900);
-}
-
-function animateCardToInventoryOrb(cardName) {
-    const preview = document.getElementById('card-preview');
-    const collectionList = document.getElementById('collection-list');
-    if (!preview || !collectionList) return;
-    let cardElem = null;
-    for (const li of collectionList.children) {
-        if (li.innerHTML.includes(cardName)) {
-            cardElem = li;
-            break;
-        }
-    }
-    let card = null;
-    for (let item of items) {
-        if (item.name === cardName) {
-            card = item;
-            break;
-        }
-    }
-    if (!cardElem) return;
-    const previewRect = preview.getBoundingClientRect();
-    const cardRect = cardElem.getBoundingClientRect();
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
-    const orb = document.createElement('div');
-    orb.className = 'token-orb-animation';
-    const size = 26;
-    orb.style.width = size + 'px';
-    orb.style.height = size + 'px';
-    orb.style.left = (previewRect.left + previewRect.width/2 + scrollX - size/2) + 'px';
-    orb.style.top = (previewRect.top + previewRect.height/2 + scrollY - size/2) + 'px';
-    document.body.appendChild(orb);
-    orb.offsetWidth;
-    orb.style.transition = 'all 0.8s cubic-bezier(0.4,1.6,0.4,1)';
-    orb.style.left = (cardRect.left + cardRect.width/2 + scrollX - size/2) + 'px';
-    orb.style.top = (cardRect.top + cardRect.height/2 + scrollY - size/2) + 'px';
-    orb.style.opacity = 1;
-    orb.style.background = card.color;
-    setTimeout(() => { orb.style.opacity = 0; }, 700);
-    setTimeout(() => { orb.remove(); }, 1000);
-}
-
 function rollItem() {
     updateLuck()
     if (isRolling) return; // Empêche les rolls multiples
@@ -346,7 +272,6 @@ function rollItem() {
     // Consommer un token
     tokens--;
     updateTokensDisplay();
-    animateTokenOrb();
     
     isRolling = true;
     const rollButton = document.getElementById('roll-button');
@@ -440,11 +365,6 @@ function rollItem() {
         saveCollection();
         updateCollection();
         updateInventoryStats();
-
-        // Animation d'orbe de la preview vers l'inventaire
-        setTimeout(() => {
-            animateCardToInventoryOrb(displayName);
-        }, 250);
 
         // Réactiver le bouton après 200ms supplémentaires (plus rapide)
         setTimeout(() => {

@@ -952,22 +952,6 @@ body {
     outline: none;
 }
 
-.token-orb-animation {
-    position: absolute;
-    width: 32px;
-    height: 32px;
-    background: radial-gradient(circle at 30% 30%, #f9d423 70%, #ff4e50 100%);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 3000;
-    opacity: 1;
-    transition: all 0.7s cubic-bezier(0.4,1.6,0.4,1), opacity 0.2s;
-    will-change: left, top, opacity;
-}
-.token-orb-animation.roll {
-    background: url('Icons/Token.png') center/cover no-repeat, radial-gradient(circle at 30% 30%, #f9d423 70%, #ff4e50 100%);
-}
-
 #card-info-popup {
     position: fixed;
     top: 50%;
