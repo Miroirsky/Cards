@@ -8,16 +8,22 @@ const items = [
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting" },
     { name: "Mars", chance: 50, rollable: true },
-    { name: "Infinity", chance: 1000000000, rollable: true }
+    { name: "Burger", chance: 75, rollable: true },
+    { name: "Earth", chance: 100, rollable: true },
+    { name: "Ice Spikes", chance: 150, rollable: true },
+    { name: "Electricity", chance: 250, rollable: true },
+    { name: "Thunder", chance: 2500, rollable: false },
+    { name: "Infinity", chance: 1000000000, rollable: false }
 ];
 
 const cardsGroupes = [
     { name: "Nature", content: ["Grass", "Bush", "Tree"], color: "rgb(6, 65, 11)" },
     { name: "Biomes", content: ["Snow Mountains", "Beach", "Tree"], color: "rgb(129, 148, 131)" },
-    { name: "Food", content: ["Sugar"], color: "rgb(216, 177, 47)" },
-    { name: "Planets", content: ["Mars"], color: "rgb(54, 54, 54)" },
+    { name: "Food", content: ["Sugar", "Burger"], color: "rgb(216, 177, 47)" },
+    { name: "Planets", content: ["Mars", "Earth"], color: "rgb(54, 54, 54)" },
     { name: "Weapons", content: ["Sword"], color: "rgb(30, 30, 30)" },
-    { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" }
+    { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" },
+    { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" }
 ];
 
 let collection = {};
@@ -46,6 +52,12 @@ let xpNext = 50;
 // Crafting
 const craftRecipes = [
     // Add more recipe here
+    {
+        name: "Thunder",
+        ingredients: [
+            { name: "Electricity", amount: 10 }
+        ],
+    }
 ];
 
 function getRarityTag(chance) {
