@@ -8,9 +8,10 @@ const items = [
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting" },
     { name: "Mars", chance: 50, rollable: true },
-    { name: "Burger", chance: 75, rollable: true },
+    { name: "Burger", chance: 75, rollable: true, specialTag: "Caloric" },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true },
+    { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Infinity", chance: 1000000000, rollable: false }
@@ -57,8 +58,15 @@ const craftRecipes = [
         ingredients: [
             { name: "Electricity", amount: 10 }
         ],
+        time: 10000,
     }
 ];
+
+let craftingQueue = [];
+
+function craftItem(item) {
+    craftingQueue.push(item);
+}
 
 function getRarityTag(chance) {
     if (chance < 10) return '<span class="rarity-tag rarity-common">Common</span>';
