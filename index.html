@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.13.1</div>
+    <div class="update-text">Update 1.14.1</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -61,10 +61,42 @@
             <ul id="collection-list"></ul>
         </div>
     </div>
+    
+    <!-- Interface Potions -->
+    <div class="potions-interface" style="margin-top:2em;text-align:center;">
+        <h2>Potions & Items</h2>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:1000px;margin:0 auto;">
+            <!-- Inventaire des potions -->
+            <div style="flex:1;margin-right:2em;">
+                <h3 style="color:#9b59b6;margin-bottom:0.5em;">Inventory</h3>
+                <div id="potions-list" style="display:flex;justify-content:center;flex-wrap:wrap;gap:1em;"></div>
+            </div>
+            <!-- Effets actifs et stats -->
+            <div style="flex:1;">
+                <h3 style="color:#e74c3c;margin-bottom:0.5em;">Effets & Stats</h3>
+                <div id="active-effects" style="background:rgba(231,76,60,0.1);border-radius:10px;padding:1em;border:2px solid rgba(231,76,60,0.3);min-height:200px;">
+                    <div style="color:#7f8c8d;font-style:italic;">No active effects...</div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Interface Craft -->
     <div class="craft-content" style="margin-top:2em;text-align:center;">
-        <h2>Craft</h2>
-        <div id="craft-list"></div>
+        <h2>Crafts</h2>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:800px;margin:0 auto;">
+            <!-- Queue de craft à gauche -->
+            <div style="flex:1;margin-right:2em;text-align:left;">
+                <h3 style="color:#3498db;margin-bottom:0.5em;">Crafting Queue</h3>
+                <div id="craft-queue" style="min-height:100px;background:rgba(52,152,219,0.1);border-radius:10px;padding:1em;border:2px solid rgba(52,152,219,0.3);">
+                    <div style="color:#7f8c8d;font-style:italic;">No crafting in progress...</div>
+                </div>
+            </div>
+            <!-- Recettes de craft à droite -->
+            <div style="flex:2;">
+                <h3 style="color:#27ae60;margin-bottom:0.5em;">Unlocked Crafts</h3>
+                <div id="craft-list"></div>
+            </div>
+        </div>
         <div id="craft-result" style="margin-top:1em;color:#f39c12;font-weight:bold;"></div>
     </div>
     <!-- Bouton paramètres -->
