@@ -13,6 +13,8 @@ const items = [
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
+    { name: "Hearth", chance: 500, rollable: true },
+    { name: "Pierced Hearth", chance: 5000, rollable: true },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Infinity", chance: 1000000000, rollable: false }
 ];
@@ -31,7 +33,7 @@ const potions = [
         name: "Thunder Potion",
         type: "rollspeed",
         power: 3,
-        duration: 180000, // 50 rolls
+        duration: 180000, // 30 minutes
         image: "Thunder.png",
         effectType: "time" // Effet basé sur le temps
     }
@@ -44,7 +46,8 @@ const cardsGroupes = [
     { name: "Planets", content: ["Mars", "Earth"], color: "rgb(54, 54, 54)" },
     { name: "Weapons", content: ["Sword"], color: "rgb(30, 30, 30)" },
     { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" },
-    { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" }
+    { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" },
+    { name: "Body Parts", content: ["Bones", "Hearth", "Pierced Hearth"], color: "rgb(207, 43, 88)" }
 ];
 
 let collection = {};
@@ -98,6 +101,13 @@ const craftRecipes = [
         ],
         time: 20000,
         type: "potion"
+    },
+	{
+        name: "Pierced Hearth",
+        ingredients: [
+            { name: "Hearth", amount: 10 }
+        ],
+        time: 15000,
     }
 ];
 
