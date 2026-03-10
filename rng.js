@@ -79,7 +79,6 @@ let maxToken = 20;
 let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
-let tokenSpeedLevelMultiplier = 1;
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
@@ -888,7 +887,7 @@ function updateActiveEffects() {
     // Appliquer les multiplicateurs
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
-    tokenInterval = (5000 / tokenSpeedMultiplier) / tokenSpeedLevelMultiplier;
+    tokenInterval = (5000 / tokenSpeedMultiplier);
     
     // Mettre à jour l'affichage
     updateLuck();
@@ -2316,32 +2315,6 @@ function updateUnlockables() {
         btn.disabled = false;
     } else {
         btn.style.display = 'none';
-    }
-
-    if (level >= 3) {
-        if (level >= 5) {
-            if (level >= 7) {
-                if (level >= 7) {
-                    if (level >= 10) {
-                        if (level >= 15) {
-                            tokenSpeedLevelMultiplier = 20;
-                        } else {
-                            tokenSpeedLevelMultiplier = 10;
-                        }
-                    } else {
-                        tokenSpeedLevelMultiplier = 5;
-                    }
-                } else {
-                    tokenSpeedLevelMultiplier = 2.5;
-                }
-            } else {
-                tokenSpeedLevelMultiplier = 2;
-            }
-        } else {
-            tokenSpeedLevelMultiplier = 1.5;
-        }
-    } else {
-        tokenSpeedLevelMultiplier = 1;
     }
 }
 
