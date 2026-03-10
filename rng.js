@@ -75,6 +75,7 @@ let rolls = 0;
 let isRolling = false;
 let tokens = 10;
 let tokenInterval = 5000;
+let tokenRechargeIntervalId = null;
 let maxToken = 20;
 let rollDelay = 1000;
 let luck = 1;
@@ -1002,16 +1003,17 @@ function addToken() {
 }
 
 function startTokenRecharge() {
-    // Ajouter un token toutes les 5 secondes
-    tokenInterval = setInterval(() => {
+    // Ajouter un token régulièrement selon tokenInterval
+    if (tokenRechargeIntervalId !== null) return;
+    tokenRechargeIntervalId = setInterval(() => {
         addToken();
-        // Afficher le temps restant dans la console pour le débogage
     }, tokenInterval);
 }
 
 function stopTokenRecharge() {
-    if (tokenInterval) {
-        clearInterval(tokenInterval);
+    if (tokenRechargeIntervalId !== null) {
+        clearInterval(tokenRechargeIntervalId);
+        tokenRechargeIntervalId = null;
     }
 }
 
@@ -2005,6 +2007,19 @@ function renderPressCardList(mode) {
         const baseName = type ? name.replace(` (${type})`, '') : name;
         const owned = collection[name] || 0;
 
+        // Calcul de la rareté effective pour le tri (même logique que l'inventaire)
+        const item = items.find(i => i.name === baseName);
+        if (!item) continue;
+        let chanceDisplay = item.chance;
+        if (type === 'Gold') chanceDisplay = item.chance * 10;
+        else if (type === 'Rainbow') chanceDisplay = item.chance * 100;
+        else if (type === 'Shiny') chanceDisplay = item.chance * 1000;
+        const rarityRank = chanceDisplay < 10 ? 0
+            : chanceDisplay < 100 ? 1
+            : chanceDisplay < 1000 ? 2
+            : chanceDisplay < 10000 ? 3
+            : 4;
+
         if (mode === 'compress') {
             let nextType = null;
             if (!type) nextType = 'Gold';
@@ -2012,7 +2027,7 @@ function renderPressCardList(mode) {
             else if (type === 'Rainbow') nextType = 'Shiny';
             const needed = 25;
             if (!nextType || owned < needed) continue;
-            entries.push({ name, baseName, type, owned, nextType, needed });
+            entries.push({ name, baseName, type, owned, nextType, needed, chanceDisplay, rarityRank });
         } else {
             // Mode décompresseur : uniquement les cartes avec une rareté supérieure
             if (!type || (type !== 'Gold' && type !== 'Rainbow' && type !== 'Shiny')) continue;
@@ -2022,7 +2037,7 @@ function renderPressCardList(mode) {
             else if (type === 'Rainbow') lowerType = 'Gold';
             else if (type === 'Shiny') lowerType = 'Rainbow';
             const resultName = lowerType ? `${baseName} (${lowerType})` : baseName;
-            entries.push({ name, baseName, type, owned, resultName });
+            entries.push({ name, baseName, type, owned, resultName, chanceDisplay, rarityRank });
         }
     }
 
@@ -2036,7 +2051,12 @@ function renderPressCardList(mode) {
         return;
     }
 
-    entries.sort((a, b) => a.baseName.localeCompare(b.baseName));
+    // Tri d'abord par rareté (Common → Mythic), puis par chance effective, puis par nom
+    entries.sort((a, b) => {
+        if (a.rarityRank !== b.rarityRank) return a.rarityRank - b.rarityRank;
+        if (a.chanceDisplay !== b.chanceDisplay) return a.chanceDisplay - b.chanceDisplay;
+        return a.baseName.localeCompare(b.baseName);
+    });
     const overlay = document.getElementById('blur-overlay');
 
     entries.forEach(entry => {
