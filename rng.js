@@ -14,8 +14,17 @@ const items = [
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
     { name: "Hearth", chance: 500, rollable: true },
-    { name: "Pierced Hearth", chance: 5000, rollable: true },
+    { name: "Evil", chance: 666, rollable: true },
+    { name: "Sky", chance: 750, rollable: true },
+    { name: "Tacos", chance: 1000, rollable: true },
+    { name: "Gun", chance: 1500, rollable: true },
+    { name: "Ugly", chance: 2500, rollable: true },
+    { name: "Cute", chance: 2500, rollable: true },
+    { name: "Noob", chance: 5000, rollable: true },
+    { name: "Cards", chance: 75000, rollable: true },
+    { name: "Cards Circus", chance: 10000000, rollable: false },
     { name: "Thunder", chance: 2500, rollable: false },
+    { name: "Pierced Hearth", chance: 5000, rollable: false },
     { name: "Infinity", chance: 1000000000, rollable: false }
 ];
 
@@ -25,7 +34,7 @@ const potions = [
         name: "Speed Potion",
         type: "rollspeed",
         power: 2,
-        duration: 60000, // 60 secondes
+        duration: 60 * 1000, // 60 secondes
         image: "Speed.png",
         effectType: "time" // Effet basé sur le temps
     },
@@ -33,18 +42,26 @@ const potions = [
         name: "Thunder Potion",
         type: "rollspeed",
         power: 3,
-        duration: 180000, // 30 minutes
+        duration: 30 * 60 * 1000, // 30 minutes
         image: "Thunder.png",
+        effectType: "time" // Effet basé sur le temps
+    },
+    {
+        name: "Luck Potion",
+        type: "luck",
+        power: 2,
+        duration: 60 * 1000, // 60 secondes
+        image: "Luck.png",
         effectType: "time" // Effet basé sur le temps
     }
 ];
 
 const cardsGroupes = [
     { name: "Nature", content: ["Grass", "Bush", "Tree", "Apple"], color: "rgb(6, 65, 11)" },
-    { name: "Biomes", content: ["Snow Mountains", "Beach"], color: "rgb(129, 148, 131)" },
-    { name: "Food", content: ["Sugar", "Burger", "Apple"], color: "rgb(216, 177, 47)" },
+    { name: "Biomes", content: ["Snow Mountains", "Beach", "Sky"], color: "rgb(129, 148, 131)" },
+    { name: "Food", content: ["Sugar", "Burger", "Apple", "Tacos"], color: "rgb(216, 177, 47)" },
     { name: "Planets", content: ["Mars", "Earth"], color: "rgb(54, 54, 54)" },
-    { name: "Weapons", content: ["Sword"], color: "rgb(30, 30, 30)" },
+    { name: "Weapons", content: ["Sword", "Gun"], color: "rgb(30, 30, 30)" },
     { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" },
     { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" },
     { name: "Body Parts", content: ["Bones", "Hearth", "Pierced Hearth"], color: "rgb(207, 43, 88)" }
@@ -62,6 +79,7 @@ let maxToken = 20;
 let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
+let tokenSpeedLevelMultiplier = 1;
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
@@ -102,12 +120,35 @@ const craftRecipes = [
         time: 20000,
         type: "potion"
     },
+    {
+        name: "Luck Potion",
+        ingredients: [
+            { name: "Sugar", amount: 10 },
+            { name: "Tacos", amount: 1 },
+        ],
+        time: 5000,
+        type: "potion"
+    },
 	{
         name: "Pierced Hearth",
         ingredients: [
             { name: "Hearth", amount: 10 }
         ],
         time: 15000,
+    },
+	{
+        name: "Ugly",
+        ingredients: [
+            { name: "Cute", amount: 5 }
+        ],
+        time: 5000,
+    },
+	{
+        name: "Cute",
+        ingredients: [
+            { name: "Ugly", amount: 5 }
+        ],
+        time: 5000,
     }
 ];
 
@@ -847,7 +888,7 @@ function updateActiveEffects() {
     // Appliquer les multiplicateurs
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
-    tokenInterval = Math.max(1000, 5000 / tokenSpeedMultiplier);
+    tokenInterval = (5000 / tokenSpeedMultiplier) / tokenSpeedLevelMultiplier;
     
     // Mettre à jour l'affichage
     updateLuck();
@@ -924,7 +965,7 @@ function updateTokensDisplay() {
         indicator.classList.add('medium');
         indicator.classList.remove('high');
         indicator.classList.remove('max');
-    } else if (tokens === maxToken) {
+    } else if (tokens >= maxToken) {
         indicator.classList.remove('very-low');
         indicator.classList.remove('low');
         indicator.classList.remove('medium');
@@ -973,6 +1014,11 @@ function stopTokenRecharge() {
     if (tokenInterval) {
         clearInterval(tokenInterval);
     }
+}
+
+function restartTokenRecharge() {
+    stopTokenRecharge();
+    startTokenRecharge();
 }
 
 // Fonction pour obtenir le temps restant avant le prochain token
@@ -1031,7 +1077,7 @@ function updateCardPreview(cardData) {
     preview.innerHTML = `
         <div class="preview-card">
             <span class="rarity-tag-container">${getGoldTag(type)}${specialTag}</span>
-            <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}">
+            <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}" class="card-image">
             <div class="preview-card-text">
                 ${displayName}<br>[1 in ${chanceDisplay}]
             </div>
@@ -1059,6 +1105,7 @@ function updateLuck() {
 
 function rollItem() {
     updateLuck()
+    updateActiveEffects()
     if (isRolling) return; // Empêche les rolls multiples
     if (tokens <= 0) {
         // Ne rien faire, le bouton est désactivé
@@ -1173,6 +1220,8 @@ function rollItem() {
         updateCollection();
         updateInventoryStats();
         updateCraftButtons();
+        updateUnlockables();
+        restartTokenRecharge(); // <-- Add this line
 
         // Réactiver le bouton après 200ms supplémentaires (plus rapide)
         setTimeout(() => {
@@ -1989,6 +2038,32 @@ function updateUnlockables() {
         btn.disabled = false;
     } else {
         btn.style.display = 'none';
+    }
+
+    if (level >= 3) {
+        if (level >= 5) {
+            if (level >= 7) {
+                if (level >= 7) {
+                    if (level >= 10) {
+                        if (level >= 15) {
+                            tokenSpeedLevelMultiplier = 20;
+                        } else {
+                            tokenSpeedLevelMultiplier = 10;
+                        }
+                    } else {
+                        tokenSpeedLevelMultiplier = 5;
+                    }
+                } else {
+                    tokenSpeedLevelMultiplier = 2.5;
+                }
+            } else {
+                tokenSpeedLevelMultiplier = 2;
+            }
+        } else {
+            tokenSpeedLevelMultiplier = 1.5;
+        }
+    } else {
+        tokenSpeedLevelMultiplier = 1;
     }
 }
 
