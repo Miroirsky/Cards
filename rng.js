@@ -1514,7 +1514,6 @@ function updateCollection() {
     if (window.updateCraftButtons) window.updateCraftButtons();
 }
 
-
 function showDecompressorMenu(cardName, cardType) {
     let comp = document.getElementById('compressor-popup');
     if (!comp) {
@@ -1614,6 +1613,116 @@ function showDecompressorMenu(cardName, cardType) {
         if (popup) popup.style.display = 'none';
         overlay.style.display = 'none';
     };
+}
+
+// Version globale pour le menu Press : ouvre uniquement l'UI de compresseur
+function showCompressorFromPress(cardName, cardType) {
+    let comp = document.getElementById('compressor-popup');
+    if (!comp) {
+        comp = document.createElement('div');
+        comp.id = 'compressor-popup';
+        comp.style.position = 'fixed';
+        comp.style.top = '50%';
+        comp.style.left = '50%';
+        comp.style.transform = 'translate(-50%,-50%)';
+        comp.style.fontSize = '1.1em';
+        comp.style.color = '#222';
+        comp.style.background = 'rgba(255,255,255,0.99)';
+        comp.style.padding = '2em 2.5em';
+        comp.style.borderRadius = '25px';
+        comp.style.zIndex = '2002';
+        comp.style.textAlign = 'center';
+        comp.style.boxShadow = '0 8px 40px rgba(52,152,219,0.15)';
+        comp.style.minWidth = '220px';
+        comp.style.maxWidth = '90vw';
+        comp.style.maxHeight = '80vh';
+        comp.style.overflowY = 'auto';
+        comp.style.display = 'none';
+        document.body.appendChild(comp);
+    }
+    // Règles de compression
+    let nextType = '', needed = 25, canCompress = 0, owned = 0, resultName = '', resultType = '';
+    if (!cardType) {
+        nextType = 'Gold'; resultType = 'Gold'; resultName = cardName + ' (Gold)';
+    } else if (cardType === 'Gold') {
+        nextType = 'Rainbow'; resultType = 'Rainbow'; resultName = cardName + ' (Rainbow)';
+    } else if (cardType === 'Rainbow') {
+        nextType = 'Shiny'; resultType = 'Shiny'; resultName = cardName + ' (Shiny)';
+    } else {
+        nextType = null;
+    }
+    const sourceKey = cardType ? cardName + ' (' + cardType + ')' : cardName;
+    owned = collection[sourceKey] || 0;
+    if (nextType) canCompress = Math.floor(owned / needed);
+
+    comp.innerHTML = `
+        <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
+            <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
+                <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+            </div>
+            <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
+                <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
+                <span style='color:#888;'>You own: ${owned}</span><br>
+                ${nextType ? `<span style='color:#3498db;'>${needed} → 1 ${nextType}</span><br>` : '<span style="color:#e74c3c;">Max rarity</span><br>'}
+                ${nextType && canCompress > 0 ? `<button id='do-compress-btn' style='margin:1em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#27ae60;color:white;border:none;cursor:pointer;'>Compress ${needed} → 1 ${nextType} (${canCompress}x)</button>` : ''}
+                ${nextType && canCompress > 0 ? `<button id='do-compress-all-btn' style='margin:0.5em 0.5em 0.5em 0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#e67e22;color:white;border:none;cursor:pointer;'>Compress All (${canCompress}x)</button>` : ''}
+                <button id='cancel-compress-btn' style='margin-top:0.7em;padding:0.4em 1.2em;font-size:0.95em;border-radius:8px;background:#aaa;color:white;border:none;cursor:pointer;'>Cancel</button>
+            </div>
+        </div>
+    `;
+    comp.style.display = 'block';
+    const overlay = document.getElementById('blur-overlay');
+    if (overlay) {
+        overlay.style.display = 'block';
+    }
+    // Bouton Cancel
+    const cancelBtn = document.getElementById('cancel-compress-btn');
+    if (cancelBtn) {
+        cancelBtn.onclick = function(ev) {
+            ev.stopPropagation();
+            comp.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        };
+    }
+    // Logique de compression
+    if (nextType && canCompress > 0) {
+        const doOne = document.getElementById('do-compress-btn');
+        const doAll = document.getElementById('do-compress-all-btn');
+        if (doOne) {
+            doOne.onclick = function(ev) {
+                ev.stopPropagation();
+                collection[sourceKey] -= needed;
+                if (collection[sourceKey] <= 0) delete collection[sourceKey];
+                if (!collection[resultName]) collection[resultName] = 0;
+                collection[resultName] += 1;
+                saveCollection();
+                updateCollection();
+                updateCraftButtons();
+                showCompressorFromPress(cardName, cardType);
+            };
+        }
+        if (doAll) {
+            doAll.onclick = function(ev) {
+                ev.stopPropagation();
+                const totalCompress = canCompress;
+                collection[sourceKey] -= needed * totalCompress;
+                if (collection[sourceKey] <= 0) delete collection[sourceKey];
+                if (!collection[resultName]) collection[resultName] = 0;
+                collection[resultName] += totalCompress;
+                saveCollection();
+                updateCollection();
+                updateCraftButtons();
+                showCompressorFromPress(cardName, cardType);
+            };
+        }
+    }
+    comp.onclick = function(ev) { ev.stopPropagation(); };
+    if (overlay) {
+        overlay.onclick = function() {
+            comp.style.display = 'none';
+            overlay.style.display = 'none';
+        };
+    }
 }
 
 // Sauvegarde l'inventaire dans localStorage
@@ -1840,6 +1949,175 @@ document.getElementById('settings-modal').onclick = function(e) {
         document.body.style.overflow = '';
     }
 };
+
+// ----- Menu Press (compresseur / décompresseur global) -----
+function setPressMode(mode) {
+    const modal = document.getElementById('press-modal');
+    if (!modal) return;
+    const btnCompress = document.getElementById('press-mode-compress');
+    const btnDecompress = document.getElementById('press-mode-decompress');
+    if (btnCompress && btnDecompress) {
+        if (mode === 'compress') {
+            btnCompress.style.background = '#3498db';
+            btnCompress.style.color = '#ffffff';
+            btnDecompress.style.background = '#ecf0f1';
+            btnDecompress.style.color = '#2c3e50';
+        } else {
+            btnDecompress.style.background = '#16a085';
+            btnDecompress.style.color = '#ffffff';
+            btnCompress.style.background = '#ecf0f1';
+            btnCompress.style.color = '#2c3e50';
+        }
+    }
+    modal.setAttribute('data-mode', mode);
+    renderPressCardList(mode);
+}
+
+function openPressMenu(initialMode) {
+    const modal = document.getElementById('press-modal');
+    if (!modal) return;
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setPressMode(initialMode || 'compress');
+}
+
+function closePressMenu() {
+    const modal = document.getElementById('press-modal');
+    if (!modal) return;
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function renderPressCardList(mode) {
+    const list = document.getElementById('press-card-list');
+    const emptyMsg = document.getElementById('press-empty-message');
+    if (!list) return;
+    list.innerHTML = '';
+    if (emptyMsg) {
+        emptyMsg.style.display = 'none';
+    }
+
+    const entries = [];
+    for (let name of Object.keys(collection)) {
+        let type = '';
+        if (name.endsWith('(Shiny)')) type = 'Shiny';
+        else if (name.endsWith('(Rainbow)')) type = 'Rainbow';
+        else if (name.endsWith('(Gold)')) type = 'Gold';
+        const baseName = type ? name.replace(` (${type})`, '') : name;
+        const owned = collection[name] || 0;
+
+        if (mode === 'compress') {
+            let nextType = null;
+            if (!type) nextType = 'Gold';
+            else if (type === 'Gold') nextType = 'Rainbow';
+            else if (type === 'Rainbow') nextType = 'Shiny';
+            const needed = 25;
+            if (!nextType || owned < needed) continue;
+            entries.push({ name, baseName, type, owned, nextType, needed });
+        } else {
+            // Mode décompresseur : uniquement les cartes avec une rareté supérieure
+            if (!type || (type !== 'Gold' && type !== 'Rainbow' && type !== 'Shiny')) continue;
+            if (owned <= 0) continue;
+            let lowerType = '';
+            if (type === 'Gold') lowerType = '';
+            else if (type === 'Rainbow') lowerType = 'Gold';
+            else if (type === 'Shiny') lowerType = 'Rainbow';
+            const resultName = lowerType ? `${baseName} (${lowerType})` : baseName;
+            entries.push({ name, baseName, type, owned, resultName });
+        }
+    }
+
+    if (entries.length === 0) {
+        if (emptyMsg) {
+            emptyMsg.textContent = mode === 'compress'
+                ? "Aucune carte compressable pour l'instant."
+                : "Aucune carte décompressable pour l'instant.";
+            emptyMsg.style.display = 'block';
+        }
+        return;
+    }
+
+    entries.sort((a, b) => a.baseName.localeCompare(b.baseName));
+    const overlay = document.getElementById('blur-overlay');
+
+    entries.forEach(entry => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.4em 0.6em;border-bottom:1px solid rgba(0,0,0,0.05);';
+
+        const left = document.createElement('div');
+        left.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
+
+        const img = document.createElement('img');
+        img.src = `Cards-Icons/${entry.baseName}.png`;
+        img.style.cssText = 'width:32px;height:32px;object-fit:cover;border-radius:6px;';
+
+        const label = document.createElement('div');
+        label.innerHTML = `<strong>${entry.baseName}${entry.type ? ' (' + entry.type + ')' : ''}</strong><br><span style="font-size:0.8em;color:#7f8c8d;">×${entry.owned}</span>`;
+
+        left.appendChild(img);
+        left.appendChild(label);
+
+        const btn = document.createElement('button');
+        btn.style.cssText = 'padding:0.4em 1em;border-radius:8px;border:none;cursor:pointer;font-size:0.9em;font-weight:bold;';
+        btn.textContent = 'Choisir';
+
+        if (mode === 'compress') {
+            btn.style.background = '#27ae60';
+            btn.style.color = '#ffffff';
+            btn.onclick = function() {
+                if (overlay) overlay.style.display = 'block';
+                closePressMenu();
+                showCompressorFromPress(entry.baseName, entry.type || '');
+            };
+        } else {
+            btn.style.background = '#16a085';
+            btn.style.color = '#ffffff';
+            btn.onclick = function() {
+                if (overlay) overlay.style.display = 'block';
+                closePressMenu();
+                showDecompressorMenu(entry.baseName, entry.type);
+            };
+        }
+
+        row.appendChild(left);
+        row.appendChild(btn);
+        list.appendChild(row);
+    });
+}
+
+// Initialisation des événements du menu Press
+const pressBtn = document.getElementById('press-btn');
+if (pressBtn) {
+    pressBtn.onclick = function() {
+        openPressMenu('compress');
+    };
+}
+const closePress = document.getElementById('close-press');
+if (closePress) {
+    closePress.onclick = function() {
+        closePressMenu();
+    };
+}
+const pressModal = document.getElementById('press-modal');
+if (pressModal) {
+    pressModal.addEventListener('click', function(e) {
+        if (e.target === pressModal) {
+            closePressMenu();
+        }
+    });
+}
+const pressModeCompressBtn = document.getElementById('press-mode-compress');
+const pressModeDecompressBtn = document.getElementById('press-mode-decompress');
+if (pressModeCompressBtn && pressModeDecompressBtn) {
+    pressModeCompressBtn.onclick = function(e) {
+        e.preventDefault();
+        setPressMode('compress');
+    };
+    pressModeDecompressBtn.onclick = function(e) {
+        e.preventDefault();
+        setPressMode('decompress');
+    };
+}
 
 // ----- Raretés utilisées pour la barre -----
 const rarityLevels = [
