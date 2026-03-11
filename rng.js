@@ -22,7 +22,7 @@ const items = [
     { name: "Cute", chance: 2500, rollable: true },
     { name: "Noob", chance: 5000, rollable: true },
     { name: "Cards", chance: 75000, rollable: true },
-    { name: "Cards Circus", chance: 10000000, rollable: false },
+    { name: "Cards Circus", chance: 100000, rollable: true },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Pierced Hearth", chance: 5000, rollable: false },
     { name: "Infinity", chance: 1000000000, rollable: false }
