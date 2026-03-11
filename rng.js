@@ -74,13 +74,21 @@ let rollBasedEffects = {}; // Effets basés sur le nombre de rolls
 let rolls = 0;
 let isRolling = false;
 let tokens = 10;
-let tokenInterval = 5000;
+let tokenRate = 0.2; // tokens par seconde (base)
+let tokenAccumulator = 0; // accumulateur fractionnaire
 let tokenRechargeIntervalId = null;
+let realTimeEffectsIntervalId = null;
+const TOKEN_TICK_MS = 100; // tick toutes les 100ms
 let pressPreviewIntervalId = null;
-let maxToken = 20;
+let pressQty = 1; // Quantité sélectionnée dans le menu Press
+const BASE_MAX_TOKEN = 20;
+let maxToken = BASE_MAX_TOKEN;
 let rollDelay = 1000;
 let luck = 1;
 let spinningCardsAnimationSpeed = 200;
+let diamonds = 0;
+let tokenUpgradeLevel = 0; // Niveau d'amélioration de vitesse de tokens
+let maxTokenUpgradeLevel = 0; // Niveau d'amélioration de max tokens
 
 let sugarRushCounter = 0;
 let sugarRushTrigger = 6;
@@ -196,12 +204,10 @@ function craftItem(recipe) {
     craftingQueue.push(craftJob);
     saveCraftingQueue();
     showCraftMessage(`${recipe.name} added to the queue!`, "success");
-    
-    // Démarrer le traitement de la queue si c'est le premier craft
-    if (craftingQueue.length === 1) {
-        processCraftingQueue();
-    }
-    
+
+    // Démarrer l'interval de traitement si pas déjà actif
+    startCraftingInterval();
+
     updateCraftButtons();
     return true;
 }
@@ -234,67 +240,63 @@ function consumeIngredients(recipe) {
     updateInventoryStats();
 }
 
+let craftingIntervalId = null;
+
+function startCraftingInterval() {
+    if (craftingIntervalId !== null) return;
+    craftingIntervalId = setInterval(processCraftingQueue, 250);
+}
+
+function stopCraftingInterval() {
+    if (craftingIntervalId !== null) {
+        clearInterval(craftingIntervalId);
+        craftingIntervalId = null;
+    }
+}
+
 function processCraftingQueue() {
     if (craftingQueue.length === 0) {
+        stopCraftingInterval();
         updateCraftButtons();
         return;
     }
-    
+
     const currentJob = craftingQueue[0];
     const now = Date.now();
-    
+
     if (now >= currentJob.endTime) {
         // Craft terminé
         const recipe = currentJob.recipe;
-        
-        // Ajouter l'objet crafté à l'inventaire approprié
+
         if (recipe.type === "potion") {
-            // Ajouter à l'inventaire des potions
-            if (!potionInventory[recipe.name]) {
-                potionInventory[recipe.name] = 1;
-            } else {
-                potionInventory[recipe.name]++;
-            }
+            potionInventory[recipe.name] = (potionInventory[recipe.name] || 0) + 1;
         } else {
-            // Ajouter à l'inventaire normal
-            if (!collection[recipe.name]) {
-                collection[recipe.name] = 1;
-            } else {
-                collection[recipe.name]++;
-            }
+            collection[recipe.name] = (collection[recipe.name] || 0) + 1;
         }
-        
-        // Retirer de la queue
+
         craftingQueue.shift();
-        
-        // Sauvegarder et mettre à jour
+
         saveCollection();
         saveCraftingQueue();
         updateCollection();
         updateInventoryStats();
         updatePotionsInventory();
-        
         showCraftMessage(`${recipe.name} successfuly crafted!`, "success");
-        
-        // Traiter le prochain craft s'il y en a
+
+        // Corriger le temps du prochain si nécessaire
         if (craftingQueue.length > 0) {
-            // Ajuster le temps de fin du prochain craft si nécessaire
             const nextJob = craftingQueue[0];
-            const now = Date.now();
-            if (nextJob.endTime <= now) {
-                nextJob.endTime = now + nextJob.recipe.time;
+            if (nextJob.endTime <= Date.now()) {
+                nextJob.endTime = Date.now() + nextJob.recipe.time;
             }
-            // Démarrer immédiatement le prochain craft
-            processCraftingQueue();
+            updateCraftButtons();
         } else {
-            // Mettre à jour l'interface seulement si plus de crafts
+            stopCraftingInterval();
             updateCraftButtons();
         }
     } else {
-        // Mettre à jour la queue en temps réel
+        // Mise à jour de l'affichage de la queue uniquement
         updateCraftQueue();
-        // Continuer à attendre
-        setTimeout(processCraftingQueue, 100);
     }
 }
 
@@ -900,7 +902,8 @@ function updateActiveEffects() {
     // Appliquer les multiplicateurs
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
-    tokenInterval = (5000 / tokenSpeedMultiplier);
+    // tokenRate de base + upgrades, multiplié par la potion
+    tokenRate = (0.2 + tokenUpgradeLevel * 0.1) * tokenSpeedMultiplier;
     
     // Mettre à jour l'affichage
     updateLuck();
@@ -1006,20 +1009,35 @@ function updateTokensDisplay() {
     }
 }
 
-function addToken() {
-    if (tokens < maxToken) { // Limite de 10 tokens
-        tokens++;
-        updateTokensDisplay();
-        saveCollection();
-    }
+function updateDiamondsDisplay() {
+    const diamondsElement = document.getElementById('diamonds-count');
+    const indicator = document.getElementById('diamonds-indicator');
+    if (!diamondsElement || !indicator) return;
+    diamondsElement.innerText = diamonds.toString();
 }
 
 function startTokenRecharge() {
-    // Ajouter un token régulièrement selon tokenInterval
     if (tokenRechargeIntervalId !== null) return;
+    let ticksSinceLastSave = 0;
     tokenRechargeIntervalId = setInterval(() => {
-        addToken();
-    }, tokenInterval);
+        if (tokens < maxToken) {
+            tokenAccumulator += tokenRate * (TOKEN_TICK_MS / 1000);
+            if (tokenAccumulator >= 1) {
+                const toAdd = Math.floor(tokenAccumulator);
+                tokenAccumulator -= toAdd;
+                const wasZero = tokens === 0;
+                tokens = Math.min(tokens + toAdd, maxToken);
+                updateTokensDisplay();
+                ticksSinceLastSave++;
+                if (ticksSinceLastSave >= 10) {
+                    saveCollection();
+                    ticksSinceLastSave = 0;
+                }
+            }
+        } else {
+            tokenAccumulator = 0;
+        }
+    }, TOKEN_TICK_MS);
 }
 
 function stopTokenRecharge() {
@@ -1109,11 +1127,10 @@ function resetCardPreview() {
 }
 
 function updateLuck() {
-    luck = (sugarRushMultiplier)
-
-    if (luck < 1) {
-        luck = 1
-    }
+    // Récupérer le multiplicateur de potion s'il est actif
+    const potionLuck = (activeEffects.luck && activeEffects.luck.endTime > Date.now())
+        ? activeEffects.luck.power : 1;
+    luck = Math.max(1, sugarRushMultiplier) * potionLuck;
 }
 
 function rollItem() {
@@ -1234,13 +1251,10 @@ function rollItem() {
         updateInventoryStats();
         updateCraftButtons();
         updateUnlockables();
-        restartTokenRecharge(); // <-- Add this line
 
-        // Réactiver le bouton après 200ms supplémentaires (plus rapide)
-        setTimeout(() => {
-            rollButton.disabled = false;
-            isRolling = false;
-        },);
+        // Réactiver le bouton
+        rollButton.disabled = false;
+        isRolling = false;
     }, rollDelay);
 }
 
@@ -1251,7 +1265,12 @@ function updateCollection() {
     // Trier chaque carte indépendamment, sans regrouper les variantes
     let rarityOrder = chance => (chance < 10 ? 0 : chance < 100 ? 1 : chance < 1000 ? 2 : 3);
     let typeOrder = t => t === 'Shiny' ? 3 : t === 'Rainbow' ? 2 : t === 'Gold' ? 1 : 0;
-    let sortedNames = Object.keys(collection).sort((a, b) => {
+    let sortedNames = Object.keys(collection).filter(name => {
+        // Exclure les entrées dont le baseName n'existe pas dans items
+        let type = name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
+        let base = type ? name.replace(` (${type})`, '') : name;
+        return !!items.find(i => i.name === base);
+    }).sort((a, b) => {
         // Détecter le type pour chaque carte
         let typeA = a.endsWith('(Shiny)') ? 'Shiny' : a.endsWith('(Rainbow)') ? 'Rainbow' : a.endsWith('(Gold)') ? 'Gold' : '';
         let typeB = b.endsWith('(Shiny)') ? 'Shiny' : b.endsWith('(Rainbow)') ? 'Rainbow' : b.endsWith('(Gold)') ? 'Gold' : '';
@@ -1305,17 +1324,13 @@ function updateCollection() {
                 </div>
             </div>
         `;
-        // Remove animation class if present
-        setTimeout(() => {
-            const cardDiv = li.querySelector('.card-inventory');
-            if (cardDiv) cardDiv.style.animation = 'none';
-        }, 0);
-        // Add long-press event for card info popup
-        setTimeout(() => { // Wait for DOM
-            const cardDiv = li.querySelector('.card-inventory');
-            if (cardDiv) {
-                let pressTimer = null;
-                let startX = 0, startY = 0;
+        ul.appendChild(li);
+        // Attacher les events long-press directement (pas besoin de setTimeout)
+        const cardDiv = li.querySelector('.card-inventory');
+        if (cardDiv) {
+            cardDiv.style.animation = 'none';
+            let pressTimer = null;
+            let startX = 0, startY = 0;
                 const showPopup = () => {
                     let overlay = document.getElementById('blur-overlay');
                     let popup = document.getElementById('card-info-popup');
@@ -1346,7 +1361,8 @@ function updateCollection() {
                                 <b style='font-size:1.25em;'>${displayName}</b><br>
                                 ${rarityTag}<br>${goldTag}${specialTag}<br>
                                 <button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
-                                <button id='decompressor-btn' style='margin-left:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button><br>
+                                <button id='decompressor-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button>
+                                <button id='diamond-press-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#9b59b6;color:white;border:none;cursor:pointer;'>💎 Press</button><br>
                                 <span style='font-size:0.9em;color:#888'>(Tap anywhere to close)</span>
                             </div>
                         </div>`;
@@ -1372,6 +1388,12 @@ function updateCollection() {
                                 div.style.fontWeight = "bold"
                                 div.style.textTransform = "uppercase"
                                 div.style.marginLeft = "2px"
+                                div.style.cursor = "pointer"
+                                div.title = `Voir le groupe ${groupe.name}`
+                                div.onclick = (e) => {
+                                    e.stopPropagation();
+                                    showGroupPopup(groupe);
+                                }
                                 groupeDisplay.appendChild(div)
                             }
                         }
@@ -1394,6 +1416,38 @@ function updateCollection() {
             e.stopPropagation();
             showDecompressorMenu(baseName, type);
         };
+        var diamondPressBtn = document.getElementById('diamond-press-btn');
+        if (diamondPressBtn) {
+            const itemForDiamond = items.find(i => i.name === baseName);
+            if (itemForDiamond) {
+                const gain = Math.floor(Math.sqrt(itemForDiamond.chance));
+                diamondPressBtn.innerHTML = `💎 Press (+${gain})`;
+                if (owned <= 0) {
+                    diamondPressBtn.disabled = true;
+                    diamondPressBtn.style.opacity = '0.5';
+                    diamondPressBtn.style.cursor = 'not-allowed';
+                } else {
+                    diamondPressBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        const cardKey = type ? `${baseName} (${type})` : baseName;
+                        const cur = collection[cardKey] || 0;
+                        if (cur <= 0) return;
+                        diamonds += gain;
+                        collection[cardKey]--;
+                        if (collection[cardKey] <= 0) delete collection[cardKey];
+                        gainXp(gain);
+                        saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons(); updateDiamondsDisplay();
+                        // Mettre à jour le compteur dans le popup
+                        const newOwned = collection[cardKey] || 0;
+                        if (newOwned <= 0) {
+                            diamondPressBtn.disabled = true;
+                            diamondPressBtn.style.opacity = '0.5';
+                            diamondPressBtn.style.cursor = 'not-allowed';
+                        }
+                    };
+                }
+            }
+        }
     
                     function showCompressorMenu(cardName, cardType) {
                         let comp = document.getElementById('compressor-popup');
@@ -1519,9 +1573,7 @@ function updateCollection() {
                         if (dx > 10 || dy > 10) clearTimeout(pressTimer);
                     }
                 });
-            }
-        }, 0);
-        ul.appendChild(li);
+        }
     }
 
     if (window.updateCraftButtons) window.updateCraftButtons();
@@ -1629,6 +1681,103 @@ function showDecompressorMenu(cardName, cardType) {
 }
 
 // Version globale pour le menu Press : ouvre uniquement l'UI de compresseur
+function showGroupPopup(groupe) {
+    const overlay = document.getElementById('blur-overlay');
+    let popup = document.getElementById('group-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'group-popup';
+        popup.style.cssText = `
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.98);
+            border-radius: 20px;
+            z-index: 2003;
+            padding: 1.5em;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+            max-width: 90vw; min-width: 300px;
+            max-height: 80vh; overflow-y: auto;
+            display: none;
+        `;
+        document.body.appendChild(popup);
+    }
+
+    // Compter les cartes possédées dans le groupe
+    const owned = groupe.content.filter(name => {
+        return Object.keys(collection).some(k => {
+            const base = k.replace(/ \((Gold|Rainbow|Shiny)\)$/, '');
+            return base === name && collection[k] > 0;
+        });
+    }).length;
+
+    popup.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.6em;margin-bottom:1em;">
+            <div style="background:${groupe.color};color:#fff;padding:4px 12px;border-radius:8px;font-weight:bold;font-size:1em;text-transform:uppercase;">
+                ${groupe.name}
+            </div>
+            <span style="color:#7f8c8d;font-size:0.9em;">${owned} / ${groupe.content.length} cartes</span>
+            <button id="close-group-popup" style="margin-left:auto;background:none;border:none;font-size:1.4em;cursor:pointer;color:#aaa;line-height:1;">&times;</button>
+        </div>
+        <div id="group-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:0.7em;"></div>
+    `;
+
+    const grid = popup.querySelector('#group-cards-grid');
+    for (const cardName of groupe.content) {
+        const item = items.find(i => i.name === cardName);
+        if (!item) continue;
+
+        // Trouver toutes les variantes possédées
+        const variants = ['', 'Gold', 'Rainbow', 'Shiny'].map(type => {
+            const key = type ? `${cardName} (${type})` : cardName;
+            return { type, key, qty: collection[key] || 0 };
+        }).filter(v => v.qty > 0);
+
+        const totalOwned = variants.reduce((s, v) => s + v.qty, 0);
+        const isOwned = totalOwned > 0;
+
+        const card = document.createElement('div');
+        card.style.cssText = `
+            background: ${isOwned ? '#f8f9fa' : '#ecf0f1'};
+            border: 2px solid ${isOwned ? groupe.color : '#bdc3c7'};
+            border-radius: 12px;
+            padding: 0.5em;
+            text-align: center;
+            opacity: ${isOwned ? '1' : '0.45'};
+            transition: transform 0.1s;
+        `;
+
+        const rarityTag = getRarityTag(item.chance);
+        const variantText = variants.length > 0
+            ? variants.map(v => `${v.type || 'Normal'}: ×${v.qty}`).join('<br>')
+            : '—';
+
+        card.innerHTML = `
+            <img src="Cards-Icons/${cardName}.png" alt="${cardName}"
+                style="width:54px;height:54px;object-fit:contain;border-radius:8px;display:block;margin:0 auto 0.3em auto;">
+            <div style="font-size:0.78em;font-weight:bold;color:#2c3e50;margin-bottom:0.2em;">${cardName}</div>
+            <div style="font-size:0.7em;color:#7f8c8d;">1 in ${item.chance}</div>
+            <div style="margin:0.2em 0;">${rarityTag}</div>
+            ${isOwned ? `<div style="font-size:0.68em;color:#27ae60;margin-top:0.2em;">${variantText}</div>` : `<div style="font-size:0.68em;color:#bdc3c7;margin-top:0.2em;">Non obtenu</div>`}
+        `;
+        grid.appendChild(card);
+    }
+
+    overlay.style.display = 'block';
+    popup.style.display = 'block';
+
+    const close = () => {
+        popup.style.display = 'none';
+        overlay.style.display = 'none';
+        // Fermer aussi le popup de carte parent s'il est ouvert
+        const cardPopup = document.getElementById('card-info-popup');
+        if (cardPopup) cardPopup.style.display = 'none';
+    };
+
+    popup.querySelector('#close-group-popup').onclick = (e) => { e.stopPropagation(); close(); };
+    overlay.onclick = close;
+    popup.onclick = (e) => e.stopPropagation();
+}
+
 function showCompressorFromPress(cardName, cardType) {
     let comp = document.getElementById('compressor-popup');
     if (!comp) {
@@ -1746,9 +1895,12 @@ function saveCollection() {
     localStorage.setItem('cards-roll-effects', JSON.stringify(rollBasedEffects));
     localStorage.setItem('cards-rolls', rolls.toString());
     localStorage.setItem('cards-tokens', tokens.toString());
+    localStorage.setItem('cards-diamonds', diamonds.toString());
     localStorage.setItem('cards-xp', xp.toString());
     localStorage.setItem('cards-level', level.toString());
     localStorage.setItem('cards-xpNext', xpNext.toString());
+    localStorage.setItem('cards-token-upgrade', tokenUpgradeLevel.toString());
+    localStorage.setItem('cards-max-token-upgrade', maxTokenUpgradeLevel.toString());
 }
 
 // Charge l'inventaire depuis localStorage
@@ -1758,6 +1910,7 @@ function loadCollection() {
     const effectsData = localStorage.getItem('cards-effects');
     const rollsData = localStorage.getItem('cards-rolls');
     const tokensData = localStorage.getItem('cards-tokens');
+    const diamondsData = localStorage.getItem('cards-diamonds');
     const xpData = localStorage.getItem('cards-xp');
     const levelData = localStorage.getItem('cards-level');
     const xpNextData = localStorage.getItem('cards-xpNext');
@@ -1772,6 +1925,16 @@ function loadCollection() {
     
     if (effectsData) {
         activeEffects = JSON.parse(effectsData);
+        // Supprimer les effets expirés et reprogrammer la fin des effets encore actifs
+        const now = Date.now();
+        for (let effectType in activeEffects) {
+            const remaining = activeEffects[effectType].endTime - now;
+            if (remaining <= 0) {
+                delete activeEffects[effectType];
+            } else {
+                setTimeout(() => removePotionEffect(effectType), remaining);
+            }
+        }
     }
     
     const rollEffectsData = localStorage.getItem('cards-roll-effects');
@@ -1786,10 +1949,16 @@ function loadCollection() {
     
     if (tokensData) {
         tokens = parseInt(tokensData);
-        // S'assurer que les tokens ne dépassent pas la limite
         if (tokens > maxToken) tokens = maxToken;
+        if (tokens <= 0) tokens = 1; // Toujours au moins 1 token au démarrage
     } else {
-        tokens = 10; // Valeur par défaut pour les nouveaux utilisateurs
+        tokens = 10;
+    }
+
+    if (diamondsData) {
+        diamonds = parseInt(diamondsData);
+    } else {
+        diamonds = 0;
     }
     
     if (xpData) {
@@ -1803,8 +1972,21 @@ function loadCollection() {
     if (xpNextData) {
         xpNext = parseInt(xpNextData);
     }
+
+    const tokenUpgradeData = localStorage.getItem('cards-token-upgrade');
+    if (tokenUpgradeData) {
+        tokenUpgradeLevel = parseInt(tokenUpgradeData);
+        tokenRate = 0.2 + tokenUpgradeLevel * 0.1;
+    }
+
+    const maxTokenUpgradeData = localStorage.getItem('cards-max-token-upgrade');
+    if (maxTokenUpgradeData) {
+        maxTokenUpgradeLevel = parseInt(maxTokenUpgradeData);
+        maxToken = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
+    }
     
     updateTokensDisplay();
+    updateDiamondsDisplay();
     updateLevelXpDisplay();
 }
 
@@ -1824,7 +2006,7 @@ function gainTokensSinceLastConnection() {
     const lastDate = new Date(last);
     const diffMs = now - lastDate;
     const diffSeconds = Math.floor(diffMs / 1000);
-    const tokensToAdd = Math.floor(diffSeconds / (rollDelay / 100)); // Gagne des tokens 100X plus lentement que en ligne
+    const tokensToAdd = Math.floor(diffSeconds * (0.2 + tokenUpgradeLevel * 0.1) / 10); // 10x plus lent qu'en ligne
     if (tokensToAdd > 0) {
         tokens = Math.min(tokens + tokensToAdd, maxToken);
         updateTokensDisplay();
@@ -1864,13 +2046,17 @@ updateActiveEffects();
 updateActiveEffectsDisplay();
 resetCardPreview();
 displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
-updateLuck()
+updateLuck();
+
+// Reprendre la queue de craft si elle était en cours
+if (craftingQueue.length > 0) startCraftingInterval();
 
 // Démarrer la mise à jour en temps réel des effets
 startRealTimeEffectsUpdate();
 
 // Démarrer la recharge de tokens
 startTokenRecharge();
+updateTokensDisplay(); // S'assurer que l'état du bouton est correct au démarrage
 
 // Ajouter des styles CSS pour les animations
 const style = document.createElement('style');
@@ -1940,8 +2126,8 @@ function updateSugarRushDisplay() {
 }
 
 function startRealTimeEffectsUpdate() {
-    // Mettre à jour l'affichage des effets toutes les secondes
-    setInterval(() => {
+    if (realTimeEffectsIntervalId !== null) return;
+    realTimeEffectsIntervalId = setInterval(() => {
         updateActiveEffectsDisplay();
     }, 1000);
 }
@@ -1969,17 +2155,22 @@ function setPressMode(mode) {
     if (!modal) return;
     const btnCompress = document.getElementById('press-mode-compress');
     const btnDecompress = document.getElementById('press-mode-decompress');
-    if (btnCompress && btnDecompress) {
+    const btnDiamond = document.getElementById('press-mode-diamond');
+    if (btnCompress && btnDecompress && btnDiamond) {
+        // reset styles
+        [btnCompress, btnDecompress, btnDiamond].forEach(b => {
+            b.style.background = '#ecf0f1';
+            b.style.color = '#2c3e50';
+        });
         if (mode === 'compress') {
             btnCompress.style.background = '#3498db';
             btnCompress.style.color = '#ffffff';
-            btnDecompress.style.background = '#ecf0f1';
-            btnDecompress.style.color = '#2c3e50';
-        } else {
+        } else if (mode === 'decompress') {
             btnDecompress.style.background = '#16a085';
             btnDecompress.style.color = '#ffffff';
-            btnCompress.style.background = '#ecf0f1';
-            btnCompress.style.color = '#2c3e50';
+        } else if (mode === 'diamond') {
+            btnDiamond.style.background = '#9b59b6';
+            btnDiamond.style.color = '#ffffff';
         }
     }
     modal.setAttribute('data-mode', mode);
@@ -1992,6 +2183,20 @@ function openPressMenu(initialMode) {
     if (!modal) return;
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
+
+    // Initialiser les boutons de quantité
+    document.querySelectorAll('.press-qty-btn').forEach(btn => {
+        const qty = btn.dataset.qty === 'max' ? 'max' : parseInt(btn.dataset.qty);
+        btn.classList.toggle('active', qty === pressQty || (btn.dataset.qty === 'max' && pressQty === 'max'));
+        btn.onclick = () => {
+            pressQty = btn.dataset.qty === 'max' ? 'max' : parseInt(btn.dataset.qty);
+            document.querySelectorAll('.press-qty-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const currentMode = modal.getAttribute('data-mode') || 'compress';
+            renderPressCardList(currentMode);
+        };
+    });
+
     setPressMode(initialMode || 'compress');
 }
 
@@ -2033,7 +2238,7 @@ function getPressEntries(mode) {
             const needed = 25;
             if (!nextType || owned < needed) continue;
             entries.push({ name, baseName, type, owned, nextType, needed, chanceDisplay, rarityRank });
-        } else {
+        } else if (mode === 'decompress') {
             if (!type || (type !== 'Gold' && type !== 'Rainbow' && type !== 'Shiny')) continue;
             if (owned <= 0) continue;
             let lowerType = '';
@@ -2042,6 +2247,11 @@ function getPressEntries(mode) {
             else if (type === 'Shiny') lowerType = 'Rainbow';
             const resultName = lowerType ? `${baseName} (${lowerType})` : baseName;
             entries.push({ name, baseName, type, owned, resultName, chanceDisplay, rarityRank });
+        } else if (mode === 'diamond') {
+            // Diamond press: consomme 1 carte, donne floor(sqrt(rareté)) diamonds
+            const diamondsGain = Math.floor(Math.sqrt(chanceDisplay));
+            if (diamondsGain <= 0 || owned <= 0) continue;
+            entries.push({ name, baseName, type, owned, diamondsGain, chanceDisplay, rarityRank });
         }
     }
     return entries;
@@ -2056,7 +2266,7 @@ function renderPressCardList(mode) {
         emptyMsg.style.display = 'none';
     }
 
-    const entries = getPressEntries(mode);
+    const entries = getPressEntries(mode === 'diamond' ? 'diamond' : mode);
 
     if (entries.length === 0) {
         if (emptyMsg) {
@@ -2095,23 +2305,63 @@ function renderPressCardList(mode) {
 
         const btn = document.createElement('button');
         btn.style.cssText = 'padding:0.4em 1em;border-radius:8px;border:none;cursor:pointer;font-size:0.9em;font-weight:bold;';
-        btn.textContent = 'Choisir';
 
         if (mode === 'compress') {
-            btn.style.background = '#27ae60';
-            btn.style.color = '#ffffff';
-            btn.onclick = function() {
-                if (overlay) overlay.style.display = 'block';
-                closePressMenu();
-                showCompressorFromPress(entry.baseName, entry.type || '');
+            const needed = entry.needed; // 25 par compression
+            const maxTimes = Math.floor(entry.owned / needed);
+            const times = pressQty === 'max' ? maxTimes : Math.min(pressQty, maxTimes);
+            const canDo = times > 0;
+            btn.style.background = canDo ? '#27ae60' : '#bdc3c7';
+            btn.style.color = canDo ? '#ffffff' : '#888';
+            btn.style.cursor = canDo ? 'pointer' : 'not-allowed';
+            btn.textContent = `×${times} (${times * needed} → ${times})`;
+            if (canDo) btn.onclick = function() {
+                const sourceKey = entry.type ? `${entry.baseName} (${entry.type})` : entry.baseName;
+                const resultName = entry.baseName + ' (' + entry.nextType + ')';
+                collection[sourceKey] = (collection[sourceKey] || 0) - times * needed;
+                if (collection[sourceKey] <= 0) delete collection[sourceKey];
+                collection[resultName] = (collection[resultName] || 0) + times;
+                gainXp(Math.floor(Math.sqrt(entry.chanceDisplay)) * times);
+                saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons();
+                renderPressCardList('compress');
             };
-        } else {
-            btn.style.background = '#16a085';
-            btn.style.color = '#ffffff';
-            btn.onclick = function() {
-                if (overlay) overlay.style.display = 'block';
-                closePressMenu();
-                showDecompressorMenu(entry.baseName, entry.type);
+        } else if (mode === 'decompress') {
+            const decompQty = 5;
+            const maxTimes = entry.owned;
+            const times = pressQty === 'max' ? maxTimes : Math.min(pressQty, maxTimes);
+            const canDo = times > 0;
+            btn.style.background = canDo ? '#16a085' : '#bdc3c7';
+            btn.style.color = canDo ? '#ffffff' : '#888';
+            btn.style.cursor = canDo ? 'pointer' : 'not-allowed';
+            btn.textContent = `×${times} → ${times * decompQty}`;
+            if (canDo) btn.onclick = function() {
+                const sourceKey = entry.type ? `${entry.baseName} (${entry.type})` : entry.baseName;
+                collection[sourceKey] = (collection[sourceKey] || 0) - times;
+                if (collection[sourceKey] <= 0) delete collection[sourceKey];
+                collection[entry.resultName] = (collection[entry.resultName] || 0) + times * decompQty;
+                gainXp(Math.floor(Math.sqrt(entry.chanceDisplay)) * times);
+                saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons();
+                renderPressCardList('decompress');
+            };
+        } else if (mode === 'diamond') {
+            const gainPer = entry.diamondsGain;
+            const maxTimes = entry.owned;
+            const times = pressQty === 'max' ? maxTimes : Math.min(pressQty, maxTimes);
+            const canDo = times > 0;
+            btn.style.background = canDo ? '#9b59b6' : '#bdc3c7';
+            btn.style.color = canDo ? '#ffffff' : '#888';
+            btn.style.cursor = canDo ? 'pointer' : 'not-allowed';
+            btn.textContent = `×${times} (${times * gainPer}💎)`;
+            if (canDo) btn.onclick = function() {
+                const owned = collection[entry.name] || 0;
+                const actualTimes = pressQty === 'max' ? owned : Math.min(pressQty, owned);
+                if (actualTimes <= 0) return;
+                diamonds += actualTimes * gainPer;
+                collection[entry.name] = (collection[entry.name] || 0) - actualTimes;
+                if (collection[entry.name] <= 0) delete collection[entry.name];
+                gainXp(Math.floor(Math.sqrt(entry.chanceDisplay)) * actualTimes);
+                saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons(); updateDiamondsDisplay();
+                renderPressCardList('diamond');
             };
         }
 
@@ -2124,7 +2374,7 @@ function renderPressCardList(mode) {
 function updatePressPreview(mode) {
     const preview = document.getElementById('press-preview');
     if (!preview) return;
-    const entries = getPressEntries(mode);
+    const entries = getPressEntries(mode === 'diamond' ? 'diamond' : mode);
     preview.innerHTML = '';
     if (entries.length === 0) {
         preview.innerHTML = `<span style="color:#7f8c8d;font-size:0.9em;">Aucune combinaison disponible pour l'instant...</span>`;
@@ -2145,7 +2395,7 @@ function updatePressPreview(mode) {
         leftAmount = entry.needed || 25;
         rightAmount = 1;
         rightType = entry.nextType;
-    } else {
+    } else if (mode === 'decompress') {
         leftAmount = 1;
         rightAmount = 5;
         if (entry.type === 'Gold') {
@@ -2155,6 +2405,10 @@ function updatePressPreview(mode) {
         } else if (entry.type === 'Shiny') {
             rightType = 'Rainbow';
         }
+    } else if (mode === 'diamond') {
+        // 1 carte => floor(sqrt(rareté)) diamonds
+        leftAmount = 1;
+        rightAmount = entry.diamondsGain;
     }
 
     function formatName(name, type) {
@@ -2162,7 +2416,7 @@ function updatePressPreview(mode) {
     }
 
     leftLabel = `${leftAmount}× ${formatName(baseName, leftType)}`;
-    rightLabel = `${rightAmount}× ${formatName(baseName, rightType)}`;
+    rightLabel = mode === 'diamond' ? `${rightAmount} 💎` : `${rightAmount}× ${formatName(baseName, rightType)}`;
 
     const leftCard = document.createElement('div');
     leftCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;';
@@ -2175,16 +2429,25 @@ function updatePressPreview(mode) {
 
     const arrow = document.createElement('div');
     arrow.style.cssText = 'font-size:1.4em;color:#2c3e50;';
-    arrow.textContent = mode === 'compress' ? '⇒' : '⇐';
+    arrow.textContent = mode === 'compress' ? '⇒' : (mode === 'decompress' ? '⇐' : '⇒');
 
     const rightCard = document.createElement('div');
     rightCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;';
-    rightCard.innerHTML = `
-        <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
-            <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
-        </div>
-        <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${rightLabel}</div>
-    `;
+    if (mode === 'diamond') {
+        rightCard.innerHTML = `
+            <div style="width:90px;height:90px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:linear-gradient(135deg,#9b59b6,#6c3483);display:flex;align-items:center;justify-content:center;font-size:2.5em;">
+                💎
+            </div>
+            <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${rightLabel}</div>
+        `;
+    } else {
+        rightCard.innerHTML = `
+            <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
+                <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
+            </div>
+            <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${rightLabel}</div>
+        `;
+    }
 
     preview.appendChild(leftCard);
     preview.appendChild(arrow);
@@ -2229,7 +2492,8 @@ if (pressModal) {
 }
 const pressModeCompressBtn = document.getElementById('press-mode-compress');
 const pressModeDecompressBtn = document.getElementById('press-mode-decompress');
-if (pressModeCompressBtn && pressModeDecompressBtn) {
+const pressModeDiamondBtn = document.getElementById('press-mode-diamond');
+if (pressModeCompressBtn && pressModeDecompressBtn && pressModeDiamondBtn) {
     pressModeCompressBtn.onclick = function(e) {
         e.preventDefault();
         setPressMode('compress');
@@ -2237,6 +2501,10 @@ if (pressModeCompressBtn && pressModeDecompressBtn) {
     pressModeDecompressBtn.onclick = function(e) {
         e.preventDefault();
         setPressMode('decompress');
+    };
+    pressModeDiamondBtn.onclick = function(e) {
+        e.preventDefault();
+        setPressMode('diamond');
     };
 }
 
@@ -2325,20 +2593,30 @@ if (resetBtn) {
             localStorage.removeItem('cards-collection');
             localStorage.removeItem('cards-rolls');
             localStorage.removeItem('cards-tokens');
+            localStorage.removeItem('cards-diamonds');
             localStorage.removeItem('cards-xp');
             localStorage.removeItem('cards-level');
             localStorage.removeItem('cards-xpNext');
             localStorage.removeItem('cards-last-connection');
+            localStorage.removeItem('cards-token-upgrade');
+            localStorage.removeItem('cards-max-token-upgrade');
             // Optionally reset rarity bar threshold
             // localStorage.removeItem('rarity-notif-threshold');
             // Reset in-memory variables
             collection = {};
             rolls = 0;
             tokens = 10;
+            diamonds = 0;
+            tokenUpgradeLevel = 0;
+            maxTokenUpgradeLevel = 0;
+            maxToken = BASE_MAX_TOKEN;
+            tokenRate = 0.2;
+            tokenAccumulator = 0;
             xp = 0;
             level = 1;
             xpNext = 50;
             updateTokensDisplay();
+            updateDiamondsDisplay();
             updateLevelXpDisplay();
             updateCollection();
             updateInventoryStats();
@@ -2443,3 +2721,135 @@ function updateUnlockables() {
 // Call these on page load and after level up
 createAutoRollButton();
 updateUnlockables();
+// ===== SHOP =====
+const TOKEN_UPGRADE_BASE_COST = 50;
+const TOKEN_UPGRADE_COST_MULTIPLIER = 2.5;
+const MAX_TOKEN_UPGRADE_BASE_COST = 100;
+const MAX_TOKEN_UPGRADE_COST_MULTIPLIER = 2.5;
+
+function getTokenUpgradeCost(level) {
+    return Math.round(TOKEN_UPGRADE_BASE_COST * Math.pow(TOKEN_UPGRADE_COST_MULTIPLIER, level));
+}
+
+function getMaxTokenUpgradeCost(level) {
+    return Math.round(MAX_TOKEN_UPGRADE_BASE_COST * Math.pow(MAX_TOKEN_UPGRADE_COST_MULTIPLIER, level));
+}
+
+function buyTokenUpgrade() {
+    const cost = getTokenUpgradeCost(tokenUpgradeLevel);
+    if (diamonds < cost) return;
+    diamonds -= cost;
+    tokenUpgradeLevel++;
+    tokenRate = 0.2 + tokenUpgradeLevel * 0.1;
+    saveCollection();
+    updateDiamondsDisplay();
+    renderShop();
+}
+
+function buyMaxTokenUpgrade() {
+    const cost = getMaxTokenUpgradeCost(maxTokenUpgradeLevel);
+    if (diamonds < cost) return;
+    diamonds -= cost;
+    maxTokenUpgradeLevel++;
+    maxToken = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
+    saveCollection();
+    updateDiamondsDisplay();
+    updateTokensDisplay();
+    renderShop();
+}
+
+function renderShop() {
+    const diamDisplay = document.getElementById('shop-diamonds-display');
+    if (diamDisplay) diamDisplay.innerHTML = `💎 ${diamonds}`;
+
+    const list = document.getElementById('shop-items-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    // --- Upgrade Token Speed ---
+    const currentRate = 0.2 + tokenUpgradeLevel * 0.1;
+    const nextRate = currentRate + 0.1;
+    const speedCost = getTokenUpgradeCost(tokenUpgradeLevel);
+    const canAffordSpeed = diamonds >= speedCost;
+
+    const speedItem = document.createElement('div');
+    speedItem.style.cssText = `
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        border-radius: 16px;
+        padding: 1.2em 1.5em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+        margin-bottom: 0.8em;
+    `;
+    speedItem.innerHTML = `
+        <div style="flex:1;">
+            <div style="font-size:1.15em;font-weight:bold;color:#f1c40f;margin-bottom:0.25em;">⚡ Token Speed</div>
+            <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
+                <b style="color:#2ecc71;">${currentRate.toFixed(1)}/s</b> → <b style="color:#3498db;">${nextRate.toFixed(1)}/s</b>
+            </div>
+            <div style="font-size:0.82em;color:#95a5a6;">Niveau <b style="color:#e67e22;">${tokenUpgradeLevel}</b></div>
+        </div>
+        <button id="buy-speed-btn" style="
+            padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
+            cursor:${canAffordSpeed ? 'pointer' : 'not-allowed'};
+            background:${canAffordSpeed ? 'linear-gradient(90deg,#9b59b6,#6c3483)' : '#555'};
+            color:${canAffordSpeed ? '#fff' : '#888'};white-space:nowrap;min-width:110px;
+        ">💎 ${speedCost}</button>
+    `;
+    if (canAffordSpeed) speedItem.querySelector('#buy-speed-btn').onclick = buyTokenUpgrade;
+    list.appendChild(speedItem);
+
+    // --- Upgrade Max Tokens ---
+    const currentMax = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
+    const nextMax = currentMax + 5;
+    const maxCost = getMaxTokenUpgradeCost(maxTokenUpgradeLevel);
+    const canAffordMax = diamonds >= maxCost;
+
+    const maxItem = document.createElement('div');
+    maxItem.style.cssText = `
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        border-radius: 16px;
+        padding: 1.2em 1.5em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    `;
+    maxItem.innerHTML = `
+        <div style="flex:1;">
+            <div style="font-size:1.15em;font-weight:bold;color:#f39c12;margin-bottom:0.25em;">🔋 Max Tokens</div>
+            <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
+                <b style="color:#2ecc71;">${currentMax}</b> → <b style="color:#3498db;">${nextMax}</b>
+            </div>
+            <div style="font-size:0.82em;color:#95a5a6;">Niveau <b style="color:#e67e22;">${maxTokenUpgradeLevel}</b></div>
+        </div>
+        <button id="buy-max-btn" style="
+            padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
+            cursor:${canAffordMax ? 'pointer' : 'not-allowed'};
+            background:${canAffordMax ? 'linear-gradient(90deg,#e67e22,#d35400)' : '#555'};
+            color:${canAffordMax ? '#fff' : '#888'};white-space:nowrap;min-width:110px;
+        ">💎 ${maxCost}</button>
+    `;
+    if (canAffordMax) maxItem.querySelector('#buy-max-btn').onclick = buyMaxTokenUpgrade;
+    list.appendChild(maxItem);
+}
+
+function openShopMenu() {
+    document.getElementById('shop-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    renderShop();
+}
+function closeShopMenu() {
+    document.getElementById('shop-modal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+document.getElementById('shop-btn').onclick = openShopMenu;
+document.getElementById('close-shop').onclick = closeShopMenu;
+document.getElementById('shop-modal').onclick = function(e) {
+    if (e.target === this) closeShopMenu();
+};

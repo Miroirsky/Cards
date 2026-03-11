@@ -1,5 +1,5 @@
 body {
-    background: #191c23;
+    background: #1a3a1a;
     color: #fff;
     font-family: Arial, sans-serif;
     margin: 0;
@@ -9,13 +9,14 @@ body {
     flex-direction: column;
 }
 
-/* Interface Roll */
+/* Interface Roll — Ciel */
 .roll-interface {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    background: linear-gradient(180deg, #1a6fa8 0%, #2e9fd4 50%, #5bbde0 100%);
     padding: 2em;
+    padding-bottom: 3em;
     text-align: center;
-    border-bottom: 3px solid #0f3460;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
 }
 
 .roll-header {
@@ -91,6 +92,20 @@ body {
     background: rgb(138, 52, 219, 0.1);
     border-color: #8a34db;
     animation: glow 2s ease-in-out infinite alternate;
+}
+
+#diamonds-indicator {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #a29bfe;
+    background: linear-gradient(135deg, rgba(162, 155, 254, 0.15), rgba(108, 92, 231, 0.15));
+    padding: 0.5em 1.2em;
+    border-radius: 25px;
+    display: inline-block;
+    border: 2px solid #a29bfe;
+    margin-left: 1em;
+    box-shadow: 0 0 12px rgba(162, 155, 254, 0.3);
+    letter-spacing: 1px;
 }
 
 .roll-btn {
@@ -269,11 +284,47 @@ body {
     margin-top: 1em;
 }
 
-/* Interface Inventaire */
+/* Séparation herbe entre roll et inventaire */
+.roll-interface::after {
+    content: '';
+    display: block;
+    position: absolute;
+    bottom: -18px;
+    left: 0; right: 0;
+    height: 36px;
+    background: linear-gradient(180deg, #3d8b2e 0%, #2d6e1e 60%, #1e5010 100%);
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.roll-interface::before {
+    content: '';
+    display: block;
+    position: absolute;
+    bottom: -2px;
+    left: 0; right: 0;
+    height: 20px;
+    background:
+        radial-gradient(ellipse 6px 14px at 5% 100%, #4caf50 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 12% 100%, #388e3c 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 22% 100%, #4caf50 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 33% 100%, #43a047 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 44% 100%, #388e3c 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 55% 100%, #4caf50 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 66% 100%, #43a047 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 77% 100%, #388e3c 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 88% 100%, #4caf50 0%, transparent 100%),
+        radial-gradient(ellipse 6px 14px at 96% 100%, #388e3c 0%, transparent 100%);
+    z-index: 11;
+    pointer-events: none;
+}
+
+/* Interface Inventaire — Terre */
 .inventory-interface {
     flex: 1;
-    background: linear-gradient(135deg, #2c3e50, #34495e);
+    background: linear-gradient(180deg, #5c3d1e 0%, #6b4423 40%, #4a2e14 100%);
     padding: 2em;
+    padding-top: 3em;
     overflow-y: auto;
 }
 
@@ -281,14 +332,14 @@ body {
     text-align: center;
     margin-bottom: 2em;
     padding-bottom: 1em;
-    border-bottom: 2px solid #3498db;
+    border-bottom: 2px solid #a0662a;
 }
 
 .inventory-header h2 {
     font-size: 2.2em;
     margin: 0 0 0.5em 0;
-    color: #3498db;
-    text-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
+    color: #e8c99a;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
 .inventory-stats {
@@ -299,22 +350,21 @@ body {
 }
 
 .inventory-stats span {
-    background: rgba(52, 152, 219, 0.1);
+    background: rgba(160, 102, 42, 0.25);
     padding: 0.5em 1em;
     border-radius: 20px;
-    border: 1px solid #3498db;
-    color: #3498db;
+    border: 1px solid #a0662a;
+    color: #e8c99a;
     font-weight: bold;
 }
 
 .collection {
     max-width: 1200px;
     margin: 0 auto;
-    background: rgba(44, 62, 80, 0.3);
+    background: rgba(0,0,0,0.2);
     border-radius: 15px;
     padding: 2em;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(52, 152, 219, 0.2);
+    border: 1px solid rgba(160, 102, 42, 0.3);
 }
 
 #collection-list {
@@ -995,3 +1045,84 @@ body {
     }
 }
 
+/* Press quantity selector */
+.press-qty-btn {
+    padding: 0.3em 0.8em;
+    border-radius: 8px;
+    border: 2px solid #bdc3c7;
+    background: #ecf0f1;
+    color: #2c3e50;
+    font-weight: bold;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.press-qty-btn:hover {
+    border-color: #3498db;
+    color: #3498db;
+}
+.press-qty-btn.active {
+    background: #3498db;
+    border-color: #3498db;
+    color: #fff;
+}
+
+/* ===== THÈME MINECRAFT ===== */
+
+/* Potions & Items — Pierre (gris clair) */
+.potions-interface {
+    background: linear-gradient(180deg, #8a8a8a 0%, #7a7a7a 40%, #696969 100%);
+    padding: 2em;
+    text-align: center;
+    box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.potions-interface h2 {
+    color: #f0f0f0;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+    margin-top: 0;
+}
+
+.potions-interface h3 {
+    color: #e0e0e0;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Crafts — Deepslate (gris très foncé / bleuté) */
+.craft-content {
+    background: linear-gradient(180deg, #3a3a45 0%, #2e2e38 40%, #22222c 100%);
+    padding: 2em;
+    text-align: center;
+    box-shadow: inset 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.craft-content h2 {
+    color: #c8c8d8;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
+    margin-top: 0;
+}
+
+.craft-content h3 {
+    color: #b0b0c8;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Ajustement des couleurs des titres dans le ciel */
+.roll-header h1 {
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+#rolls-indicator {
+    border-color: #a8d8f0;
+    color: #d0eeff;
+    background: rgba(255,255,255,0.15);
+}
+
+#tokens-indicator {
+    background: rgba(255,255,255,0.15);
+}
+
+/* XP bar dans le ciel */
+#xp-bar-container {
+    background: rgba(0,0,0,0.3) !important;
+}

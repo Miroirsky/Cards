@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.15.4</div>
+    <div class="update-text">Update 0.16.0</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -16,6 +16,7 @@
         <div class="roll-header">
             <div id="rolls-indicator">Rolls: <span id="rolls-count">0</span></div>
             <div id="tokens-indicator">Tokens: <span id="tokens-count">10</span></div>
+            <div id="diamonds-indicator">💎 <span id="diamonds-count">0</span></div>
             <div id="xp-bar-container" style="width: 220px; height: 22px; background: #222; border-radius: 10px; margin: 0.5em auto 0.3em auto; overflow: hidden; box-shadow: 0 2px 8px #0002; position: relative; display: flex; align-items: center; justify-content: center;">
                 <div id="xp-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4ecdc4, #f9d423); border-radius: 10px 0 0 10px; transition: width 0.4s; position: absolute; left: 0; top: 0;"></div>
                 <span id="xp-bar-label" style="position: relative; z-index: 2; color: #fff; font-weight: bold; width: 100%; text-align: center; pointer-events: none; text-shadow: 0 1px 4px #000, 0 0 2px #222; font-size: 1em;">
@@ -63,7 +64,7 @@
     </div>
     
     <!-- Interface Potions -->
-    <div class="potions-interface" style="margin-top:2em;text-align:center;">
+    <div class="potions-interface" style="text-align:center;">
         <h2>Potions & Items</h2>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:1000px;margin:0 auto;">
             <!-- Inventaire des potions -->
@@ -81,7 +82,7 @@
         </div>
     </div>
     <!-- Interface Craft -->
-    <div class="craft-content" style="margin-top:2em;text-align:center;">
+    <div class="craft-content" style="text-align:center;">
         <h2>Crafts</h2>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:800px;margin:0 auto;">
             <!-- Queue de craft à gauche -->
@@ -107,6 +108,10 @@
     <button id="press-btn" class="settings-btn" title="Press menu" style="right: 90px;">
         Press
     </button>
+    <!-- Bouton Shop -->
+    <button id="shop-btn" class="settings-btn" title="Shop" style="right: 175px;">
+        Shop
+    </button>
 
     <!-- Menu de paramètres (modal cachée au départ) -->
     <div id="settings-modal" class="settings-modal">
@@ -122,7 +127,6 @@
                 <button id="reset-save-btn" class="reset-save-btn" style="margin-top:2em;background:#e74c3c;color:white;padding:0.7em 2em;border:none;border-radius:10px;font-size:1.1em;cursor:pointer;">Reset Save</button>
             </div>
         </div>
-        <audio id="notification-sound" src="Roll-Notification.mp3" preload="auto"></audio>
     </div>
 
     <!-- Menu Press (compresseur / décompresseur) -->
@@ -134,12 +138,34 @@
                 <div style="display:flex;gap:1em;margin-bottom:1em;justify-content:center;">
                     <button id="press-mode-compress" style="padding:0.5em 1.5em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;background:#3498db;color:white;">Compressor</button>
                     <button id="press-mode-decompress" style="padding:0.5em 1.5em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;background:#ecf0f1;color:#2c3e50;">Decompressor</button>
+                    <button id="press-mode-diamond" style="padding:0.5em 1.5em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;background:#ecf0f1;color:#2c3e50;">Diamond Press</button>
                 </div>
                 <div id="press-preview" style="margin:0 auto 1em auto;max-width:260px;min-height:120px;display:flex;align-items:center;justify-content:center;gap:0.8em;">
-                    <!-- Animation d'exemple remplie par JS -->
+                <!-- Animation d'exemple remplie par JS -->
+                </div>
+                <!-- Sélecteur de quantité -->
+                <div id="press-qty-selector" style="display:flex;justify-content:center;gap:0.5em;margin-bottom:0.8em;flex-wrap:wrap;">
+                    <span style="align-self:center;font-size:0.9em;color:#7f8c8d;font-weight:bold;margin-right:0.3em;">Qty:</span>
+                    <button class="press-qty-btn active" data-qty="1">×1</button>
+                    <button class="press-qty-btn" data-qty="5">×5</button>
+                    <button class="press-qty-btn" data-qty="10">×10</button>
+                    <button class="press-qty-btn" data-qty="25">×25</button>
+                    <button class="press-qty-btn" data-qty="max">Max</button>
                 </div>
                 <div id="press-card-list" style="max-height:260px;overflow:auto;"></div>
                 <div id="press-empty-message" style="text-align:center;color:#7f8c8d;margin-top:1em;display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Shop -->
+    <div id="shop-modal" class="settings-modal">
+        <div class="settings-content">
+            <span id="close-shop" class="close-settings">&times;</span>
+            <h2>Shop</h2>
+            <div class="settings-section">
+                <div id="shop-diamonds-display" style="text-align:center;font-size:1.1em;margin-bottom:1.2em;color:#9b59b6;font-weight:bold;"></div>
+                <div id="shop-items-list" style="display:flex;flex-direction:column;gap:1em;"></div>
             </div>
         </div>
     </div>
