@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.15.3</div>
+    <div class="update-text">Update 0.15.4</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -135,7 +135,10 @@
                     <button id="press-mode-compress" style="padding:0.5em 1.5em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;background:#3498db;color:white;">Compressor</button>
                     <button id="press-mode-decompress" style="padding:0.5em 1.5em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;background:#ecf0f1;color:#2c3e50;">Decompressor</button>
                 </div>
-                <div id="press-card-list" style="max-height:300px;overflow:auto;"></div>
+                <div id="press-preview" style="margin:0 auto 1em auto;max-width:260px;min-height:120px;display:flex;align-items:center;justify-content:center;gap:0.8em;">
+                    <!-- Animation d'exemple remplie par JS -->
+                </div>
+                <div id="press-card-list" style="max-height:260px;overflow:auto;"></div>
                 <div id="press-empty-message" style="text-align:center;color:#7f8c8d;margin-top:1em;display:none;"></div>
             </div>
         </div>

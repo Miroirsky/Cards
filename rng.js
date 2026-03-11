@@ -22,7 +22,7 @@ const items = [
     { name: "Cute", chance: 2500, rollable: true },
     { name: "Noob", chance: 5000, rollable: true },
     { name: "Cards", chance: 75000, rollable: true },
-    { name: "Cards Circus", chance: 100000, rollable: true },
+    { name: "Cards Circus", chance: 10000000, rollable: false },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Pierced Hearth", chance: 5000, rollable: false },
     { name: "Infinity", chance: 1000000000, rollable: false }
@@ -76,6 +76,7 @@ let isRolling = false;
 let tokens = 10;
 let tokenInterval = 5000;
 let tokenRechargeIntervalId = null;
+let pressPreviewIntervalId = null;
 let maxToken = 20;
 let rollDelay = 1000;
 let luck = 1;
@@ -154,6 +155,14 @@ const craftRecipes = [
 
 let craftingQueue = [];
 
+function saveCraftingQueue() {
+    const simplified = craftingQueue.map(job => ({
+        recipeName: job.recipe.name,
+        endTime: job.endTime
+    }));
+    localStorage.setItem('cards-craft-queue', JSON.stringify(simplified));
+}
+
 function craftItem(recipe) {
     // Vérifier si on a les ingrédients nécessaires
     if (!hasIngredients(recipe)) {
@@ -185,6 +194,7 @@ function craftItem(recipe) {
     };
     
     craftingQueue.push(craftJob);
+    saveCraftingQueue();
     showCraftMessage(`${recipe.name} added to the queue!`, "success");
     
     // Démarrer le traitement de la queue si c'est le premier craft
@@ -259,6 +269,7 @@ function processCraftingQueue() {
         
         // Sauvegarder et mettre à jour
         saveCollection();
+        saveCraftingQueue();
         updateCollection();
         updateInventoryStats();
         updatePotionsInventory();
@@ -306,6 +317,7 @@ function updateCraftQueue() {
     
     if (craftingQueue.length === 0) {
         craftQueue.innerHTML = '<div style="color:#7f8c8d;font-style:italic;">No crafting in progress...</div>';
+        saveCraftingQueue();
         return;
     }
     
@@ -1972,6 +1984,7 @@ function setPressMode(mode) {
     }
     modal.setAttribute('data-mode', mode);
     renderPressCardList(mode);
+    startPressPreview(mode);
 }
 
 function openPressMenu(initialMode) {
@@ -1987,17 +2000,10 @@ function closePressMenu() {
     if (!modal) return;
     modal.classList.remove('open');
     document.body.style.overflow = '';
+    stopPressPreview();
 }
 
-function renderPressCardList(mode) {
-    const list = document.getElementById('press-card-list');
-    const emptyMsg = document.getElementById('press-empty-message');
-    if (!list) return;
-    list.innerHTML = '';
-    if (emptyMsg) {
-        emptyMsg.style.display = 'none';
-    }
-
+function getPressEntries(mode) {
     const entries = [];
     for (let name of Object.keys(collection)) {
         let type = '';
@@ -2007,7 +2013,6 @@ function renderPressCardList(mode) {
         const baseName = type ? name.replace(` (${type})`, '') : name;
         const owned = collection[name] || 0;
 
-        // Calcul de la rareté effective pour le tri (même logique que l'inventaire)
         const item = items.find(i => i.name === baseName);
         if (!item) continue;
         let chanceDisplay = item.chance;
@@ -2029,7 +2034,6 @@ function renderPressCardList(mode) {
             if (!nextType || owned < needed) continue;
             entries.push({ name, baseName, type, owned, nextType, needed, chanceDisplay, rarityRank });
         } else {
-            // Mode décompresseur : uniquement les cartes avec une rareté supérieure
             if (!type || (type !== 'Gold' && type !== 'Rainbow' && type !== 'Shiny')) continue;
             if (owned <= 0) continue;
             let lowerType = '';
@@ -2040,6 +2044,19 @@ function renderPressCardList(mode) {
             entries.push({ name, baseName, type, owned, resultName, chanceDisplay, rarityRank });
         }
     }
+    return entries;
+}
+
+function renderPressCardList(mode) {
+    const list = document.getElementById('press-card-list');
+    const emptyMsg = document.getElementById('press-empty-message');
+    if (!list) return;
+    list.innerHTML = '';
+    if (emptyMsg) {
+        emptyMsg.style.display = 'none';
+    }
+
+    const entries = getPressEntries(mode);
 
     if (entries.length === 0) {
         if (emptyMsg) {
@@ -2102,6 +2119,91 @@ function renderPressCardList(mode) {
         row.appendChild(btn);
         list.appendChild(row);
     });
+}
+
+function updatePressPreview(mode) {
+    const preview = document.getElementById('press-preview');
+    if (!preview) return;
+    const entries = getPressEntries(mode);
+    preview.innerHTML = '';
+    if (entries.length === 0) {
+        preview.innerHTML = `<span style="color:#7f8c8d;font-size:0.9em;">Aucune combinaison disponible pour l'instant...</span>`;
+        return;
+    }
+    const entry = entries[Math.floor(Math.random() * entries.length)];
+    const baseName = entry.baseName;
+    const fromType = entry.type || '';
+
+    let leftLabel = '';
+    let rightLabel = '';
+    let leftType = fromType;
+    let rightType = '';
+    let leftAmount = 1;
+    let rightAmount = 1;
+
+    if (mode === 'compress') {
+        leftAmount = entry.needed || 25;
+        rightAmount = 1;
+        rightType = entry.nextType;
+    } else {
+        leftAmount = 1;
+        rightAmount = 5;
+        if (entry.type === 'Gold') {
+            rightType = '';
+        } else if (entry.type === 'Rainbow') {
+            rightType = 'Gold';
+        } else if (entry.type === 'Shiny') {
+            rightType = 'Rainbow';
+        }
+    }
+
+    function formatName(name, type) {
+        return type ? `${name} (${type})` : name;
+    }
+
+    leftLabel = `${leftAmount}× ${formatName(baseName, leftType)}`;
+    rightLabel = `${rightAmount}× ${formatName(baseName, rightType)}`;
+
+    const leftCard = document.createElement('div');
+    leftCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    leftCard.innerHTML = `
+        <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
+            <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
+        </div>
+        <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${leftLabel}</div>
+    `;
+
+    const arrow = document.createElement('div');
+    arrow.style.cssText = 'font-size:1.4em;color:#2c3e50;';
+    arrow.textContent = mode === 'compress' ? '⇒' : '⇐';
+
+    const rightCard = document.createElement('div');
+    rightCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    rightCard.innerHTML = `
+        <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
+            <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
+        </div>
+        <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${rightLabel}</div>
+    `;
+
+    preview.appendChild(leftCard);
+    preview.appendChild(arrow);
+    preview.appendChild(rightCard);
+}
+
+function startPressPreview(mode) {
+    stopPressPreview();
+    updatePressPreview(mode);
+    pressPreviewIntervalId = setInterval(() => {
+        updatePressPreview(mode);
+    }, 1000);
+}
+
+function stopPressPreview() {
+    if (pressPreviewIntervalId !== null) {
+        clearInterval(pressPreviewIntervalId);
+        pressPreviewIntervalId = null;
+    }
 }
 
 // Initialisation des événements du menu Press
