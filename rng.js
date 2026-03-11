@@ -124,7 +124,7 @@ const craftRecipes = [
         name: "Luck Potion",
         ingredients: [
             { name: "Sugar", amount: 10 },
-            { name: "Tacos", amount: 1 },
+            { name: "Snow Mountains", amount: 4 },
         ],
         time: 5000,
         type: "potion"
