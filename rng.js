@@ -21,7 +21,8 @@ const items = [
     { name: "Ugly", chance: 2500, rollable: true },
     { name: "Cute", chance: 2500, rollable: true },
     { name: "Noob", chance: 5000, rollable: true },
-    { name: "Cards", chance: 75000, rollable: true },
+    { name: "Cards", chance: 7500, rollable: true },
+    { name: "Circus", chance: 10000, rollable: true },
     { name: "Cards Circus", chance: 10000000, rollable: false },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Pierced Hearth", chance: 5000, rollable: false },
@@ -156,6 +157,14 @@ const craftRecipes = [
         name: "Cute",
         ingredients: [
             { name: "Ugly", amount: 5 }
+        ],
+        time: 5000,
+    },
+	{
+        name: "Cards Circus",
+        ingredients: [
+            { name: "Circus", amount: 1 },
+            { name: "Cards", amount: 2 }
         ],
         time: 5000,
     }
@@ -403,79 +412,163 @@ function updateCraftQueue() {
     }
 }
 
+// Track selected recipe
+let selectedRecipe = null;
+
+function getItemChance(itemName) {
+    const item = items.find(i => i.name === itemName);
+    return item ? item.chance : 9999;
+}
+
 function updateCraftButtons() {
     const craftList = document.getElementById('craft-list');
     if (!craftList) return;
-    
     craftList.innerHTML = '';
-    
+
     for (let recipe of craftRecipes) {
         const canCraft = hasIngredients(recipe);
-        const isInQueue = craftingQueue.some(job => job.recipe.name === recipe.name);
-        
-        const button = document.createElement('button');
-        button.className = 'craft-button';
-        button.style.cssText = `
-            margin: 0.5em;
-            padding: 0.8em 1.5em;
-            border: none;
-            border-radius: 10px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: ${canCraft ? 'linear-gradient(90deg, #27ae60, #2ecc71)' : '#bdc3c7'};
-            color: ${canCraft ? 'white' : '#7f8c8d'};
-            opacity: 1;
-        `;
-        
-        button.innerText = `${recipe.name} (${formatTime(recipe.time)})`;
-        
-        if (canCraft) {
-            button.onclick = () => craftItem(recipe);
-        } else {
-            button.onclick = () => showCraftMessage("Not enought items!", "error");
-        }
-        
-        // Afficher les ingrédients requis et combien on peut crafter
+        const isSelected = selectedRecipe && selectedRecipe.name === recipe.name;
+
         const maxCrafts = Math.min(...recipe.ingredients.map(ing => {
             const owned = collection[ing.name] || 0;
             return Math.floor(owned / ing.amount);
         }));
-        
-        const ingredientsText = recipe.ingredients.map(ing => {
+
+        const card = document.createElement('div');
+        card.className = 'craft-recipe-card' + (isSelected ? ' selected' : '') + (canCraft ? ' can-craft' : '');
+        card.onclick = () => selectRecipe(recipe);
+
+        // Image de la carte
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'craft-card-img-wrap';
+        const img = document.createElement('img');
+        img.src = `Cards-Icons/${recipe.name}.png`;
+        img.alt = recipe.name;
+        img.onerror = function() { this.style.display = 'none'; };
+        imgWrap.appendChild(img);
+
+        // Infos
+        const info = document.createElement('div');
+        info.className = 'craft-card-info';
+
+        const nameRow = document.createElement('div');
+        nameRow.className = 'craft-card-name';
+        nameRow.innerHTML = recipe.name + (canCraft ? ` <span class="craft-can-badge">\u00d7${maxCrafts}</span>` : '');
+
+        const timeRow = document.createElement('div');
+        timeRow.className = 'craft-card-time';
+        timeRow.innerHTML = `\u23f1 ${formatTime(recipe.time)}`;
+
+        const ingredientsRow = document.createElement('div');
+        ingredientsRow.className = 'craft-card-ingredients';
+        for (let ing of recipe.ingredients) {
             const owned = collection[ing.name] || 0;
-            const color = owned >= ing.amount ? '#27ae60' : '#e74c3c';
-            return `<span style="color: ${color}">${ing.name}: ${owned}/${ing.amount}</span>`;
-        }).join(', ');
-        
-        // Ajouter le nombre de crafts possibles
-        if (maxCrafts > 0) {
-            button.innerText += ` (${maxCrafts}x)`;
+            const ok = owned >= ing.amount;
+            const ingChance = getItemChance(ing.name);
+            const ingSquare = document.createElement('div');
+            ingSquare.className = 'craft-ing-square' + (ok ? ' ok' : ' missing');
+            ingSquare.innerHTML = `
+                <img src="Cards-Icons/${ing.name}.png" alt="${ing.name}" onerror="this.style.display='none'">
+                <span class="craft-ing-qty">${owned}/${ing.amount}</span>
+                <span class="craft-ing-name">${ing.name}</span>
+                <span class="craft-ing-rarity">${getRarityTag(ingChance)}</span>
+            `;
+            ingredientsRow.appendChild(ingSquare);
         }
-        
-        const ingredientsDiv = document.createElement('div');
-        ingredientsDiv.style.cssText = `
-            font-size: 0.8em;
-            margin-top: 0.3em;
-            color: #7f8c8d;
-        `;
-        ingredientsDiv.innerHTML = ingredientsText;
-        
-        const container = document.createElement('div');
-        container.style.cssText = `
-            display: inline-block;
-            margin: 0.5em;
-            text-align: center;
-        `;
-        container.appendChild(button);
-        container.appendChild(ingredientsDiv);
-        
-        craftList.appendChild(container);
+
+        info.appendChild(nameRow);
+        info.appendChild(timeRow);
+        info.appendChild(ingredientsRow);
+        card.appendChild(imgWrap);
+        card.appendChild(info);
+        craftList.appendChild(card);
     }
-    
-    // Mettre à jour aussi la queue
+
+    // Refresh selected panel
+    if (selectedRecipe) {
+        const updated = craftRecipes.find(r => r.name === selectedRecipe.name);
+        if (updated) renderSelectedRecipe(updated);
+    }
+
     updateCraftQueue();
+}
+
+function selectRecipe(recipe) {
+    selectedRecipe = recipe;
+    renderSelectedRecipe(recipe);
+    document.querySelectorAll('.craft-recipe-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.craft-recipe-card').forEach(c => {
+        const nameEl = c.querySelector('.craft-card-name');
+        if (nameEl && nameEl.textContent.trim().startsWith(recipe.name)) {
+            c.classList.add('selected');
+        }
+    });
+}
+
+function renderSelectedRecipe(recipe) {
+    const box = document.getElementById('craft-selected');
+    if (!box) return;
+
+    const canCraft = hasIngredients(recipe);
+    const maxCrafts = Math.min(...recipe.ingredients.map(ing => {
+        const owned = collection[ing.name] || 0;
+        return Math.floor(owned / ing.amount);
+    }));
+
+    box.innerHTML = '';
+
+    // Grande image
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'craft-selected-img-wrap';
+    const img = document.createElement('img');
+    img.src = `Cards-Icons/${recipe.name}.png`;
+    img.alt = recipe.name;
+    img.onerror = function() { this.style.display = 'none'; };
+    imgWrap.appendChild(img);
+    box.appendChild(imgWrap);
+
+    // Nom + temps
+    const header = document.createElement('div');
+    header.className = 'craft-selected-header';
+    header.innerHTML = `
+        <div class="craft-selected-name">${recipe.name}</div>
+        <div class="craft-selected-time">\u23f1 ${formatTime(recipe.time)}</div>
+        ${maxCrafts > 0 ? `<div class="craft-selected-count">Can craft: <b>${maxCrafts}\u00d7</b></div>` : ''}
+    `;
+    box.appendChild(header);
+
+    // Ingrédients
+    const ingsTitle = document.createElement('div');
+    ingsTitle.className = 'craft-selected-section-title';
+    ingsTitle.textContent = 'Ingredients';
+    box.appendChild(ingsTitle);
+
+    const ingsRow = document.createElement('div');
+    ingsRow.className = 'craft-selected-ings';
+    for (let ing of recipe.ingredients) {
+        const owned = collection[ing.name] || 0;
+        const ok = owned >= ing.amount;
+        const ingChance = getItemChance(ing.name);
+        const sq = document.createElement('div');
+        sq.className = 'craft-selected-ing-sq' + (ok ? ' ok' : ' missing');
+        sq.innerHTML = `
+            <img src="Cards-Icons/${ing.name}.png" alt="${ing.name}" onerror="this.style.display='none'">
+            <div class="craft-selected-ing-name">${ing.name}</div>
+            <div class="craft-selected-ing-qty ${ok ? 'qty-ok' : 'qty-missing'}">${owned} / ${ing.amount}</div>
+            <div class="craft-selected-ing-rarity">${getRarityTag(ingChance)}</div>
+        `;
+        ingsRow.appendChild(sq);
+    }
+    box.appendChild(ingsRow);
+
+    // Bouton craft
+    const btn = document.createElement('button');
+    btn.className = 'craft-selected-btn' + (canCraft ? ' active' : ' disabled');
+    btn.textContent = canCraft ? `CRAFT ${recipe.name}` : 'Missing ingredients';
+    btn.onclick = canCraft
+        ? () => { craftItem(recipe); updateCraftButtons(); }
+        : () => showCraftMessage("Not enough items!", "error");
+    box.appendChild(btn);
 }
 
 function updateActiveEffectsDisplay() {

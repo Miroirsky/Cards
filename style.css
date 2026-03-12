@@ -4,9 +4,79 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
+    padding-bottom: 70px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+}
+
+/* ===== BOTTOM NAVIGATION BAR ===== */
+#bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 4000;
+    display: flex;
+    background: rgba(15, 20, 15, 0.97);
+    border-top: 2px solid rgba(78, 205, 196, 0.3);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    height: 64px;
+}
+
+.bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: #7f8c8d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0.4em 0;
+    position: relative;
+    font-family: Arial, sans-serif;
+}
+
+.bottom-nav-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: transparent;
+    border-radius: 0 0 4px 4px;
+    transition: background 0.2s ease;
+}
+
+.bottom-nav-btn.active::before {
+    background: #4ecdc4;
+}
+
+.bottom-nav-btn.active {
+    color: #4ecdc4;
+}
+
+.bottom-nav-btn:hover:not(.active) {
+    color: #bdc3c7;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.bottom-nav-icon {
+    font-size: 1.5em;
+    line-height: 1;
+}
+
+.bottom-nav-label {
+    font-size: 0.72em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 /* Interface Roll — Ciel */
@@ -1067,7 +1137,349 @@ body {
     color: #fff;
 }
 
-/* ===== THÈME MINECRAFT ===== */
+/* ===== CRAFT NEW LAYOUT ===== */
+
+.craft-layout {
+    display: flex;
+    gap: 2em;
+    max-width: 1400px;
+    margin: 0 auto;
+    align-items: flex-start;
+}
+
+.craft-recipes-panel {
+    flex: 0 0 420px;
+    min-width: 320px;
+}
+
+.craft-detail-panel {
+    flex: 1;
+    min-width: 300px;
+    position: sticky;
+    top: 1em;
+}
+
+.craft-panel-title {
+    color: #a0b8d8;
+    font-size: 1.1em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 0.8em 0;
+    padding-bottom: 0.4em;
+    border-bottom: 2px solid rgba(160, 184, 216, 0.25);
+}
+
+/* Carte recette (liste gauche) */
+.craft-recipe-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1em;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 0.8em;
+    margin-bottom: 0.8em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.craft-recipe-card:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(52,152,219,0.5);
+    transform: translateX(3px);
+}
+
+.craft-recipe-card.selected {
+    background: rgba(52,152,219,0.15);
+    border-color: #3498db;
+    box-shadow: 0 0 16px rgba(52,152,219,0.3);
+}
+
+.craft-recipe-card.can-craft {
+    border-color: rgba(39,174,96,0.4);
+}
+
+.craft-recipe-card.can-craft.selected {
+    border-color: #27ae60;
+    box-shadow: 0 0 16px rgba(39,174,96,0.35);
+}
+
+.craft-card-img-wrap {
+    flex: 0 0 80px;
+    width: 80px;
+    height: 50px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.craft-card-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.craft-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.craft-card-name {
+    font-size: 1.05em;
+    font-weight: bold;
+    color: #ecf0f1;
+    margin-bottom: 0.25em;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    flex-wrap: wrap;
+}
+
+.craft-can-badge {
+    background: linear-gradient(90deg, #27ae60, #2ecc71);
+    color: white;
+    font-size: 0.75em;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+.craft-card-time {
+    font-size: 0.82em;
+    color: #a29bfe;
+    margin-bottom: 0.4em;
+}
+
+.craft-card-ingredients {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+}
+
+/* Petits carrés ingrédients (liste) */
+.craft-ing-square {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 68px;
+    padding: 0.3em;
+    border-radius: 8px;
+    border: 1.5px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.25);
+    font-size: 0.72em;
+    text-align: center;
+    gap: 2px;
+}
+
+.craft-ing-square.ok {
+    border-color: rgba(39,174,96,0.5);
+    background: rgba(39,174,96,0.08);
+}
+
+.craft-ing-square.missing {
+    border-color: rgba(231,76,60,0.5);
+    background: rgba(231,76,60,0.08);
+}
+
+.craft-ing-square img {
+    width: 32px;
+    height: 20px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.craft-ing-qty {
+    font-weight: bold;
+    color: #ecf0f1;
+    font-size: 0.95em;
+}
+
+.craft-ing-name {
+    color: #bdc3c7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 64px;
+}
+
+.craft-ing-rarity .rarity-tag {
+    font-size: 0.78em;
+    padding: 1px 4px;
+}
+
+/* Panel droit: recette sélectionnée */
+.craft-selected-box {
+    background: rgba(255,255,255,0.04);
+    border: 2px solid rgba(52,152,219,0.3);
+    border-radius: 16px;
+    padding: 1.4em;
+    min-height: 120px;
+}
+
+.craft-selected-img-wrap {
+    width: 100%;
+    max-width: 300px;
+    height: 150px;
+    margin: 0 auto 1em auto;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.craft-selected-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.craft-selected-header {
+    text-align: center;
+    margin-bottom: 1em;
+}
+
+.craft-selected-name {
+    font-size: 1.7em;
+    font-weight: bold;
+    color: #ecf0f1;
+    margin-bottom: 0.2em;
+}
+
+.craft-selected-time {
+    font-size: 1em;
+    color: #a29bfe;
+    margin-bottom: 0.3em;
+}
+
+.craft-selected-count {
+    font-size: 0.95em;
+    color: #27ae60;
+}
+
+.craft-selected-section-title {
+    font-size: 0.88em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f8c8d;
+    margin: 0.8em 0 0.6em 0;
+    font-weight: bold;
+}
+
+.craft-selected-ings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8em;
+    margin-bottom: 1.2em;
+    justify-content: center;
+}
+
+/* Grands carrés ingrédients (panel sélectionné) */
+.craft-selected-ing-sq {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100px;
+    padding: 0.7em 0.5em;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,0.12);
+    background: rgba(0,0,0,0.3);
+    gap: 4px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.craft-selected-ing-sq.ok {
+    border-color: rgba(39,174,96,0.6);
+    background: rgba(39,174,96,0.1);
+    box-shadow: 0 0 10px rgba(39,174,96,0.2);
+}
+
+.craft-selected-ing-sq.missing {
+    border-color: rgba(231,76,60,0.6);
+    background: rgba(231,76,60,0.1);
+    box-shadow: 0 0 10px rgba(231,76,60,0.15);
+}
+
+.craft-selected-ing-sq img {
+    width: 56px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.craft-selected-ing-name {
+    font-size: 0.82em;
+    font-weight: bold;
+    color: #ecf0f1;
+}
+
+.craft-selected-ing-qty {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.qty-ok { color: #27ae60; }
+.qty-missing { color: #e74c3c; }
+
+.craft-selected-ing-rarity .rarity-tag {
+    font-size: 0.78em;
+}
+
+/* Bouton CRAFT */
+.craft-selected-btn {
+    width: 100%;
+    padding: 1em;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.15em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 1px;
+    margin-top: 0.5em;
+}
+
+.craft-selected-btn.active {
+    background: linear-gradient(90deg, #27ae60, #2ecc71);
+    color: white;
+    box-shadow: 0 4px 18px rgba(39,174,96,0.4);
+}
+
+.craft-selected-btn.active:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(39,174,96,0.55);
+}
+
+.craft-selected-btn.disabled {
+    background: rgba(127,140,141,0.3);
+    color: #7f8c8d;
+    cursor: not-allowed;
+}
+
+/* Queue dans le panel droit */
+.craft-queue-box {
+    background: rgba(52,152,219,0.07);
+    border: 2px solid rgba(52,152,219,0.25);
+    border-radius: 14px;
+    padding: 1em;
+    min-height: 80px;
+}
+
+@media (max-width: 900px) {
+    .craft-layout {
+        flex-direction: column;
+    }
+    .craft-recipes-panel {
+        flex: none;
+        width: 100%;
+    }
+}
 
 /* Potions & Items — Pierre (gris clair) */
 .potions-interface {

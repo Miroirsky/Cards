@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.16.0</div>
+    <div class="update-text">Update 0.16.1</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -82,23 +82,27 @@
         </div>
     </div>
     <!-- Interface Craft -->
-    <div class="craft-content" style="text-align:center;">
+    <div class="craft-content">
         <h2>Crafts</h2>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;max-width:800px;margin:0 auto;">
-            <!-- Queue de craft à gauche -->
-            <div style="flex:1;margin-right:2em;text-align:left;">
-                <h3 style="color:#3498db;margin-bottom:0.5em;">Crafting Queue</h3>
-                <div id="craft-queue" style="min-height:100px;background:rgba(52,152,219,0.1);border-radius:10px;padding:1em;border:2px solid rgba(52,152,219,0.3);">
-                    <div style="color:#7f8c8d;font-style:italic;">No crafting in progress...</div>
-                </div>
-            </div>
-            <!-- Recettes de craft à droite -->
-            <div style="flex:2;">
-                <h3 style="color:#27ae60;margin-bottom:0.5em;">Unlocked Crafts</h3>
+        <div class="craft-layout">
+            <!-- Gauche : liste des recettes -->
+            <div class="craft-recipes-panel">
+                <h3 class="craft-panel-title">Recipes</h3>
                 <div id="craft-list"></div>
             </div>
+            <!-- Droite : recette sélectionnée + queue -->
+            <div class="craft-detail-panel">
+                <h3 class="craft-panel-title">Selected Recipe</h3>
+                <div id="craft-selected" class="craft-selected-box">
+                    <div style="color:#7f8c8d;font-style:italic;text-align:center;padding:2em;">Click a recipe to select it</div>
+                </div>
+                <h3 class="craft-panel-title" style="margin-top:1.5em;">Crafting Queue</h3>
+                <div id="craft-queue" class="craft-queue-box">
+                    <div style="color:#7f8c8d;font-style:italic;">No crafting in progress...</div>
+                </div>
+                <div id="craft-result" style="margin-top:1em;color:#f39c12;font-weight:bold;text-align:center;"></div>
+            </div>
         </div>
-        <div id="craft-result" style="margin-top:1em;color:#f39c12;font-weight:bold;"></div>
     </div>
     <!-- Bouton paramètres -->
     <button id="settings-btn" class="settings-btn" title="Settings">
@@ -170,6 +174,38 @@
         </div>
     </div>
 
+    <!-- Bottom Navigation Bar -->
+    <nav id="bottom-nav">
+        <button class="bottom-nav-btn active" id="nav-roll" onclick="navigateTo('roll')">
+            <span class="bottom-nav-icon">🎲</span>
+            <span class="bottom-nav-label">Roll</span>
+        </button>
+        <button class="bottom-nav-btn" id="nav-inventory" onclick="navigateTo('inventory')">
+            <span class="bottom-nav-icon">🎴</span>
+            <span class="bottom-nav-label">Inventory</span>
+        </button>
+        <button class="bottom-nav-btn" id="nav-craft" onclick="navigateTo('craft')">
+            <span class="bottom-nav-icon">⚗️</span>
+            <span class="bottom-nav-label">Craft</span>
+        </button>
+    </nav>
+
     <script src="rng.js"></script>
+    <script>
+        function navigateTo(section) {
+            // Update active button
+            document.querySelectorAll('.bottom-nav-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('nav-' + section).classList.add('active');
+
+            // Scroll to section
+            const targets = {
+                'roll': '.roll-interface',
+                'inventory': '.inventory-interface',
+                'craft': '.craft-content'
+            };
+            const el = document.querySelector(targets[section]);
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
 </body>
 </html>
