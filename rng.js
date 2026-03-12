@@ -180,6 +180,27 @@ function saveCraftingQueue() {
     localStorage.setItem('cards-craft-queue', JSON.stringify(simplified));
 }
 
+function loadCraftingQueue() {
+    const data = localStorage.getItem('cards-craft-queue');
+    if (!data) return;
+    try {
+        const simplified = JSON.parse(data);
+        craftingQueue = [];
+        for (let job of simplified) {
+            const recipe = craftRecipes.find(r => r.name === job.recipeName);
+            if (!recipe) continue;
+            craftingQueue.push({
+                recipe: recipe,
+                startTime: job.endTime - recipe.time,
+                endTime: job.endTime,
+                id: job.endTime + Math.random()
+            });
+        }
+    } catch(e) {
+        craftingQueue = [];
+    }
+}
+
 function craftItem(recipe) {
     // Vérifier si on a les ingrédients nécessaires
     if (!hasIngredients(recipe)) {
@@ -2094,31 +2115,90 @@ window.addEventListener('beforeunload', saveLastConnection);
 
 function gainTokensSinceLastConnection() {
     const last = localStorage.getItem('cards-last-connection');
-    if (!last) return { tokensToAdd: 0, diffMinutes: 0, lastDate: null };
-    const now = new Date();
+    if (!last) return { tokensToAdd: 0, diffMinutes: 0, lastDate: null, craftedOffline: [] };
+    const now = Date.now();
     const lastDate = new Date(last);
-    const diffMs = now - lastDate;
+    const diffMs = now - lastDate.getTime();
     const diffSeconds = Math.floor(diffMs / 1000);
-    const tokensToAdd = Math.floor(diffSeconds * (0.2 + tokenUpgradeLevel * 0.1) / 10); // 10x plus lent qu'en ligne
+
+    // Tokens gagnés hors-ligne (10x plus lent)
+    const tokensToAdd = Math.floor(diffSeconds * (0.2 + tokenUpgradeLevel * 0.1) / 10);
     if (tokensToAdd > 0) {
         tokens = Math.min(tokens + tokensToAdd, maxToken);
         updateTokensDisplay();
-        saveCollection();
     }
-    return { tokensToAdd, diffMinutes: Math.floor(diffSeconds / 60), lastDate };
+
+    // Crafts terminés hors-ligne
+    const craftedOffline = [];
+    if (craftingQueue.length > 0) {
+        let changed = false;
+        while (craftingQueue.length > 0 && craftingQueue[0].endTime <= now) {
+            const job = craftingQueue.shift();
+            const recipe = job.recipe;
+            if (recipe.type === 'potion') {
+                potionInventory[recipe.name] = (potionInventory[recipe.name] || 0) + 1;
+            } else {
+                collection[recipe.name] = (collection[recipe.name] || 0) + 1;
+            }
+            craftedOffline.push(recipe.name);
+            changed = true;
+        }
+        // Recalcule les endTime pour les crafts restants
+        if (craftingQueue.length > 0 && craftingQueue[0].endTime <= now) {
+            craftingQueue[0].endTime = now + craftingQueue[0].recipe.time;
+        }
+        if (changed) {
+            saveCollection();
+            saveCraftingQueue();
+        }
+    }
+
+    saveCollection();
+    return { tokensToAdd, diffMinutes: Math.floor(diffSeconds / 60), lastDate, craftedOffline };
 }
 
-function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate) {
+function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate, craftedOffline) {
     const el = document.getElementById('last-connection');
     const overlay = document.getElementById('blur-overlay');
-    if (!el || !lastDate || !overlay) return;
+    // Only show popup if away for more than 1 minute
+    if (!el || !lastDate || !overlay || diffMinutes < 1) return;
     const dateStr = lastDate.toLocaleString();
     const hours = Math.floor(diffMinutes / 60);
     const minutes = diffMinutes % 60;
     let timeStr = '';
     if (hours > 0) timeStr += hours + 'h ';
     timeStr += minutes + 'min';
-    el.innerHTML = `Dernière connexion : <b>${dateStr}</b><br>Temps écoulé : <b>${timeStr}</b><br>Tokens gagnés : <b>${tokensToAdd}</b><br><br><span style='font-size:0.9em;color:#888'>(Clique pour continuer)</span>`;
+
+    let craftHtml = '';
+    if (craftedOffline && craftedOffline.length > 0) {
+        const counts = {};
+        for (const name of craftedOffline) counts[name] = (counts[name] || 0) + 1;
+        const rows = Object.entries(counts).map(([name, qty]) => {
+            const multiple = qty > 1 ? ` <span style="color:#f39c12;font-weight:bold;">x${qty}</span>` : '';
+            return `<div style="display:flex;align-items:center;gap:0.5em;margin:0.3em 0;">
+                <img src="Cards-Icons/${name}.png" alt="${name}" style="width:36px;height:22px;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">
+                <span style="font-weight:bold;color:#2ecc71;">${name}</span>${multiple}
+            </div>`;
+        }).join('');
+        craftHtml = `
+            <div style="margin:0.8em 0;padding:0.8em;background:rgba(39,174,96,0.1);border:1.5px solid rgba(39,174,96,0.4);border-radius:12px;text-align:left;">
+                <div style="font-weight:bold;color:#2ecc71;margin-bottom:0.4em;">⚗️ Crafted while away:</div>
+                ${rows}
+            </div>`;
+    }
+
+    let tokenHtml = tokensToAdd > 0
+        ? `<div style="margin:0.5em 0;">🪙 Tokens gained: <b style="color:#f39c12;">+${tokensToAdd}</b></div>`
+        : '';
+
+    el.innerHTML = `
+        <div style="font-size:1em;font-weight:bold;color:#3498db;margin-bottom:0.5em;">Welcome back!</div>
+        <div style="font-size:0.9em;color:#7f8c8d;margin-bottom:0.8em;">Last visit: ${dateStr}</div>
+        <div style="margin:0.5em 0;">⏱ Away for: <b>${timeStr}</b></div>
+        ${tokenHtml}
+        ${craftHtml}
+        <br><span style='font-size:0.85em;color:#aaa;'>(Click to continue)</span>
+    `;
     el.style.display = 'block';
     overlay.style.display = 'block';
     el.style.cursor = 'pointer';
@@ -2130,7 +2210,8 @@ function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate) {
 
 // Au chargement de la page, on restaure l'inventaire
 loadCollection();
-const offlineInfo = gainTokensSinceLastConnection();
+loadCraftingQueue(); // Restaurer la queue de craft sauvegardée
+const offlineInfo = gainTokensSinceLastConnection(); // Craft + tokens hors-ligne
 updateCollection();
 updateInventoryStats();
 updateCraftButtons();
@@ -2138,7 +2219,7 @@ updatePotionsInventory();
 updateActiveEffects();
 updateActiveEffectsDisplay();
 resetCardPreview();
-displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
+displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate, offlineInfo.craftedOffline);
 updateLuck();
 
 // Reprendre la queue de craft si elle était en cours
@@ -2693,6 +2774,7 @@ if (resetBtn) {
             localStorage.removeItem('cards-last-connection');
             localStorage.removeItem('cards-token-upgrade');
             localStorage.removeItem('cards-max-token-upgrade');
+            localStorage.removeItem('cards-craft-queue');
             // Optionally reset rarity bar threshold
             // localStorage.removeItem('rarity-notif-threshold');
             // Reset in-memory variables
@@ -2708,6 +2790,7 @@ if (resetBtn) {
             xp = 0;
             level = 1;
             xpNext = 50;
+            craftingQueue = [];
             updateTokensDisplay();
             updateDiamondsDisplay();
             updateLevelXpDisplay();
