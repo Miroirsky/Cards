@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.16.1</div>
+    <div class="update-text">Update 0.17.0</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -155,6 +155,12 @@
                     <button class="press-qty-btn" data-qty="10">×10</button>
                     <button class="press-qty-btn" data-qty="25">×25</button>
                     <button class="press-qty-btn" data-qty="max">Max</button>
+                </div>
+                <div id="press-keep-option" style="text-align:center;margin-bottom:0.8em;">
+                    <label style="font-weight:bold;font-size:0.9em;">
+                        <input type="checkbox" id="press-keep-checkbox">
+                        Keep <span id="press-keep-label">1</span>
+                    </label>
                 </div>
                 <div id="press-card-list" style="max-height:260px;overflow:auto;"></div>
                 <div id="press-empty-message" style="text-align:center;color:#7f8c8d;margin-top:1em;display:none;"></div>

@@ -664,6 +664,12 @@ body {
     color: #2c3e50;
 }
 
+.rarity-uncommon {
+    background: #1a6b2e;
+    color: #a8ffb8;
+    box-shadow: 0 0 6px rgba(26, 107, 46, 0.5);
+}
+
 .rarity-rare {
     background: #3498db;
     color: white;
@@ -722,6 +728,27 @@ body {
     text-shadow: 0 0 2px #222, 0 0 6px #b0c4de;
 }
 
+.rarity-caloric {
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: #fff;
+    box-shadow: 0 0 8px #e67e22aa;
+    border: 1px solid #e67e22;
+}
+
+.rarity-nuclear {
+    background: linear-gradient(45deg, #39ff14, #7fff00, #b8ff00);
+    color: #1a2900;
+    box-shadow: 0 0 12px rgba(57, 255, 20, 0.8), 0 0 24px rgba(57, 255, 20, 0.4);
+    border: 1px solid #39ff14;
+    animation: nuclear-glow 1.2s ease-in-out infinite alternate;
+    text-shadow: 0 0 4px rgba(57, 255, 20, 0.9);
+}
+
+@keyframes nuclear-glow {
+    from { box-shadow: 0 0 8px rgba(57, 255, 20, 0.7), 0 0 16px rgba(57, 255, 20, 0.3); }
+    to   { box-shadow: 0 0 18px rgba(57, 255, 20, 1),  0 0 36px rgba(57, 255, 20, 0.7); }
+}
+
 @keyframes rainbow-glow {
     from { box-shadow: 0 0 15px rgba(231, 76, 60, 0.6); }
     to { box-shadow: 0 0 25px rgba(52, 152, 219, 0.8); }
@@ -742,6 +769,10 @@ body {
 .card-flip-back.rarity-common {
     background: #95a5a6;
     color: #2c3e50;
+}
+.card-flip-back.rarity-uncommon {
+    background: #1a6b2e;
+    color: #a8ffb8;
 }
 .card-flip-back.rarity-rare {
     background: #3498db;
@@ -773,6 +804,11 @@ body {
     background-size: 200% 200%;
     animation: shiny-move 2s linear infinite alternate;
     color: #fff;
+}
+.card-flip-back.rarity-nuclear {
+    background: linear-gradient(45deg, #39ff14, #7fff00, #b8ff00);
+    color: #1a2900;
+    animation: nuclear-glow 1.2s ease-in-out infinite alternate;
 }
 
 /* Responsive design */
