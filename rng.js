@@ -23,6 +23,9 @@ const items = [
     { name: "Noob", chance: 5000, rollable: true },
     { name: "Cards", chance: 7500, rollable: true },
     { name: "Circus", chance: 10000, rollable: true },
+    { name: "Clouds", chance: 15000, rollable: true },
+    { name: "Nars", chance: 25000, rollable: true },
+    { name: "Iceberg", chance: 15000, rollable: false },
     { name: "Cards Circus", chance: 25000, rollable: false },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Pierced Hearth", chance: 5000, rollable: false },
@@ -171,6 +174,13 @@ const craftRecipes = [
             { name: "Cards", amount: 2 }
         ],
         time: 1000 * 45,
+    },
+	{
+        name: "Iceberg",
+        ingredients: [
+            { name: "Ice Spikes", amount: 100 }
+        ],
+        time: 1000 * 60,
     }
 ];
 
