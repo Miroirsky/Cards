@@ -23,6 +23,23 @@ body {
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(10px);
     height: 64px;
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#bottom-nav.nav-visible {
+    transform: translateY(0);
+}
+
+/* Invisible trigger zone at bottom of screen */
+#bottom-nav-trigger {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 18px;
+    z-index: 3999;
+    pointer-events: all;
 }
 
 .bottom-nav-btn {
@@ -1573,4 +1590,20 @@ body {
 /* XP bar dans le ciel */
 #xp-bar-container {
     background: rgba(0,0,0,0.3) !important;
+}
+
+/* ===== INDEX SYSTEM ===== */
+#index-modal,
+#index-cards-modal,
+#index-card-detail {
+    overflow: hidden;
+}
+
+#index-cards-list div:active {
+    background: rgba(255,255,255,0.13) !important;
+}
+
+#index-search:focus {
+    border-color: rgba(78, 205, 196, 0.7);
+    background: rgba(255,255,255,0.1);
 }

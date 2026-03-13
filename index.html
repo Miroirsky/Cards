@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.17.0</div>
+    <div class="update-text">Update 0.18.5</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -156,6 +156,9 @@
                     <button class="press-qty-btn" data-qty="25">×25</button>
                     <button class="press-qty-btn" data-qty="max">Max</button>
                 </div>
+                <div style="display:flex;justify-content:center;margin-bottom:0.8em;">
+                    <button id="press-all-btn" style="padding:0.5em 2em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;font-size:1em;background:#e67e22;color:white;">Tous</button>
+                </div>
                 <div id="press-keep-option" style="text-align:center;margin-bottom:0.8em;">
                     <label style="font-weight:bold;font-size:0.9em;">
                         <input type="checkbox" id="press-keep-checkbox">
@@ -180,6 +183,9 @@
         </div>
     </div>
 
+    <!-- Bottom nav hover trigger -->
+    <div id="bottom-nav-trigger"></div>
+
     <!-- Bottom Navigation Bar -->
     <nav id="bottom-nav">
         <button class="bottom-nav-btn active" id="nav-roll" onclick="navigateTo('roll')">
@@ -194,7 +200,97 @@
             <span class="bottom-nav-icon">⚗️</span>
             <span class="bottom-nav-label">Craft</span>
         </button>
+        <button class="bottom-nav-btn" id="nav-index" onclick="openIndexMenu()">
+            <span class="bottom-nav-icon">📖</span>
+            <span class="bottom-nav-label">Index</span>
+        </button>
     </nav>
+
+    <!-- Index Modal -->
+    <div id="index-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3500;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(78,205,196,0.2);">
+            <button onclick="closeIndexMenu()" style="background:none;border:none;color:#4ecdc4;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#4ecdc4;font-size:1.3em;">Index</h2>
+        </div>
+        <div id="index-main" style="flex:1;overflow-y:auto;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;">
+            <!-- Option Cards -->
+            <div onclick="openIndexSection('cards')" style="background:rgba(255,255,255,0.07);border:2px solid rgba(78,205,196,0.25);border-radius:16px;padding:1.2em 1.5em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.2s;">
+                <span style="font-size:2em;">🎴</span>
+                <div>
+                    <div style="font-weight:bold;font-size:1.1em;color:#fff;">Cards</div>
+                    <div style="font-size:0.82em;color:#7f8c8d;">All discovered cards and their details</div>
+                </div>
+                <span style="margin-left:auto;color:#4ecdc4;font-size:1.3em;">›</span>
+            </div>
+            <!-- Option Potions -->
+            <div onclick="openIndexSection('potions')" style="background:rgba(255,255,255,0.07);border:2px solid rgba(155,89,182,0.25);border-radius:16px;padding:1.2em 1.5em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.2s;">
+                <span style="font-size:2em;">🧪</span>
+                <div>
+                    <div style="font-weight:bold;font-size:1.1em;color:#fff;">Potions</div>
+                    <div style="font-size:0.82em;color:#7f8c8d;">Effects, duration and craft recipes</div>
+                </div>
+                <span style="margin-left:auto;color:#9b59b6;font-size:1.3em;">›</span>
+            </div>
+            <!-- Option Tags -->
+            <div onclick="openIndexSection('tags')" style="background:rgba(255,255,255,0.07);border:2px solid rgba(241,196,15,0.25);border-radius:16px;padding:1.2em 1.5em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.2s;">
+                <span style="font-size:2em;">✨</span>
+                <div>
+                    <div style="font-weight:bold;font-size:1.1em;color:#fff;">Rarity Tags</div>
+                    <div style="font-size:0.82em;color:#7f8c8d;">Gold, Rainbow, Shiny, Nuclear variants</div>
+                </div>
+                <span style="margin-left:auto;color:#f1c40f;font-size:1.3em;">›</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Index Cards Section -->
+    <div id="index-cards-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3600;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(78,205,196,0.2);">
+            <button onclick="closeIndexSection()" style="background:none;border:none;color:#4ecdc4;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#4ecdc4;font-size:1.3em;">Cards</h2>
+            <span id="index-cards-count" style="margin-left:auto;color:#7f8c8d;font-size:0.85em;"></span>
+        </div>
+        <div style="padding:0.8em 1em;background:rgba(0,0,0,0.2);">
+            <input id="index-search" type="text" placeholder="Search cards..." style="width:100%;box-sizing:border-box;padding:0.6em 1em;border-radius:10px;border:1.5px solid rgba(78,205,196,0.3);background:rgba(255,255,255,0.07);color:#fff;font-size:1em;outline:none;">
+        </div>
+        <div id="index-cards-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.5em;"></div>
+    </div>
+
+    <!-- Index Card Detail -->
+    <div id="index-card-detail" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3700;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(78,205,196,0.2);">
+            <button onclick="closeIndexCardDetail()" style="background:none;border:none;color:#4ecdc4;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 id="index-detail-title" style="margin:0;color:#fff;font-size:1.2em;"></h2>
+        </div>
+        <div id="index-detail-content" style="flex:1;overflow-y:auto;padding:1.2em;"></div>
+    </div>
+
+    <!-- Index Group Detail -->
+    <div id="index-group-detail" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3800;background:#1a3a1a;flex-direction:column;">
+        <div id="index-group-header" style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(78,205,196,0.2);">
+            <button onclick="closeIndexGroupDetail()" style="background:none;border:none;color:#4ecdc4;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 id="index-group-title" style="margin:0;color:#fff;font-size:1.2em;"></h2>
+        </div>
+        <div id="index-group-content" style="flex:1;overflow-y:auto;padding:1.2em;display:flex;flex-direction:column;gap:0.5em;"></div>
+    </div>
+
+    <!-- Index Potions Section -->
+    <div id="index-potions-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3600;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(155,89,182,0.3);">
+            <button onclick="closeIndexPotions()" style="background:none;border:none;color:#9b59b6;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#9b59b6;font-size:1.3em;">Potions</h2>
+        </div>
+        <div id="index-potions-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
+    </div>
+
+    <!-- Index Tags Section -->
+    <div id="index-tags-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3600;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(241,196,15,0.3);">
+            <button onclick="closeIndexTags()" style="background:none;border:none;color:#f1c40f;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#f1c40f;font-size:1.3em;">Rarity Tags</h2>
+        </div>
+        <div id="index-tags-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
+    </div>
 
     <script src="rng.js"></script>
     <script>
@@ -212,6 +308,46 @@
             const el = document.querySelector(targets[section]);
             if (el) el.scrollIntoView({ behavior: 'smooth' });
         }
+
+        // Bottom nav auto-hide logic
+        const bottomNav = document.getElementById('bottom-nav');
+        const navTrigger = document.getElementById('bottom-nav-trigger');
+        let navHideTimer = null;
+
+        function showNav() {
+            clearTimeout(navHideTimer);
+            bottomNav.classList.add('nav-visible');
+            // Keep trigger zone at the right height when nav is visible
+            navTrigger.style.height = '64px';
+        }
+
+        function scheduleHideNav() {
+            clearTimeout(navHideTimer);
+            navHideTimer = setTimeout(() => {
+                bottomNav.classList.remove('nav-visible');
+                navTrigger.style.height = '18px';
+            }, 1500);
+        }
+
+        navTrigger.addEventListener('mouseenter', showNav);
+        bottomNav.addEventListener('mouseenter', () => { clearTimeout(navHideTimer); });
+        bottomNav.addEventListener('mouseleave', scheduleHideNav);
+        navTrigger.addEventListener('mouseleave', scheduleHideNav);
+
+        // Touch support: swipe up from bottom
+        let touchStartY = 0;
+        document.addEventListener('touchstart', e => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        document.addEventListener('touchend', e => {
+            const touchEndY = e.changedTouches[0].clientY;
+            const diff = touchStartY - touchEndY;
+            const fromBottom = window.innerHeight - touchStartY;
+            if (fromBottom < 60 && diff > 20) {
+                showNav();
+                scheduleHideNav();
+            }
+        }, { passive: true });
     </script>
 </body>
 </html>
