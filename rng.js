@@ -7,6 +7,7 @@ const items = [
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sword", chance: 25, rollable: true, specialTag: "Cutting" },
+	{ name: "Overworld", chance: 35, rollable: true }
     { name: "Mars", chance: 50, rollable: true },
     { name: "Burger", chance: 75, rollable: true, specialTag: "Caloric" },
     { name: "Earth", chance: 100, rollable: true },
