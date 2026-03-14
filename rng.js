@@ -3,13 +3,13 @@ const items = [
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
     { name: "Bones", chance: 5, rollable: true },
-    { name: "Sugar", chance: 7, rollable: true },
+    { name: "Sugar", chance: 7, rollable: true, tags: ["sweet"] },
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sword", chance: 25, rollable: true },
-	   { name: "Overworld", chance: 35, rollable: true },
+    { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
-    { name: "Burger", chance: 75, rollable: true },
+    { name: "Burger", chance: 75, rollable: true, tags: ["caloric"] },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
@@ -17,7 +17,7 @@ const items = [
     { name: "Hearth", chance: 500, rollable: true },
     { name: "Evil", chance: 666, rollable: true },
     { name: "Sky", chance: 750, rollable: true },
-    { name: "Tacos", chance: 1000, rollable: true },
+    { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
     { name: "Ugly", chance: 2500, rollable: true },
     { name: "Cute", chance: 2500, rollable: true },
@@ -101,6 +101,8 @@ let xpUpgradeLevel = 0;      // Niveau d'amélioration de gain XP
 
 
 let slotInterval = null;
+let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2 luck sur les cartes sweet)
+let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
 
 let xp = 0;
 let level = 1;
@@ -601,39 +603,72 @@ function updateActiveEffectsDisplay() {
     }
     
     activeEffectsDiv.innerHTML = '';
-    
-    // Stats de base
+
+    // ── Calcul des stats réelles (upgrades + potions) ──
+    const potionRollSpeed   = activeEffects.rollspeed  ? activeEffects.rollspeed.power  : 1;
+    const potionLuckMult    = activeEffects.luck        ? activeEffects.luck.power        : 1;
+    const potionTokenSpeed  = activeEffects.tokenspeed ? activeEffects.tokenspeed.power : 1;
+
+    const upgradeRollSpeed  = 1; // pas d'upgrade roll speed pour l'instant
+    const upgradeLuckMult   = 1 + luckUpgradeLevel  * 0.5;
+    const upgradeTokenSpeed = 1 + tokenUpgradeLevel * 0.5;  // chaque niveau = +50% de la base
+    const upgradeTokenRate  = (0.2 + tokenUpgradeLevel * 0.1).toFixed(1); // tokens/s réels
+
+    const totalRollSpeed  = potionRollSpeed  * upgradeRollSpeed;
+    const sugarRushMult   = sugarRushRolls > 0 ? 2 : 1;
+    const ventrePleinMult = ventrePleinRolls > 0 ? 1.5 : 1;
+    const totalLuck       = (potionLuckMult  * upgradeLuckMult * sugarRushMult * ventrePleinMult).toFixed(2);
+    const totalTokenSpeed = (potionTokenSpeed * upgradeTokenSpeed).toFixed(2);
+    const realTokenRate   = (parseFloat(upgradeTokenRate) * potionTokenSpeed).toFixed(2);
+
+    // Délai effectif en ms
+    const effectiveDelay  = Math.max(50, Math.round(1000 / totalRollSpeed));
+
+    // ── Section stats toujours visible ──
     const statsSection = document.createElement('div');
     statsSection.style.cssText = `
         margin-bottom: 1em;
         padding-bottom: 1em;
         border-bottom: 1px solid rgba(231,76,60,0.3);
     `;
-    
-    const rollSpeedMultiplier = activeEffects.rollspeed ? activeEffects.rollspeed.power : 1;
-    const luckMultiplier = (activeEffects.luck ? activeEffects.luck.power : 1);
-    const tokenSpeedMultiplier = activeEffects.tokenspeed ? activeEffects.tokenspeed.power : 1;
-    
     statsSection.innerHTML = `
-        <div style="font-weight:bold;color:#e74c3c;margin-bottom:0.5em;">Stats Actuelles</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.9em;">
-            <div>Roll Speed: <span style="color:#27ae60;font-weight:bold;">x${rollSpeedMultiplier}</span></div>
-            <div>Luck: <span style="color:#3498db;font-weight:bold;">x${luckMultiplier}</span></div>
-            <div>Tokens Speed: <span style="color:#f39c12;font-weight:bold;">x${tokenSpeedMultiplier}</span></div>
+        <div style="font-weight:bold;color:#e74c3c;margin-bottom:0.6em;">📊 Current Stats</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.88em;">
+            <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
+                <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">⚡ Roll Speed</div>
+                <div style="color:#27ae60;font-weight:bold;">×${totalRollSpeed}
+                    <span style="color:#555;font-size:0.8em;font-weight:normal;">(${effectiveDelay}ms)</span>
+                </div>
+                <div style="color:#555;font-size:0.75em;">base ×${upgradeRollSpeed}${potionRollSpeed > 1 ? ` · potion ×${potionRollSpeed}` : ''}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
+                <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🍀 Luck</div>
+                <div style="color:#3498db;font-weight:bold;">×${totalLuck}</div>
+                <div style="color:#555;font-size:0.75em;">upgrade ×${upgradeLuckMult.toFixed(2)}${potionLuckMult > 1 ? ` · potion ×${potionLuckMult}` : ''}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
+                <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🪙 Token Rate</div>
+                <div style="color:#f39c12;font-weight:bold;">${realTokenRate}/s</div>
+                <div style="color:#555;font-size:0.75em;">base ${upgradeTokenRate}/s${potionTokenSpeed > 1 ? ` · potion ×${potionTokenSpeed}` : ''}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
+                <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">📦 Max Tokens</div>
+                <div style="color:#e67e22;font-weight:bold;">${maxToken}</div>
+                <div style="color:#555;font-size:0.75em;">base ${BASE_MAX_TOKEN} + ${maxTokenUpgradeLevel} upgrades</div>
+            </div>
         </div>
     `;
-    
     activeEffectsDiv.appendChild(statsSection);
-    
-    // Effets actifs
+
+    // ── Effets actifs ──
     let hasActiveEffects = false;
-    
+
     // Effets de potions (temporels)
     for (let effectType in activeEffects) {
         hasActiveEffects = true;
         const effect = activeEffects[effectType];
         const timeLeft = Math.max(0, effect.endTime - now);
-        
+
         const effectDiv = document.createElement('div');
         effectDiv.style.cssText = `
             background: linear-gradient(135deg, #9b59b6, #8e44ad);
@@ -645,28 +680,18 @@ function updateActiveEffectsDisplay() {
             justify-content: space-between;
             align-items: center;
         `;
-        
-        let effectName = "";
-        let effectIcon = "⚗️";
+
+        let effectName = "", effectIcon = "⚗️";
         switch (effectType) {
-            case "rollspeed":
-                effectName = "Roll Speed";
-                effectIcon = "⚡";
-                break;
-            case "luck":
-                effectName = "Luck";
-                effectIcon = "🍀";
-                break;
-            case "tokenspeed":
-                effectName = "Tokens Speed";
-                effectIcon = "🪙";
-                break;
+            case "rollspeed": effectName = "Roll Speed";   effectIcon = "⚡"; break;
+            case "luck":      effectName = "Luck";         effectIcon = "🍀"; break;
+            case "tokenspeed":effectName = "Token Speed";  effectIcon = "🪙"; break;
         }
-        
+
         effectDiv.innerHTML = `
             <div>
                 <div style="font-weight:bold;">${effectIcon} ${effect.potionName}</div>
-                <div style="font-size:0.8em;opacity:0.9;">${effectName} x${effect.power}</div>
+                <div style="font-size:0.8em;opacity:0.9;">${effectName} ×${effect.power}</div>
             </div>
             <div style="text-align:right;">
                 <div style="font-size:0.9em;">${Math.ceil(timeLeft / 1000)}s left</div>
@@ -674,12 +699,12 @@ function updateActiveEffectsDisplay() {
         `;
         activeEffectsDiv.appendChild(effectDiv);
     }
-    
+
     // Effets basés sur les rolls
     for (let effectType in rollBasedEffects) {
         hasActiveEffects = true;
         const effect = rollBasedEffects[effectType];
-        
+
         const effectDiv = document.createElement('div');
         effectDiv.style.cssText = `
             background: linear-gradient(135deg, #e67e22, #d35400);
@@ -691,28 +716,18 @@ function updateActiveEffectsDisplay() {
             justify-content: space-between;
             align-items: center;
         `;
-        
-        let effectName = "";
-        let effectIcon = "🎯";
+
+        let effectName = "", effectIcon = "🎯";
         switch (effectType) {
-            case "rollspeed":
-                effectName = "Roll Speed";
-                effectIcon = "⚡";
-                break;
-            case "luck":
-                effectName = "Luck";
-                effectIcon = "🍀";
-                break;
-            case "tokenspeed":
-                effectName = "Tokens Speed";
-                effectIcon = "🪙";
-                break;
+            case "rollspeed": effectName = "Roll Speed";   effectIcon = "⚡"; break;
+            case "luck":      effectName = "Luck";         effectIcon = "🍀"; break;
+            case "tokenspeed":effectName = "Token Speed";  effectIcon = "🪙"; break;
         }
-        
+
         effectDiv.innerHTML = `
             <div>
                 <div style="font-weight:bold;">${effectIcon} ${effect.potionName}</div>
-                <div style="font-size:0.8em;opacity:0.9;">${effectName} x${effect.power}</div>
+                <div style="font-size:0.8em;opacity:0.9;">${effectName} ×${effect.power}</div>
             </div>
             <div style="text-align:right;">
                 <div style="font-size:0.9em;">${effect.rollsUsed}/${effect.rollLimit}</div>
@@ -721,14 +736,67 @@ function updateActiveEffectsDisplay() {
         `;
         activeEffectsDiv.appendChild(effectDiv);
     }
-    
-    // Message si aucun effet
-    if (!hasActiveEffects) {
-        activeEffectsDiv.innerHTML = `
-            <div style="color:#7f8c8d;font-style:italic;text-align:center;padding:2em;">
-                No active effects...
+
+    // Sugar Rush dans la liste des effets
+    if (sugarRushRolls > 0) {
+        hasActiveEffects = true;
+        const srDiv = document.createElement('div');
+        srDiv.style.cssText = `
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 0.8em;
+            border-radius: 8px;
+            margin-bottom: 0.5em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        srDiv.innerHTML = `
+            <div>
+                <div style="font-weight:bold;">🍬 Sugar Rush</div>
+                <div style="font-size:0.8em;opacity:0.9;">Luck ×2 on all cards</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.1em;font-weight:bold;">${sugarRushRolls}</div>
+                <div style="font-size:0.8em;opacity:0.9;">rolls left</div>
             </div>
         `;
+        activeEffectsDiv.appendChild(srDiv);
+    }
+
+    // Ventre Plein dans la liste des effets
+    if (ventrePleinRolls > 0) {
+        hasActiveEffects = true;
+        const vpDiv = document.createElement('div');
+        vpDiv.style.cssText = `
+            background: linear-gradient(135deg, #e67e22, #c0392b);
+            color: white;
+            padding: 0.8em;
+            border-radius: 8px;
+            margin-bottom: 0.5em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        vpDiv.innerHTML = `
+            <div>
+                <div style="font-weight:bold;">🍔 Ventre Plein</div>
+                <div style="font-size:0.8em;opacity:0.9;">Luck ×1.5 on all cards</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.1em;font-weight:bold;">${ventrePleinRolls}</div>
+                <div style="font-size:0.8em;opacity:0.9;">rolls left</div>
+            </div>
+        `;
+        activeEffectsDiv.appendChild(vpDiv);
+    }
+
+    // Message si aucun effet actif (mais les stats restent visibles au-dessus)
+    if (!hasActiveEffects) {
+        const noEffect = document.createElement('div');
+        noEffect.style.cssText = 'color:#7f8c8d;font-style:italic;text-align:center;padding:1em 0 0.5em;';
+        noEffect.textContent = 'No active effects.';
+        activeEffectsDiv.appendChild(noEffect);
     }
 }
 
@@ -1012,6 +1080,24 @@ function getGoldTag(type) {
     return '';
 }
 
+function getSweetTag(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('sweet')) {
+        return '<span class="rarity-tag rarity-sweet">🍬 Sweet</span>';
+    }
+    return '';
+}
+
+function getCaloricTag(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('caloric')) {
+        return '<span class="rarity-tag rarity-caloric">🍔 Caloric</span>';
+    }
+    return '';
+}
+
+function getSpecialTags(item) {
+    return getSweetTag(item) + getCaloricTag(item);
+}
+
 
 function updateInventoryStats() {
     const totalCards = Object.values(collection).reduce((sum, count) => sum + count, 0);
@@ -1174,7 +1260,7 @@ function updateCardPreview(cardData) {
     const { selected, type, displayName, chanceDisplay } = cardData;
     preview.innerHTML = `
         <div class="preview-card">
-            <span class="rarity-tag-container">${getGoldTag(type)}</span>
+            <span class="rarity-tag-container">${getGoldTag(type)}${getSpecialTags(selected)}</span>
             <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}" class="card-image">
             <div class="preview-card-text">
                 ${displayName}<br>[1 in ${chanceDisplay}]
@@ -1197,7 +1283,9 @@ function updateLuck() {
     const potionLuck = (activeEffects.luck && activeEffects.luck.endTime > Date.now())
         ? activeEffects.luck.power : 1;
     const upgradeLuck = 1 + luckUpgradeLevel * 0.5;
-    luck = potionLuck * upgradeLuck;
+    const sugarRushLuck = sugarRushRolls > 0 ? 2 : 1;
+    const ventrePleinLuck = ventrePleinRolls > 0 ? 1.5 : 1;
+    luck = potionLuck * upgradeLuck * sugarRushLuck * ventrePleinLuck;
 }
 
 function rollItem() {
@@ -1236,36 +1324,47 @@ function rollItem() {
 
     // Simuler le roll
     setTimeout(() => {
-        // Nouveau système : pool pondéré par 1/chance (les cartes communes ont plus de poids)
+        // Système unifié : pool de toutes les cartes ET leurs variantes, chacune avec son poids
+        const variants = [
+            { type: '',        mult: 1      },
+            { type: 'Gold',    mult: 10     },
+            { type: 'Rainbow', mult: 100    },
+            { type: 'Shiny',   mult: 1000   },
+            { type: 'Nuclear', mult: 10000  },
+        ];
+
         const rollableItems = items.filter(item => item.rollable);
 
-        // Appliquer le luck sur les chances : divise effectiveChance par luck (rend les rares + probables)
-        const pool = rollableItems.map(item => {
-            let rarityFactor = Math.log10(item.chance + 1);
-            let effectiveChance = item.chance / (1 + (luck - 1) * rarityFactor * 0.25);
-            return { item, weight: 1 / effectiveChance };
-        });
+        // Construire le pool : une entrée par (carte × variante)
+        // Le poids est 1 / chanceDisplay, modifié par luck
+        const sugarRushActive = sugarRushRolls > 0;
+        const pool = [];
+        for (const item of rollableItems) {
+            const isSweet = Array.isArray(item.tags) && item.tags.includes('sweet');
+            for (const variant of variants) {
+                const chanceDisplay = item.chance * variant.mult;
+                // luck réduit la chance effective des cartes rares proportionnellement
+                let rarityFactor = Math.log10(chanceDisplay + 1);
+                let effectiveChance = chanceDisplay / (1 + (luck - 1) * rarityFactor * 0.25);
+                // Sugar Rush : ×2 sur les cartes sweet (multiplicatif)
+                let weight = 1 / effectiveChance;
+                if (sugarRushActive && isSweet) weight *= 2;
+                pool.push({ item, type: variant.type, chanceDisplay, weight });
+            }
+        }
 
         const totalWeight = pool.reduce((sum, e) => sum + e.weight, 0);
         let rand = Math.random() * totalWeight;
-        let selected = pool[pool.length - 1].item;
+        let chosen = pool[pool.length - 1];
         for (const entry of pool) {
             rand -= entry.weight;
-            if (rand <= 0) { selected = entry.item; break; }
+            if (rand <= 0) { chosen = entry; break; }
         }
 
-        // Variantes : Gold → Rainbow → Shiny → Nuclear (chacune nécessite la précédente)
-        let type = '';
-        let isGold    = Math.floor(Math.random() * (10    / luck)) === 0;
-        let isRainbow = isGold    && Math.floor(Math.random() * (100   / luck)) === 0;
-        let isShiny   = isRainbow && Math.floor(Math.random() * (1000  / luck)) === 0;
-        let isNuclear = isShiny   && Math.floor(Math.random() * (10000 / luck)) === 0;
-        if (isNuclear)     type = 'Nuclear';
-        else if (isShiny)  type = 'Shiny';
-        else if (isRainbow) type = 'Rainbow';
-        else if (isGold)   type = 'Gold';
+        const selected     = chosen.item;
+        const type         = chosen.type;
+        const chanceDisplay = chosen.chanceDisplay;
         let displayName = selected.name + (type ? ` (${type})` : '');
-        let chanceDisplay = type === 'Nuclear' ? selected.chance * 10000 : type === 'Shiny' ? selected.chance * 1000 : type === 'Rainbow' ? selected.chance * 100 : type === 'Gold' ? selected.chance * 10 : selected.chance;
 
         // XP gain: sqrt(roll chance)
         let xpGain = Math.floor(Math.sqrt(chanceDisplay));
@@ -1302,6 +1401,46 @@ function rollItem() {
         }
         // Track discovered tag types
         if (type) discoveredTags.add(type);
+
+        // ── Sugar Rush ──
+        const rolledIsSweet = Array.isArray(selected.tags) && selected.tags.includes('sweet');
+
+        if (rolledIsSweet) {
+            // Roll sweet : 1/3 chance d'ajouter 4 rolls, cap 10, ne consomme PAS le compteur
+            if (Math.floor(Math.random() * 3) === 0) {
+                const before = sugarRushRolls;
+                sugarRushRolls = Math.min(10, sugarRushRolls + 4);
+                const added = sugarRushRolls - before;
+                showCraftMessage(`🍬 Sugar Rush! +${added} roll${added > 1 ? 's' : ''} (${sugarRushRolls} remaining)`, "success");
+            }
+        } else if (sugarRushRolls > 0) {
+            // Roll normal : décrémente le compteur
+            sugarRushRolls--;
+            if (sugarRushRolls === 0) {
+                showCraftMessage("🍬 Sugar Rush ended!", "info");
+            }
+        }
+        // ── Ventre Plein ──
+        const rolledIsCaloric = Array.isArray(selected.tags) && selected.tags.includes('caloric');
+
+        if (rolledIsCaloric) {
+            // Roll caloric : ajoute entre 2 et 5 rolls, cap 10, ne consomme PAS le compteur
+            const added = Math.floor(Math.random() * 4) + 2; // 2–5
+            const before = ventrePleinRolls;
+            ventrePleinRolls = Math.min(10, ventrePleinRolls + added);
+            const actualAdded = ventrePleinRolls - before;
+            if (actualAdded > 0) {
+                showCraftMessage(`🍔 Ventre Plein! +${actualAdded} roll${actualAdded > 1 ? 's' : ''} (${ventrePleinRolls} remaining)`, "success");
+            }
+        } else if (ventrePleinRolls > 0) {
+            ventrePleinRolls--;
+            if (ventrePleinRolls === 0) {
+                showCraftMessage("🍔 Ventre Plein ended!", "info");
+            }
+        }
+
+        updateLuck();
+        updateActiveEffectsDisplay();
         
         saveCollection();
         updateCollection();
@@ -1352,6 +1491,7 @@ function updateCollection() {
         let chanceDisplay = type === 'Nuclear' ? item.chance * 10000 : type === 'Shiny' ? item.chance * 1000 : type === 'Rainbow' ? item.chance * 100 : type === 'Gold' ? item.chance * 10 : item.chance;
         let displayName = baseName;
         let goldTag = getGoldTag(type);
+        let specialTags = getSpecialTags(item);
         let rarityTag = getRarityTag(chanceDisplay);
         let imgSrc = `Cards-Icons/${baseName}.png`;
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
@@ -1368,7 +1508,7 @@ function updateCollection() {
             <div class=\"card-inventory\">
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
-                        <span class=\"rarity-tag-container\">${goldTag}</span>
+                        <span class=\"rarity-tag-container\">${goldTag}${specialTags}</span>
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
@@ -1414,7 +1554,7 @@ function updateCollection() {
                             </div>
                             <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
                                 <b style='font-size:1.25em;'>${displayName}</b><br>
-                                ${rarityTag}<br>${goldTag}<br>
+                                <div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0.3em;margin:0.4em 0;'>${rarityTag}${goldTag}${specialTags}</div>
                                 <button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
                                 <button id='decompressor-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button>
                                 <button id='diamond-press-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#9b59b6;color:white;border:none;cursor:pointer;'>💎 Press</button><br>
@@ -1968,6 +2108,7 @@ function saveCollection() {
     localStorage.setItem('cards-luck-upgrade', luckUpgradeLevel.toString());
     localStorage.setItem('cards-xp-upgrade', xpUpgradeLevel.toString());
     localStorage.setItem('cards-discovered-tags', JSON.stringify([...discoveredTags]));
+    localStorage.setItem('cards-sugar-rush', sugarRushRolls.toString());
 }
 
 // Charge l'inventaire depuis localStorage
@@ -2072,12 +2213,13 @@ function loadCollection() {
     }
 
     
+    const sugarRushData = localStorage.getItem('cards-sugar-rush');
+    if (sugarRushData) sugarRushRolls = Math.max(0, parseInt(sugarRushData) || 0);
+
     updateTokensDisplay();
     updateDiamondsDisplay();
     updateLevelXpDisplay();
 }
-
-// Fonction pour enregistrer la date de dernière connexion
 function saveLastConnection() {
     const now = new Date();
     localStorage.setItem('cards-last-connection', now.toISOString());
@@ -3095,6 +3237,12 @@ function openIndexSection(section) {
     } else if (section === 'tags') {
         document.getElementById('index-tags-modal').style.display = 'flex';
         renderIndexTags();
+    } else if (section === 'specialtags') {
+        document.getElementById('index-specialtags-modal').style.display = 'flex';
+        renderIndexSpecialTags();
+    } else if (section === 'effects') {
+        document.getElementById('index-effects-modal').style.display = 'flex';
+        renderIndexEffects();
     }
 }
 
@@ -3174,8 +3322,11 @@ function renderIndexCards(filter) {
         row.innerHTML = `
             <img src="Cards-Icons/${item.name}.png" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">
             <div style="flex:1;min-width:0;">
-                <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+                <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${item.name}${Array.isArray(item.tags) && item.tags.includes('sweet') ? ' <span style="background:linear-gradient(90deg,#f39c12,#e67e22);color:#fff;font-size:0.6em;font-weight:bold;border-radius:5px;padding:1px 5px;vertical-align:middle;">🍬</span>' : ''}
+                </div>
                 <div style="font-size:0.78em;color:${rarityColor};font-weight:bold;">${rarityName} · 1 in ${item.chance.toLocaleString()}</div>
+                <div>${getSweetTag(item)}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <div style="font-size:0.85em;color:#4ecdc4;font-weight:bold;">×${totalOwned}</div>
@@ -3216,12 +3367,14 @@ function openIndexCardDetail(itemName) {
     const craftsAsIngredient = craftRecipes.filter(r => r.ingredients.some(ing => ing.name === item.name));
     const craftsAsResult = craftRecipes.filter(r => r.name === item.name);
 
+    const itemIsSweet = Array.isArray(item.tags) && item.tags.includes('sweet');
     // Build HTML
     let html = `
     <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1.5em;">
         <img src="Cards-Icons/${item.name}.png" style="width:100px;height:100px;object-fit:cover;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.4);margin-bottom:0.7em;">
         <div style="font-size:1.4em;font-weight:bold;color:#fff;">${item.name}</div>
         <div style="font-size:0.9em;color:${rarityColor};font-weight:bold;margin-top:0.2em;">${rarityName}</div>
+        ${itemIsSweet ? '<div style="margin-top:0.4em;">' + getSweetTag(item) + '</div>' : ''}
     </div>
 
     <!-- Stats -->
@@ -3376,6 +3529,260 @@ function openIndexGroupDetail(groupName) {
 
 function closeIndexGroupDetail() {
     document.getElementById('index-group-detail').style.display = 'none';
+}
+
+function closeIndexSpecialTags() {
+    document.getElementById('index-specialtags-modal').style.display = 'none';
+}
+
+function closeIndexEffects() {
+    document.getElementById('index-effects-modal').style.display = 'none';
+}
+
+function renderIndexSpecialTags() {
+    const list = document.getElementById('index-specialtags-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const sweetItems   = items.filter(i => Array.isArray(i.tags) && i.tags.includes('sweet'));
+    const caloricItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('caloric'));
+
+    // ── Sweet card ──
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(255,105,180,0.08);border:1.5px solid rgba(255,105,180,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    // Header
+    card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🍬</span>
+            <div>
+                <div style="font-weight:bold;font-size:1.15em;color:#ff69b4;">Sweet</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers Sugar Rush</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Effect</div>
+            <div style="color:#fff;line-height:1.5;">When a <span style="color:#ff69b4;font-weight:bold;">Sweet</span> card is rolled, there is a <span style="color:#f39c12;font-weight:bold;">1 in 3</span> chance to activate or extend <span style="color:#f39c12;font-weight:bold;">Sugar Rush</span> by +4 rolls (max 10). While Sugar Rush is active, rolling a Sweet card <b>does not</b> consume a Sugar Rush roll.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Chance table</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Trigger chance</div><div style="color:#f39c12;font-weight:bold;">1 in 3 per roll</div>
+                <div style="color:#7f8c8d;">Rolls added</div><div style="color:#fff;font-weight:bold;">+4 (cap 10)</div>
+                <div style="color:#7f8c8d;">Roll consumed?</div><div style="color:#2ecc71;font-weight:bold;">No (if Sweet)</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Cards with Sweet tag</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${sweetItems.map(item => {
+                    const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
+                    return `<div onclick="openIndexCardDetail('${item.name.replace(/'/g,"\'")}');closeIndexSpecialTags();" style="background:rgba(255,105,180,0.12);border:1px solid rgba(255,105,180,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">
+                        <img src="Cards-Icons/${item.name}.png" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">
+                        <span style="color:#fff;font-size:0.88em;">${item.name}</span>
+                        <span style="color:#7f8c8d;font-size:0.78em;">×${owned}</span>
+                        <span style="color:#f39c12;font-size:0.75em;">1 in ${item.chance}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related effect</div>
+            <div onclick="closeIndexSpecialTags();openIndexSection('effects');" style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.3);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🍬</span>
+                <div>
+                    <div style="font-weight:bold;color:#f39c12;font-size:0.9em;">Sugar Rush</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">×2 Luck · roll-based</div>
+                </div>
+                <span style="margin-left:auto;color:#f39c12;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(card);
+
+    // ── Caloric card ──
+    const caloricCard = document.createElement('div');
+    caloricCard.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+    caloricCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🍔</span>
+            <div>
+                <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Caloric</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers Ventre Plein</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Effect</div>
+            <div style="color:#fff;line-height:1.5;">When a <span style="color:#e67e22;font-weight:bold;">Caloric</span> card is rolled, it adds <span style="color:#f39c12;font-weight:bold;">2 to 5 rolls</span> to <span style="color:#e67e22;font-weight:bold;">Ventre Plein</span> (max 10). Rolling a Caloric card <b>does not</b> consume a Ventre Plein roll.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Chance table</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Trigger</div><div style="color:#f39c12;font-weight:bold;">Always (100%)</div>
+                <div style="color:#7f8c8d;">Rolls added</div><div style="color:#fff;font-weight:bold;">+2 to +5 (cap 10)</div>
+                <div style="color:#7f8c8d;">Roll consumed?</div><div style="color:#2ecc71;font-weight:bold;">No (if Caloric)</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Cards with Caloric tag</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${caloricItems.map(item => {
+                    const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
+                    const safeName = item.name.replace(/'/g, "\\'");
+                    return '<div onclick="openIndexCardDetail(\'' + safeName + '\');closeIndexSpecialTags();" style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">'
+                        + '<img src="Cards-Icons/' + item.name + '.png" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
+                        + '<span style="color:#fff;font-size:0.88em;">' + item.name + '</span>'
+                        + '<span style="color:#7f8c8d;font-size:0.78em;">×' + owned + '</span>'
+                        + '<span style="color:#f39c12;font-size:0.75em;">1 in ' + item.chance + '</span>'
+                        + '</div>';
+                }).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related effect</div>
+            <div onclick="closeIndexSpecialTags();openIndexSection('effects');" style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.3);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🍔</span>
+                <div>
+                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Ventre Plein</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">×1.5 Luck · roll-based</div>
+                </div>
+                <span style="margin-left:auto;color:#e67e22;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(caloricCard);
+}
+
+function renderIndexEffects() {
+    const list = document.getElementById('index-effects-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    // Sugar Rush
+    const sweetItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('sweet'));
+    const card = document.createElement('div');
+    card.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    const active = sugarRushRolls > 0;
+    card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🍬</span>
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:0.5em;">
+                    <div style="font-weight:bold;font-size:1.15em;color:#f39c12;">Sugar Rush</div>
+                    ${active ? `<span style="background:#f39c12;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${sugarRushRolls} rolls</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
+                </div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Roll-based passive effect</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What it does</div>
+            <div style="color:#fff;line-height:1.5;">Multiplies <span style="color:#3498db;font-weight:bold;">Luck ×2</span> for all cards while active. The effect has a roll counter — each non-Sweet roll decrements it by 1. Rolling a <span style="color:#ff69b4;font-weight:bold;">Sweet</span> card never decrements it.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Luck bonus</div><div style="color:#3498db;font-weight:bold;">×2</div>
+                <div style="color:#7f8c8d;">Max rolls</div><div style="color:#f39c12;font-weight:bold;">10</div>
+                <div style="color:#7f8c8d;">Rolls added</div><div style="color:#fff;font-weight:bold;">+4 per trigger</div>
+                <div style="color:#7f8c8d;">Trigger rate</div><div style="color:#f39c12;font-weight:bold;">1 in 3</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">How to obtain</div>
+            <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#ff69b4;font-weight:bold;">🍬 Sweet</span> tag. There is a 1 in 3 chance to trigger Sugar Rush or add +4 rolls to the current count.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${sweetItems.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(255,105,180,0.12);border:1px solid rgba(255,105,180,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
+                    <img src="Cards-Icons/${item.name}.png" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <span style="color:#ff69b4;font-size:0.85em;font-weight:bold;">${item.name}</span>
+                    <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related special tag</div>
+            <div onclick="closeIndexEffects();openIndexSection('specialtags');" style="background:rgba(255,105,180,0.1);border:1px solid rgba(255,105,180,0.25);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🍬</span>
+                <div>
+                    <div style="font-weight:bold;color:#ff69b4;font-size:0.9em;">Sweet</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Sugar Rush</div>
+                </div>
+                <span style="margin-left:auto;color:#ff69b4;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(card);
+
+    // ── Ventre Plein ──
+    const caloricItems2 = items.filter(i => Array.isArray(i.tags) && i.tags.includes('caloric'));
+    const vpCard = document.createElement('div');
+    vpCard.style.cssText = 'background:rgba(230,126,34,0.08);border:1.5px solid rgba(230,126,34,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    const vpActive = ventrePleinRolls > 0;
+    vpCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🍔</span>
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:0.5em;">
+                    <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Ventre Plein</div>
+                    ${vpActive ? `<span style="background:#e67e22;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${ventrePleinRolls} rolls</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
+                </div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Roll-based passive effect</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What it does</div>
+            <div style="color:#fff;line-height:1.5;">Multiplies <span style="color:#3498db;font-weight:bold;">Luck ×1.5</span> for all cards while active. Each non-Caloric roll decrements the counter by 1. Rolling a <span style="color:#e67e22;font-weight:bold;">Caloric</span> card never decrements it.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Luck bonus</div><div style="color:#3498db;font-weight:bold;">×1.5</div>
+                <div style="color:#7f8c8d;">Max rolls</div><div style="color:#e67e22;font-weight:bold;">10</div>
+                <div style="color:#7f8c8d;">Rolls added</div><div style="color:#fff;font-weight:bold;">+2 to +5 per trigger</div>
+                <div style="color:#7f8c8d;">Trigger rate</div><div style="color:#2ecc71;font-weight:bold;">Always (100%)</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">How to obtain</div>
+            <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#e67e22;font-weight:bold;">🍔 Caloric</span> tag. Always adds +2 to +5 rolls to the current count.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${caloricItems2.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
+                    <img src="Cards-Icons/${item.name}.png" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <span style="color:#e67e22;font-size:0.85em;font-weight:bold;">${item.name}</span>
+                    <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related special tag</div>
+            <div onclick="closeIndexEffects();openIndexSection('specialtags');" style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.25);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🍔</span>
+                <div>
+                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Caloric</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Ventre Plein</div>
+                </div>
+                <span style="margin-left:auto;color:#e67e22;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(vpCard);
 }
 
 // ===== INDEX: POTIONS =====
