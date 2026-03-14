@@ -47,7 +47,7 @@ const potions = [
         name: "Thunder Potion",
         type: "rollspeed",
         power: 3,
-        duration: 30 * 60 * 1000, // 30 minutes
+        duration: 5 * 60 * 1000, // 5 minutes
         image: "Thunder.png",
         effectType: "time" // Effet basé sur le temps
     },
@@ -76,6 +76,7 @@ let collection = {};
 let discoveredTags = new Set(); // tracks tag types ever obtained (Gold, Rainbow, Shiny, Nuclear)
 let potionInventory = {}; // Inventaire des potions et items spéciaux
 let activeEffects = {}; // Effets actuellement actifs
+let potionQueues = {};
 let rollBasedEffects = {}; // Effets basés sur le nombre de rolls
 let rolls = 0;
 let isRolling = false;
@@ -325,12 +326,80 @@ function showCraftMessage(message, type) {
     if (craftResult) {
         craftResult.innerText = message;
         craftResult.style.color = type === 'error' ? '#e74c3c' : '#27ae60';
-        
-        // Effacer le message après 3 secondes
-        setTimeout(() => {
-            craftResult.innerText = '';
-        }, 3000);
+        setTimeout(() => { craftResult.innerText = ''; }, 3000);
     }
+    showNotification(message, type);
+}
+
+const NOTIF_DURATION = 10000;
+
+function getNotifContainer() {
+    return document.getElementById('roll-notif-stack');
+}
+
+function showNotification(message, type) {
+    const container = getNotifContainer();
+    if (!container) return;
+    const colors = {
+        success: { bg: 'rgba(39,174,96,0.93)',  bar: '#2ecc71' },
+        error:   { bg: 'rgba(192,57,43,0.93)',   bar: '#e74c3c' },
+        info:    { bg: 'rgba(52,73,94,0.93)',     bar: '#95a5a6' },
+    };
+    const c = colors[type] || colors.info;
+    const notif = document.createElement('div');
+    notif.style.cssText = [
+        'background:' + c.bg,
+        'color:#fff',
+        'border-radius:10px',
+        'padding:0.55em 0.85em 0.45em',
+        'font-size:0.82em',
+        'font-weight:500',
+        'box-shadow:0 2px 10px rgba(0,0,0,0.4)',
+        'cursor:pointer',
+        'max-width:240px',
+        'word-break:break-word',
+        'animation:notifSlideIn 0.18s ease',
+        'position:relative',
+        'overflow:hidden'
+    ].join(';');
+    const msgDiv = document.createElement('div');
+    msgDiv.style.marginBottom = '0.35em';
+    msgDiv.textContent = message;
+    const bar = document.createElement('div');
+    bar.style.cssText = [
+        'position:absolute',
+        'bottom:0',
+        'left:0',
+        'height:3px',
+        'width:100%',
+        'background:' + c.bar,
+        'border-radius:0 0 10px 10px',
+        'transform-origin:left'
+    ].join(';');
+    notif.appendChild(msgDiv);
+    notif.appendChild(bar);
+    notif.addEventListener('click', () => dismissNotif(notif));
+    container.appendChild(notif);
+    const start = performance.now();
+    let rafId;
+    function animBar(now) {
+        const pct = Math.max(0, 1 - (now - start) / NOTIF_DURATION);
+        bar.style.width = (pct * 100) + '%';
+        if (pct > 0) rafId = requestAnimationFrame(animBar);
+    }
+    rafId = requestAnimationFrame(animBar);
+    const timer = setTimeout(() => dismissNotif(notif), NOTIF_DURATION);
+    notif._timer = timer;
+    notif._raf = rafId;
+}
+
+function dismissNotif(notif) {
+    clearTimeout(notif._timer);
+    cancelAnimationFrame(notif._raf);
+    notif.style.transition = 'opacity 0.2s, transform 0.2s';
+    notif.style.opacity = '0';
+    notif.style.transform = 'translateX(-20px)';
+    setTimeout(() => { if (notif.parentNode) notif.parentNode.removeChild(notif); }, 220);
 }
 
 function updateCraftQueue() {
@@ -431,6 +500,15 @@ function getItemChance(itemName) {
     return item ? item.chance : 9999;
 }
 
+
+function getRecipeImageSrc(recipe) {
+    if (recipe.type === 'potion') {
+        const p = potions.find(pt => pt.name === recipe.name);
+        if (p && p.image) return 'Potions/' + p.image;
+    }
+    return 'Cards-Icons/' + recipe.name + '.png';
+}
+
 function updateCraftButtons() {
     const craftList = document.getElementById('craft-list');
     if (!craftList) return;
@@ -453,7 +531,7 @@ function updateCraftButtons() {
         const imgWrap = document.createElement('div');
         imgWrap.className = 'craft-card-img-wrap';
         const img = document.createElement('img');
-        img.src = `Cards-Icons/${recipe.name}.png`;
+        img.src = getRecipeImageSrc(recipe);
         img.alt = recipe.name;
         img.onerror = function() { this.style.display = 'none'; };
         imgWrap.appendChild(img);
@@ -532,7 +610,7 @@ function renderSelectedRecipe(recipe) {
     const imgWrap = document.createElement('div');
     imgWrap.className = 'craft-selected-img-wrap';
     const img = document.createElement('img');
-    img.src = `Cards-Icons/${recipe.name}.png`;
+    img.src = getRecipeImageSrc(recipe);
     img.alt = recipe.name;
     img.onerror = function() { this.style.display = 'none'; };
     imgWrap.appendChild(img);
@@ -668,135 +746,174 @@ function updateActiveEffectsDisplay() {
         hasActiveEffects = true;
         const effect = activeEffects[effectType];
         const timeLeft = Math.max(0, effect.endTime - now);
-
-        const effectDiv = document.createElement('div');
-        effectDiv.style.cssText = `
-            background: linear-gradient(135deg, #9b59b6, #8e44ad);
-            color: white;
-            padding: 0.8em;
-            border-radius: 8px;
-            margin-bottom: 0.5em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
-
-        let effectName = "", effectIcon = "⚗️";
+        const totalDuration = effect.totalDuration || 60000;
+        const pct = (timeLeft / totalDuration) * 100;
+        const queued = potionQueues[effectType] || 0;
+        let effectName = "", effectIcon = "?";
         switch (effectType) {
-            case "rollspeed": effectName = "Roll Speed";   effectIcon = "⚡"; break;
-            case "luck":      effectName = "Luck";         effectIcon = "🍀"; break;
-            case "tokenspeed":effectName = "Token Speed";  effectIcon = "🪙"; break;
+            case "rollspeed": effectName = "Roll Speed";  effectIcon = "??"; break;
+            case "luck":      effectName = "Luck";        effectIcon = "??"; break;
+            case "tokenspeed":effectName = "Token Speed"; effectIcon = "??"; break;
         }
-
-        effectDiv.innerHTML = `
-            <div>
-                <div style="font-weight:bold;">${effectIcon} ${effect.potionName}</div>
-                <div style="font-size:0.8em;opacity:0.9;">${effectName} ×${effect.power}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:0.9em;">${Math.ceil(timeLeft / 1000)}s left</div>
-            </div>
-        `;
+        const effectDiv = document.createElement('div');
+        effectDiv.style.cssText = "background:linear-gradient(135deg,#9b59b6,#8e44ad);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        const queueDots = queued > 0
+            ? Array.from({length: Math.min(queued, 8)}).map(() =>
+                '<div style="height:5px;flex:1;max-width:24px;background:rgba(241,196,15,0.7);border-radius:999px;"></div>'
+              ).join('') : '';
+        effectDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">' + effectIcon + ' ' + effect.potionName + '</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' x' + effect.power + '</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + Math.ceil(timeLeft / 1000) + 's left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">' + Math.floor((totalDuration - timeLeft)/1000) + 's / ' + Math.floor(totalDuration/1000) + 's</div>' +
+                    (queued > 0 ? '<div style="font-size:0.78em;color:#f1c40f;margin-top:0.2em;">? ' + queued + ' in queue</div>' : '') +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>' +
+            (queued > 0 ? '<div style="margin-top:0.3em;display:flex;gap:0.3em;">' + queueDots + '</div>' : '');
         activeEffectsDiv.appendChild(effectDiv);
     }
-
     // Effets basés sur les rolls
     for (let effectType in rollBasedEffects) {
         hasActiveEffects = true;
         const effect = rollBasedEffects[effectType];
-
-        const effectDiv = document.createElement('div');
-        effectDiv.style.cssText = `
-            background: linear-gradient(135deg, #e67e22, #d35400);
-            color: white;
-            padding: 0.8em;
-            border-radius: 8px;
-            margin-bottom: 0.5em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
-
-        let effectName = "", effectIcon = "🎯";
+        const pct = ((effect.rollLimit - effect.rollsUsed) / effect.rollLimit) * 100;
+        let effectName = "", effectIcon = "?";
         switch (effectType) {
-            case "rollspeed": effectName = "Roll Speed";   effectIcon = "⚡"; break;
-            case "luck":      effectName = "Luck";         effectIcon = "🍀"; break;
-            case "tokenspeed":effectName = "Token Speed";  effectIcon = "🪙"; break;
+            case "rollspeed": effectName = "Roll Speed";  effectIcon = "??"; break;
+            case "luck":      effectName = "Luck";        effectIcon = "??"; break;
+            case "tokenspeed":effectName = "Token Speed"; effectIcon = "??"; break;
         }
-
-        effectDiv.innerHTML = `
-            <div>
-                <div style="font-weight:bold;">${effectIcon} ${effect.potionName}</div>
-                <div style="font-size:0.8em;opacity:0.9;">${effectName} ×${effect.power}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:0.9em;">${effect.rollsUsed}/${effect.rollLimit}</div>
-                <div style="font-size:0.8em;opacity:0.9;">Rolls left</div>
-            </div>
-        `;
+        const effectDiv = document.createElement('div');
+        effectDiv.style.cssText = "background:linear-gradient(135deg,#e67e22,#d35400);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        effectDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">' + effectIcon + ' ' + effect.potionName + '</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' x' + effect.power + '</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + (effect.rollLimit - effect.rollsUsed) + ' rolls left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">Active for ' + effect.rollsUsed + ' / ' + effect.rollLimit + ' rolls</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
         activeEffectsDiv.appendChild(effectDiv);
     }
-
     // Sugar Rush dans la liste des effets
     if (sugarRushRolls > 0) {
         hasActiveEffects = true;
+        const srPct = (sugarRushRolls / 10) * 100;
         const srDiv = document.createElement('div');
-        srDiv.style.cssText = `
-            background: linear-gradient(135deg, #f39c12, #e67e22);
-            color: white;
-            padding: 0.8em;
-            border-radius: 8px;
-            margin-bottom: 0.5em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
-        srDiv.innerHTML = `
-            <div>
-                <div style="font-weight:bold;">🍬 Sugar Rush</div>
-                <div style="font-size:0.8em;opacity:0.9;">Luck ×2 on all cards</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:1.1em;font-weight:bold;">${sugarRushRolls}</div>
-                <div style="font-size:0.8em;opacity:0.9;">rolls left</div>
-            </div>
-        `;
+        srDiv.style.cssText = "background:linear-gradient(135deg,#f39c12,#e67e22);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        srDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div><div style="font-weight:bold;">?? Sugar Rush</div>' +
+                '<div style="font-size:0.8em;opacity:0.9;">Luck x2 on sweet cards</div></div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + sugarRushRolls + ' rolls left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">Active for ' + (10 - sugarRushRolls) + ' / 10 rolls</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,srPct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
         activeEffectsDiv.appendChild(srDiv);
     }
 
     // Ventre Plein dans la liste des effets
     if (ventrePleinRolls > 0) {
         hasActiveEffects = true;
+        const vpPct = (ventrePleinRolls / 10) * 100;
         const vpDiv = document.createElement('div');
-        vpDiv.style.cssText = `
-            background: linear-gradient(135deg, #e67e22, #c0392b);
-            color: white;
-            padding: 0.8em;
-            border-radius: 8px;
-            margin-bottom: 0.5em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
-        vpDiv.innerHTML = `
-            <div>
-                <div style="font-weight:bold;">🍔 Ventre Plein</div>
-                <div style="font-size:0.8em;opacity:0.9;">Luck ×1.5 on all cards</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:1.1em;font-weight:bold;">${ventrePleinRolls}</div>
-                <div style="font-size:0.8em;opacity:0.9;">rolls left</div>
-            </div>
-        `;
+        vpDiv.style.cssText = "background:linear-gradient(135deg,#e67e22,#c0392b);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        vpDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div><div style="font-weight:bold;">?? Ventre Plein</div>' +
+                '<div style="font-size:0.8em;opacity:0.9;">Luck x1.5 on caloric cards</div></div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + ventrePleinRolls + ' rolls left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">Active for ' + (10 - ventrePleinRolls) + ' / 10 rolls</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,vpPct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
         activeEffectsDiv.appendChild(vpDiv);
     }
 
-    // Message si aucun effet actif (mais les stats restent visibles au-dessus)
+    // Message si aucun effet actif
     if (!hasActiveEffects) {
         const noEffect = document.createElement('div');
         noEffect.style.cssText = 'color:#7f8c8d;font-style:italic;text-align:center;padding:1em 0 0.5em;';
         noEffect.textContent = 'No active effects.';
         activeEffectsDiv.appendChild(noEffect);
+    }
+
+    updateRollEffectsIndicator();
+}
+
+function updateRollEffectsIndicator() {
+    const indicator = document.getElementById('roll-effects-indicator');
+    if (!indicator) return;
+    indicator.innerHTML = '';
+    const now = Date.now();
+
+    function makeChip(bgColor, iconText, labelText, subText, pct) {
+        const chip = document.createElement('div');
+        chip.style.cssText = 'background:' + bgColor + ';color:white;border-radius:10px;padding:0.35em 0.65em;font-size:0.8em;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,0.35);min-width:90px;text-align:center;';
+        chip.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:0.4em;">' +
+                '<span>' + iconText + ' ' + labelText + '</span>' +
+                '<span style="font-weight:normal;opacity:0.85;font-size:0.9em;">' + subText + '</span>' +
+            '</div>' +
+            '<div style="margin-top:0.3em;background:rgba(0,0,0,0.25);border-radius:999px;height:4px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.8);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
+        return chip;
+    }
+
+    for (let effectType in activeEffects) {
+        const effect = activeEffects[effectType];
+        const timeLeft = Math.max(0, effect.endTime - now);
+        const totalDuration = effect.totalDuration || 60000;
+        const pct = (timeLeft / totalDuration) * 100;
+        const queued = potionQueues[effectType] || 0;
+        let icon = "?";
+        switch (effectType) {
+            case "rollspeed": icon = "??"; break;
+            case "luck":      icon = "??"; break;
+            case "tokenspeed":icon = "??"; break;
+        }
+        const sub = Math.ceil(timeLeft/1000) + 's' + (queued > 0 ? ' +' + queued : '');
+        indicator.appendChild(makeChip('#8e44ad', icon, 'x' + effect.power, sub, pct));
+    }
+
+    for (let effectType in rollBasedEffects) {
+        const effect = rollBasedEffects[effectType];
+        const pct = ((effect.rollLimit - effect.rollsUsed) / effect.rollLimit) * 100;
+        let icon = "?";
+        switch (effectType) {
+            case "rollspeed": icon = "??"; break;
+            case "luck":      icon = "??"; break;
+            case "tokenspeed":icon = "??"; break;
+        }
+        indicator.appendChild(makeChip('#d35400', icon, 'x' + effect.power, effect.rollsUsed + '/' + effect.rollLimit, pct));
+    }
+
+    if (sugarRushRolls > 0) {
+        indicator.appendChild(makeChip('#e67e22', '??', 'x2', sugarRushRolls + '/10', (sugarRushRolls/10)*100));
+    }
+    if (ventrePleinRolls > 0) {
+        indicator.appendChild(makeChip('#c0392b', '??', 'x1.5', ventrePleinRolls + '/10', (ventrePleinRolls/10)*100));
     }
 }
 
@@ -933,121 +1050,98 @@ function usePotion(potionName) {
 }
 
 function applyPotionEffect(potion) {
-    // Vérifier le type d'effet
     if (potion.effectType === "rolls") {
-        // Effet basé sur le nombre de rolls
-        const rollLimit = potion.rollLimit || 10; // Par défaut 10 rolls
-        
+        const rollLimit = potion.rollLimit || 10;
         rollBasedEffects[potion.type] = {
-            power: potion.power,
-            rollsUsed: 0,
-            rollLimit: rollLimit,
-            potionName: potion.name
+            power: potion.power, rollsUsed: 0, rollLimit: rollLimit, potionName: potion.name
         };
-        
-        // Message de confirmation
-        let effectMessage = "";
+        let msg = "";
         switch (potion.type) {
-            case "rollspeed":
-                effectMessage = `Roll Speed x${potion.power} for ${rollLimit} rolls !`;
-                break;
-            case "luck":
-                effectMessage = `Luck x${potion.power} for ${rollLimit} rolls !`;
-                break;
-            case "tokenspeed":
-                effectMessage = `Tokens Speed x${potion.power} for ${rollLimit} rolls !`;
-                break;
+            case "rollspeed": msg = "Roll Speed x" + potion.power + " for " + rollLimit + " rolls !"; break;
+            case "luck":      msg = "Luck x" + potion.power + " for " + rollLimit + " rolls !"; break;
+            case "tokenspeed":msg = "Tokens Speed x" + potion.power + " for " + rollLimit + " rolls !"; break;
         }
-        showCraftMessage(effectMessage, "success");
+        showCraftMessage(msg, "success");
     } else {
-        // Effet basé sur le temps
-        const now = Date.now();
-        
-        // Vérifier si un effet du même type existe déjà
         if (activeEffects[potion.type]) {
-            // Ajouter le temps à l'effet existant
-            activeEffects[potion.type].endTime += potion.duration;
-            showCraftMessage(`+${Math.floor(potion.duration / 1000)}s added to ${potion.name}`, "success");
+            potionQueues[potion.type] = (potionQueues[potion.type] || 0) + 1;
+            showCraftMessage(potion.name + " added to queue (" + potionQueues[potion.type] + " waiting)", "success");
         } else {
-            // Créer un nouvel effet
-            const endTime = now + potion.duration;
-            activeEffects[potion.type] = {
-                power: potion.power,
-                endTime: endTime,
-                potionName: potion.name
-            };
+            activatePotionEffect(potion.type, potion.power, potion.name, potion.duration);
+            let msg = "";
+            switch (potion.type) {
+                case "rollspeed": msg = "Roll Speed x" + potion.power + " !"; break;
+                case "luck":      msg = "Luck x" + potion.power + " !"; break;
+                case "tokenspeed":msg = "Tokens Speed x" + potion.power + " !"; break;
+            }
+            showCraftMessage(msg, "success");
         }
-        
-        // Message de confirmation
-        let effectMessage = "";
-        switch (potion.type) {
-            case "rollspeed":
-                effectMessage = `Roll Speed x${potion.power} !`;
-                break;
-            case "luck":
-                effectMessage = `Luck x${potion.power} !`;
-                break;
-            case "tokenspeed":
-                effectMessage = `Tokens Speed x${potion.power} !`;
-                break;
-        }
-        showCraftMessage(effectMessage, "success");
-        
-        // Programmer la fin de l'effet
-        setTimeout(() => {
-            removePotionEffect(potion.type);
-        }, potion.duration);
     }
-    
-    // Appliquer l'effet immédiatement
+    saveCollection();
+    updateActiveEffects();
+}
+
+function activatePotionEffect(effectType, power, potionName, duration) {
+    const now = Date.now();
+    activeEffects[effectType] = {
+        power: power, endTime: now + duration, startTime: now,
+        totalDuration: duration, potionName: potionName,
+        _duration: duration, _power: power, _name: potionName
+    };
+    activeEffects[effectType]._timeoutId = setTimeout(function() {
+        consumePotionEffectOrDequeue(effectType);
+    }, duration);
+}
+
+function consumePotionEffectOrDequeue(effectType) {
+    const queued = potionQueues[effectType] || 0;
+    const prev = activeEffects[effectType];
+    if (queued > 0) {
+        const dur = prev ? prev._duration : 60000;
+        const pw  = prev ? prev._power    : 1;
+        const nm  = prev ? prev._name     : effectType;
+        potionQueues[effectType] = queued - 1;
+        if (potionQueues[effectType] === 0) delete potionQueues[effectType];
+        activatePotionEffect(effectType, pw, nm, dur);
+        showCraftMessage("Next " + nm + " from queue! (" + (potionQueues[effectType] || 0) + " left)", "success");
+    } else {
+        delete activeEffects[effectType];
+        showCraftMessage(effectType + " effect ended", "info");
+    }
+    saveCollection();
     updateActiveEffects();
 }
 
 function removePotionEffect(effectType) {
     if (activeEffects[effectType]) {
+        if (activeEffects[effectType]._timeoutId) clearTimeout(activeEffects[effectType]._timeoutId);
         delete activeEffects[effectType];
+        delete potionQueues[effectType];
         updateActiveEffects();
-        showCraftMessage(`${effectType} ended`, "info");
     }
 }
 
 function updateActiveEffects() {
     const now = Date.now();
-    
-    // Nettoyer les effets expirés
-    for (let effectType in activeEffects) {
+    // Déclencher la queue pour les effets expirés non traités par leur timeout
+    for (let effectType of Object.keys(activeEffects)) {
         if (activeEffects[effectType].endTime <= now) {
-            delete activeEffects[effectType];
+            consumePotionEffectOrDequeue(effectType);
         }
     }
-    
-    // Appliquer les effets actifs
     let rollSpeedMultiplier = 1;
     let luckMultiplier = 1;
     let tokenSpeedMultiplier = 1;
-    
     for (let effectType in activeEffects) {
-        const effect = activeEffects[effectType];
         switch (effectType) {
-            case "rollspeed":
-                rollSpeedMultiplier = effect.power;
-                break;
-            case "luck":
-                luckMultiplier = effect.power;
-                break;
-            case "tokenspeed":
-                tokenSpeedMultiplier = effect.power;
-                break;
+            case "rollspeed":  rollSpeedMultiplier = activeEffects[effectType].power; break;
+            case "luck":       luckMultiplier      = activeEffects[effectType].power; break;
+            case "tokenspeed": tokenSpeedMultiplier = activeEffects[effectType].power; break;
         }
     }
-    
-    // Appliquer les multiplicateurs
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
-    // tokenRate de base + upgrades, multiplié par la potion
     tokenRate = (0.2 + tokenUpgradeLevel * 0.1) * tokenSpeedMultiplier;
-    
-    // Mettre à jour l'affichage
     updateLuck();
     updateActiveEffectsDisplay();
 }
@@ -2096,6 +2190,7 @@ function saveCollection() {
     localStorage.setItem('cards-collection', JSON.stringify(collection));
     localStorage.setItem('cards-potions', JSON.stringify(potionInventory));
     localStorage.setItem('cards-effects', JSON.stringify(activeEffects));
+    localStorage.setItem('cards-potion-queues', JSON.stringify(potionQueues));
     localStorage.setItem('cards-roll-effects', JSON.stringify(rollBasedEffects));
     localStorage.setItem('cards-rolls', rolls.toString());
     localStorage.setItem('cards-tokens', tokens.toString());
@@ -2133,16 +2228,24 @@ function loadCollection() {
     
     if (effectsData) {
         activeEffects = JSON.parse(effectsData);
-        // Supprimer les effets expirés et reprogrammer la fin des effets encore actifs
         const now = Date.now();
-        for (let effectType in activeEffects) {
-            const remaining = activeEffects[effectType].endTime - now;
+        for (let effectType of Object.keys(activeEffects)) {
+            const effect = activeEffects[effectType];
+            const remaining = effect.endTime - now;
             if (remaining <= 0) {
-                delete activeEffects[effectType];
+                setTimeout(function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType), 0);
             } else {
-                setTimeout(() => removePotionEffect(effectType), remaining);
+                effect._timeoutId = setTimeout(
+                    function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType),
+                    remaining
+                );
             }
         }
+    }
+
+    const potionQueuesData = localStorage.getItem('cards-potion-queues');
+    if (potionQueuesData) {
+        try { potionQueues = JSON.parse(potionQueuesData); } catch(e) { potionQueues = {}; }
     }
     
     const rollEffectsData = localStorage.getItem('cards-roll-effects');

@@ -123,6 +123,7 @@ body {
 .roll-content {
     max-width: 800px;
     margin: 0 auto;
+    position: relative;
 }
 
 #rolls-indicator {
@@ -1606,4 +1607,9 @@ body {
 #index-search:focus {
     border-color: rgba(78, 205, 196, 0.7);
     background: rgba(255,255,255,0.1);
+}
+
+@keyframes notifSlideIn {
+    from { opacity: 0; transform: translateX(-16px); }
+    to   { opacity: 1; transform: translateX(0); }
 }
