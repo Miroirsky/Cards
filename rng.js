@@ -14,7 +14,7 @@ const items = [
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
-    { name: "Coal", chance: 350, rollable: true },
+    { name: "Coal", chance: 350, rollable: true, tags: ["ai"] },
     { name: "Hearth", chance: 500, rollable: true },
     { name: "Lava", chance: 625, rollable: true, tags: ["ai"] },
     { name: "Evil", chance: 666, rollable: true },
