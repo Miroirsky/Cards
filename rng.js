@@ -14,19 +14,46 @@ const items = [
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
+    { name: "Coal", chance: 350, rollable: true },
     { name: "Hearth", chance: 500, rollable: true },
+    { name: "Lava", chance: 625, rollable: true, tags: ["ai"] },
     { name: "Evil", chance: 666, rollable: true },
     { name: "Sky", chance: 750, rollable: true },
+    { name: "Moon", chance: 999, rollable: true, tags: ["ai"] },
+    { name: "Sun", chance: 999, rollable: true, tags: ["ai"] },
     { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
     { name: "Ugly", chance: 2500, rollable: true },
     { name: "Cute", chance: 2500, rollable: true },
+    { name: "Zombie", chance: 3500, rollable: true, tags: ["ai"] },
     { name: "Noob", chance: 5000, rollable: true },
     { name: "Cards", chance: 7500, rollable: true },
     { name: "Circus", chance: 10000, rollable: true },
     { name: "Clouds", chance: 15000, rollable: true },
+    { name: "Sand", chance: 20000, rollable: true, tags: ["ai"] },
     { name: "Nars", chance: 25000, rollable: true },
+    { name: "Wood", chance: 35000, rollable: true, tags: ["ai"] },
+    { name: "Rock", chance: 50000, rollable: true, tags: ["ai"] },
+    { name: "Cog", chance: 75000, rollable: true, tags: ["ai"] },
+    { name: "Salt", chance: 100000, rollable: true, tags: ["ai"] },
+    { name: "Time", chance: 150000, rollable: true, tags: ["ai"] },
+    { name: "Dog", chance: 200000, rollable: true, tags: ["ai"] },
+    { name: "House", chance: 250000, rollable: true, tags: ["ai"] },
+    { name: "Brick", chance: 350000, rollable: true, tags: ["ai"] },
+    { name: "Slime", chance: 500000, rollable: true, tags: ["ai"] },
+    { name: "Ghost", chance: 750000, rollable: true, tags: ["ai"] },
+    { name: "Skeleton", chance: 1000000, rollable: true, tags: ["ai"] },
+    { name: "Lava", chance: 1500000, rollable: true, tags: ["ai"] },
+    { name: "Monkey", chance: 2500000, rollable: true, tags: ["ai"] },
+    { name: "Uranus", chance: 3500000, rollable: true, tags: ["ai"] },
+    { name: "Fire", chance: 5000000, rollable: true, tags: ["ai"] },
+    { name: "Uranus", chance: 6250000, rollable: true, tags: ["ai"] },
+    { name: "Water", chance: 7500000, rollable: true, tags: ["ai"] },
+    { name: "Rubiks Cube", chance: 8500000, rollable: true, tags: ["ai"] },
+    { name: "Empty Glass", chance: 10000000, rollable: true, tags: ["ai"] },
+    { name: "Iron", chance: 15000000, rollable: true, tags: ["ai"] },
     { name: "Iceberg", chance: 15000, rollable: false },
+    { name: "Water Glass", chance: 17500000, rollable: false, tags: ["ai"] },
     { name: "Cards Circus", chance: 25000, rollable: false },
     { name: "Thunder", chance: 2500, rollable: false },
     { name: "Pierced Hearth", chance: 5000, rollable: false },
@@ -82,8 +109,16 @@ const cardsGroupes = [
     { name: "Entities", content: ["Noob", "Evil"], color: "rgb(116, 56, 0)" },
     { name: "Buildings", content: ["Circus"], color: "rgb(192, 192, 192)" },
     { name: "Objects", content: ["Cards", "Cards Circus"], color: "rgb(255, 243, 75)" },
-    { name: "Dangers", content: ["Ice Spikes"], color: "rgb(156, 18, 18)" }
+    { name: "Dangers", content: ["Ice Spikes"], color: "rgb(156, 18, 18)" },
+    { name: "AI", content: [], color: "rgb(112, 18, 156)" }
 ];
+
+for (let item of items) {
+    if (item.tags && item.tags.includes('ai') && !cardsGroupes.find(g => g.name === "AI").content.includes(item.name)) {
+        cardsGroupes.find(g => g.name === "AI").content.push(item.name);
+    }
+}
+
 
 let collection = {};
 let discoveredTags = new Set(); // tracks tag types ever obtained (Gold, Rainbow, Shiny, Nuclear)
@@ -199,6 +234,14 @@ const craftRecipes = [
         name: "Iceberg",
         ingredients: [
             { name: "Ice Spikes", amount: 100 }
+        ],
+        time: 1000 * 60,
+    },
+	{
+        name: "Water Glass",
+        ingredients: [
+            { name: "Empty Glass", amount: 1 },
+            { name: "Water", amount: 1 }
         ],
         time: 1000 * 60,
     }
@@ -559,6 +602,13 @@ function getRecipeImageSrc(recipe) {
     return 'Cards-Icons/' + recipe.name + '.png';
 }
 
+function getCardImageSrc(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('ai')) {
+        return 'Cards-Icons/AI/' + item.name + '.png';
+    }
+    return 'Cards-Icons/' + item.name + '.png';
+}
+
 function updateCraftButtons() {
     const craftList = document.getElementById('craft-list');
     if (!craftList) return;
@@ -601,13 +651,14 @@ function updateCraftButtons() {
         const ingredientsRow = document.createElement('div');
         ingredientsRow.className = 'craft-card-ingredients';
         for (let ing of recipe.ingredients) {
+            const item = items.find(i => i.name === ing.name);
             const owned = collection[ing.name] || 0;
             const ok = owned >= ing.amount;
             const ingChance = getItemChance(ing.name);
             const ingSquare = document.createElement('div');
             ingSquare.className = 'craft-ing-square' + (ok ? ' ok' : ' missing');
             ingSquare.innerHTML = `
-                <img src="Cards-Icons/${ing.name}.png" alt="${ing.name}" onerror="this.style.display='none'">
+                <img src="${getCardImageSrc(item)}" alt="${ing.name}" onerror="this.style.display='none'">
                 <span class="craft-ing-qty">${owned}/${ing.amount}</span>
                 <span class="craft-ing-name">${ing.name}</span>
                 <span class="craft-ing-rarity">${getRarityTag(ingChance)}</span>
@@ -685,13 +736,14 @@ function renderSelectedRecipe(recipe) {
     const ingsRow = document.createElement('div');
     ingsRow.className = 'craft-selected-ings';
     for (let ing of recipe.ingredients) {
+        const item = items.find(i => i.name === ing.name);
         const owned = collection[ing.name] || 0;
         const ok = owned >= ing.amount;
         const ingChance = getItemChance(ing.name);
         const sq = document.createElement('div');
         sq.className = 'craft-selected-ing-sq' + (ok ? ' ok' : ' missing');
         sq.innerHTML = `
-            <img src="Cards-Icons/${ing.name}.png" alt="${ing.name}" onerror="this.style.display='none'">
+            <img src="${getCardImageSrc(item)}" alt="${ing.name}" onerror="this.style.display='none'">
             <div class="craft-selected-ing-name">${ing.name}</div>
             <div class="craft-selected-ing-qty ${ok ? 'qty-ok' : 'qty-missing'}">${owned} / ${ing.amount}</div>
             <div class="craft-selected-ing-rarity">${getRarityTag(ingChance)}</div>
@@ -1327,8 +1379,15 @@ function getCaloricTag(item) {
     return '';
 }
 
+function getAiTag(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('ai')) {
+        return '<span class="rarity-tag rarity-ai">🤖 AI</span>';
+    }
+    return '';
+}
+
 function getSpecialTags(item) {
-    return getSweetTag(item) + getCaloricTag(item);
+    return getSweetTag(item) + getCaloricTag(item) + getAiTag(item);
 }
 
 
@@ -1456,7 +1515,7 @@ function updateSpinningCards() {
         const item = getRandomItem();
         card.innerHTML = `
             <div style="position:relative;width:100%;height:100%;">
-                <img src="Cards-Icons/${item.name}.png" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
+                <img src="${getCardImageSrc(item)}" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">
                 <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:#fff;font-size:0.85em;font-weight:bold;text-align:center;text-shadow:0 0 4px #000;padding:2px 0;border-radius:0 0 10px 10px;">${item.name}</div>
             </div>
         `;
@@ -1494,7 +1553,7 @@ function updateCardPreview(cardData) {
     preview.innerHTML = `
         <div class="preview-card">
             <span class="rarity-tag-container">${getGoldTag(type)}${getSpecialTags(selected)}</span>
-            <img src="Cards-Icons/${selected.name}.png" alt="${selected.name}" class="card-image">
+            <img src="${getCardImageSrc(selected)}" alt="${selected.name}" class="card-image">
             <div class="preview-card-text">
                 ${displayName}<br>[1 in ${chanceDisplay}]
             </div>
@@ -1737,7 +1796,7 @@ function updateCollection() {
         let goldTag = getGoldTag(type);
         let specialTags = getSpecialTags(item);
         let rarityTag = getRarityTag(chanceDisplay);
-        let imgSrc = `Cards-Icons/${baseName}.png`;
+        let imgSrc = getCardImageSrc(item);
         let cardText = `<span class=\"name-only\">${displayName}</span>`;
         let cardDetail = `<span class=\"detail\">${displayName}<br>1 in ${chanceDisplay}<br>×${collection[name]}</span>`;
         // Déterminer la classe de rareté pour le dos
@@ -1903,6 +1962,7 @@ function updateCollection() {
         }
     
                     function showCompressorMenu(cardName, cardType) {
+                        let item = items.find(i => i.name === cardName);
                         let comp = document.getElementById('compressor-popup');
                         if (!comp) {
                             comp = document.createElement('div');
@@ -1938,7 +1998,7 @@ function updateCollection() {
                         comp.innerHTML = `
                             <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
                                 <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
-                                    <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+                                    <img src='${getCardImageSrc(item)}' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
                                 </div>
                                 <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
                                     <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
@@ -2034,6 +2094,7 @@ function updateCollection() {
 }
 
 function showDecompressorMenu(cardName, cardType) {
+    let item = items.find(i => i.name === cardName);
     let comp = document.getElementById('compressor-popup');
     if (!comp) {
         comp = document.createElement('div');
@@ -2071,7 +2132,7 @@ function showDecompressorMenu(cardName, cardType) {
     comp.innerHTML = `
         <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
             <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
-                <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+                <img src='${getCardImageSrc(item)}' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
             </div>
             <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
                 <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
@@ -2207,7 +2268,7 @@ function showGroupPopup(groupe) {
             : '—';
 
         card.innerHTML = `
-            <img src="Cards-Icons/${cardName}.png" alt="${cardName}"
+            <img src="${getCardImageSrc(item)}" alt="${cardName}"
                 style="width:54px;height:54px;object-fit:contain;border-radius:8px;display:block;margin:0 auto 0.3em auto;">
             <div style="font-size:0.78em;font-weight:bold;color:#2c3e50;margin-bottom:0.2em;">${cardName}</div>
             <div style="font-size:0.7em;color:#7f8c8d;">1 in ${item.chance}</div>
@@ -2234,6 +2295,7 @@ function showGroupPopup(groupe) {
 }
 
 function showCompressorFromPress(cardName, cardType) {
+    let item = items.find(i => i.name === cardName);
     let comp = document.getElementById('compressor-popup');
     if (!comp) {
         comp = document.createElement('div');
@@ -2277,7 +2339,7 @@ function showCompressorFromPress(cardName, cardType) {
     comp.innerHTML = `
         <div style='width:100%;display:flex;flex-direction:column;align-items:center;'>
             <div style='width:100%;height:120px;display:flex;align-items:center;justify-content:center;border-radius:18px 18px 0 0;'>
-                <img src='Cards-Icons/${cardName}.png' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
+                <img src='${getCardImageSrc(item)}' style='width:auto;max-width:90%;max-height:110px;object-fit:contain;border-radius:14px;box-shadow:0 2px 12px #0002;'>
             </div>
             <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
                 <b style='font-size:1.15em;'>${cardName}${cardType ? ' ('+cardType+')' : ''}</b><br>
@@ -2778,7 +2840,8 @@ function renderPressCardList(mode) {
         left.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
 
         const img = document.createElement('img');
-        img.src = `Cards-Icons/${entry.baseName}.png`;
+        const item = items.find(i => i.name === entry.baseName);
+        img.src = getCardImageSrc(item);
         img.style.cssText = 'width:32px;height:32px;object-fit:cover;border-radius:6px;';
 
         const label = document.createElement('div');
@@ -2920,6 +2983,7 @@ function updatePressPreview(mode) {
     }
     const entry = entries[Math.floor(Math.random() * entries.length)];
     const baseName = entry.baseName;
+    const item = items.find(i => i.name === baseName);
     const fromType = entry.type || '';
 
     let leftLabel = '';
@@ -2960,7 +3024,7 @@ function updatePressPreview(mode) {
     leftCard.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;';
     leftCard.innerHTML = `
         <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
-            <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
+            <img src="${getCardImageSrc(item)}" style="width:100%;height:100%;object-fit:cover;">
         </div>
         <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${leftLabel}</div>
     `;
@@ -2981,7 +3045,7 @@ function updatePressPreview(mode) {
     } else {
         rightCard.innerHTML = `
             <div style="width:90px;height:90px;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:#2c3e50;display:flex;align-items:center;justify-content:center;">
-                <img src="Cards-Icons/${baseName}.png" style="width:100%;height:100%;object-fit:cover;">
+                <img src="${getCardImageSrc(item)}" style="width:100%;height:100%;object-fit:cover;">
             </div>
             <div style="margin-top:0.3em;font-size:0.8em;color:#2c3e50;text-align:center;">${rightLabel}</div>
         `;
@@ -3674,7 +3738,7 @@ function renderIndexCards(filter, tab) {
         row.onmouseenter = () => row.style.background = 'rgba(255,255,255,0.1)';
         row.onmouseleave = () => row.style.background = 'rgba(255,255,255,0.05)';
         row.innerHTML = `
-            <img src="Cards-Icons/${item.name}.png" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">
+            <img src="${getCardImageSrc(item)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">
             <div style="flex:1;min-width:0;">
                 <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
                 <div style="font-size:0.78em;color:${rarityColor};font-weight:bold;">${rarityName} · 1 in ${item.chance.toLocaleString()}</div>
@@ -3764,14 +3828,13 @@ function openIndexCardDetail(itemName) {
     const craftsAsIngredient = craftRecipes.filter(r => r.ingredients.some(ing => ing.name === item.name));
     const craftsAsResult = craftRecipes.filter(r => r.name === item.name);
 
-    const itemIsSweet = Array.isArray(item.tags) && item.tags.includes('sweet');
     // Build HTML
     let html = `
     <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1.5em;">
-        <img src="Cards-Icons/${item.name}.png" style="width:100px;height:100px;object-fit:cover;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.4);margin-bottom:0.7em;">
+        <img src="${getCardImageSrc(item)}" style="width:100px;height:100px;object-fit:cover;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.4);margin-bottom:0.7em;">
         <div style="font-size:1.4em;font-weight:bold;color:#fff;">${item.name}</div>
         <div style="font-size:0.9em;color:${rarityColor};font-weight:bold;margin-top:0.2em;">${rarityName}</div>
-        ${itemIsSweet ? '<div style="margin-top:0.4em;">' + getSweetTag(item) + '</div>' : ''}
+        <div style="margin-top:0.4em;">${getSpecialTags(item)}</div>
     </div>
 
     <!-- Stats -->
@@ -3898,7 +3961,7 @@ function openIndexGroupDetail(groupName) {
         }
 
         row.innerHTML = `
-            <img src="Cards-Icons/${item.name}.png" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;${!discovered ? 'filter:grayscale(1) brightness(0.4);' : ''}">
+            <img src="${getCardImageSrc(item)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;${!discovered ? 'filter:grayscale(1) brightness(0.4);' : ''}">
             <div style="flex:1;min-width:0;">
                 <div style="font-weight:bold;color:${discovered ? '#fff' : '#7f8c8d'};font-size:1em;">${discovered ? item.name : '???'}</div>
                 <div style="font-size:0.78em;color:${rarityColor};font-weight:bold;">${rarityName} · 1 in ${item.chance.toLocaleString()}</div>
@@ -3978,7 +4041,7 @@ function renderIndexSpecialTags() {
                 ${sweetItems.map(item => {
                     const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
                     return `<div onclick="openIndexCardDetail('${item.name.replace(/'/g,"\'")}');closeIndexSpecialTags();" style="background:rgba(255,105,180,0.12);border:1px solid rgba(255,105,180,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">
-                        <img src="Cards-Icons/${item.name}.png" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">
+                        <img src="${getCardImageSrc(item)}" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">
                         <span style="color:#fff;font-size:0.88em;">${item.name}</span>
                         <span style="color:#7f8c8d;font-size:0.78em;">×${owned}</span>
                         <span style="color:#f39c12;font-size:0.75em;">1 in ${item.chance}</span>
@@ -4034,7 +4097,7 @@ function renderIndexSpecialTags() {
                     const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
                     const safeName = item.name.replace(/'/g, "\\'");
                     return '<div onclick="openIndexCardDetail(\'' + safeName + '\');closeIndexSpecialTags();" style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">'
-                        + '<img src="Cards-Icons/' + item.name + '.png" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
+                        + '<img src="' + getCardImageSrc(item) + '" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
                         + '<span style="color:#fff;font-size:0.88em;">' + item.name + '</span>'
                         + '<span style="color:#7f8c8d;font-size:0.78em;">×' + owned + '</span>'
                         + '<span style="color:#f39c12;font-size:0.75em;">1 in ' + item.chance + '</span>'
@@ -4056,6 +4119,42 @@ function renderIndexSpecialTags() {
         </div>
     `;
     list.appendChild(caloricCard);
+
+    // ── AI card ──
+    const aiItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('ai'));
+    const aiCard = document.createElement('div');
+    aiCard.style.cssText = 'background:rgba(155,89,182,0.08);border:1.5px solid rgba(155,89,182,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+    aiCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🤖</span>
+            <div>
+                <div style="font-weight:bold;font-size:1.15em;color:#9b59b6;">AI</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — illustration is AI generated</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Description</div>
+            <div style="color:#fff;line-height:1.5;">These cards feature illustrations that were generated using artificial intelligence. They represent a unique category of cards with AI-created artwork.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Cards with AI tag</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${aiItems.map(item => {
+                    const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
+                    const safeName = item.name.replace(/'/g, "\\'");
+                    return '<div onclick="openIndexCardDetail(\'' + safeName + '\');closeIndexSpecialTags();" style="background:rgba(155,89,182,0.12);border:1px solid rgba(155,89,182,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">'
+                        + '<img src="' + getCardImageSrc(item) + '" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
+                        + '<span style="color:#fff;font-size:0.88em;">' + item.name + '</span>'
+                        + '<span style="color:#7f8c8d;font-size:0.78em;">×' + owned + '</span>'
+                        + '<span style="color:#9b59b6;font-size:0.75em;">1 in ' + item.chance + '</span>'
+                        + '</div>';
+                }).join('')}
+            </div>
+        </div>
+    `;
+    list.appendChild(aiCard);
 }
 
 function renderIndexEffects() {
@@ -4101,7 +4200,7 @@ function renderIndexEffects() {
             <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#ff69b4;font-weight:bold;">🍬 Sweet</span> tag. There is a 1 in 3 chance to trigger Sugar Rush or add +4 rolls to the current count.</div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
                 ${sweetItems.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(255,105,180,0.12);border:1px solid rgba(255,105,180,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
-                    <img src="Cards-Icons/${item.name}.png" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <img src="${getCardImageSrc(item)}" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
                     <span style="color:#ff69b4;font-size:0.85em;font-weight:bold;">${item.name}</span>
                     <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance}</span>
                 </div>`).join('')}
@@ -4160,7 +4259,7 @@ function renderIndexEffects() {
             <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#e67e22;font-weight:bold;">🍔 Caloric</span> tag. Always adds +2 to +5 rolls to the current count.</div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
                 ${caloricItems2.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(243,156,18,0.12);border:1px solid rgba(243,156,18,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
-                    <img src="Cards-Icons/${item.name}.png" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <img src="${getCardImageSrc(item)}" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
                     <span style="color:#e67e22;font-size:0.85em;font-weight:bold;">${item.name}</span>
                     <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance}</span>
                 </div>`).join('')}
@@ -4449,7 +4548,7 @@ function renderIndexTags() {
                         const dv = item ? Math.floor(Math.sqrt(item.chance * tag.mult)) : 0;
                         const qty = collection[k] || 0;
                         return `<div onclick="openIndexCardDetail('${baseName.replace(/'/g,"\\'")}');closeIndexTags();" style="background:rgba(255,255,255,0.07);border-radius:8px;padding:0.3em 0.7em;font-size:0.78em;cursor:pointer;display:flex;align-items:center;gap:0.4em;">
-                            <img src="Cards-Icons/${baseName}.png" style="width:18px;height:18px;object-fit:cover;border-radius:3px;">
+                            <img src="${getCardImageSrc(item)}" style="width:18px;height:18px;object-fit:cover;border-radius:3px;">
                             <span style="color:#fff;">${baseName}</span>
                             <span style="color:#7f8c8d;">×${qty}</span>
                             <span style="color:#9b59b6;font-size:0.85em;">💎${dv}</span>

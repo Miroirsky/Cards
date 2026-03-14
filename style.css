@@ -753,6 +753,13 @@ body {
     border: 1px solid #e67e22;
 }
 
+.rarity-ai {
+    background: linear-gradient(45deg, #9b59b6, #8e44ad);
+    color: #fff;
+    box-shadow: 0 0 8px #8e44adaa;
+    border: 1px solid #8e44ad;
+}
+
 .rarity-nuclear {
     background: linear-gradient(45deg, #39ff14, #7fff00, #b8ff00);
     color: #1a2900;
