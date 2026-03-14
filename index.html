@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.20.0</div>
+    <div class="update-text">Update 0.21.3</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -100,7 +100,7 @@
             </div>
             <!-- Effets actifs et stats -->
             <div style="flex:1;">
-                <h3 style="color:#e74c3c;margin-bottom:0.5em;">Effets & Stats</h3>
+                <h3 style="color:#e74c3c;margin-bottom:0.5em;">Effects & Stats</h3>
                 <div id="active-effects" style="background:rgba(231,76,60,0.1);border-radius:10px;padding:1em;border:2px solid rgba(231,76,60,0.3);min-height:200px;">
                     <div style="color:#7f8c8d;font-style:italic;">No active effects...</div>
                 </div>
@@ -141,6 +141,10 @@
     <!-- Bouton Shop -->
     <button id="shop-btn" class="settings-btn" title="Shop" style="right: 175px;">
         Shop
+    </button>
+    <!-- Bouton Unlocks -->
+    <button id="unlocks-btn" class="settings-btn" title="Unlocks" style="right: 260px;">
+        Unlocks
     </button>
 
     <!-- Menu de paramètres (modal cachée au départ) -->
@@ -183,7 +187,7 @@
                     <button class="press-qty-btn" data-qty="max">Max</button>
                 </div>
                 <div style="display:flex;justify-content:center;margin-bottom:0.8em;">
-                    <button id="press-all-btn" style="padding:0.5em 2em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;font-size:1em;background:#e67e22;color:white;">Tous</button>
+                    <button id="press-all-btn" style="padding:0.5em 2em;border-radius:10px;border:none;cursor:pointer;font-weight:bold;font-size:1em;background:#e67e22;color:white;">All</button>
                 </div>
                 <div id="press-keep-option" style="text-align:center;margin-bottom:0.8em;">
                     <label style="font-weight:bold;font-size:0.9em;">
@@ -284,6 +288,15 @@
                 </div>
                 <span style="margin-left:auto;color:#f39c12;font-size:1.3em;">›</span>
             </div>
+            <!-- Option Unlocks -->
+            <div onclick="openIndexSection('unlocks')" style="background:rgba(255,255,255,0.07);border:2px solid rgba(52,152,219,0.3);border-radius:16px;padding:1.2em 1.5em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.2s;">
+                <span style="font-size:2em;">🔓</span>
+                <div>
+                    <div style="font-weight:bold;font-size:1.1em;color:#fff;">Unlocks</div>
+                    <div style="font-size:0.82em;color:#7f8c8d;">Level-based features and upgrades</div>
+                </div>
+                <span style="margin-left:auto;color:#3498db;font-size:1.3em;">›</span>
+            </div>
         </div>
     </div>
 
@@ -352,6 +365,15 @@
             <h2 style="margin:0;color:#f39c12;font-size:1.3em;">Effects</h2>
         </div>
         <div id="index-effects-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
+    </div>
+
+    <!-- Index Unlocks Section -->
+    <div id="index-unlocks-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3600;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(52,152,219,0.3);">
+            <button onclick="closeIndexSection()" style="background:none;border:none;color:#3498db;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#3498db;font-size:1.3em;">Unlocks</h2>
+        </div>
+        <div id="index-unlocks-list" style="flex:1;overflow-x:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
     </div>
 
     <script src="rng.js"></script>

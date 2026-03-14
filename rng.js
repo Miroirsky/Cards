@@ -2,14 +2,14 @@ const items = [
     { name: "Grass", chance: 2, rollable: true },
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
-    { name: "Bones", chance: 5, rollable: true },
+    { name: "Burger", chance: 5, rollable: true, tags: ["caloric"] },
     { name: "Sugar", chance: 7, rollable: true, tags: ["sweet"] },
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sword", chance: 25, rollable: true },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
-    { name: "Burger", chance: 75, rollable: true, tags: ["caloric"] },
+    { name: "Bones", chance: 75, rollable: true },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
@@ -39,7 +39,7 @@ const potions = [
         name: "Speed Potion",
         type: "rollspeed",
         power: 2,
-        duration: 60 * 1000, // 60 secondes
+        duration: 2 * 60 * 1000, // 2 minutes
         image: "Speed.png",
         effectType: "time" // Effet basé sur le temps
     },
@@ -55,21 +55,34 @@ const potions = [
         name: "Luck Potion",
         type: "luck",
         power: 2,
-        duration: 60 * 1000, // 60 secondes
+        duration: 2 * 60 * 1000, // 2 minutes
         image: "Luck.png",
+        effectType: "time" // Effet basé sur le temps
+    },
+    {
+        name: "Craft Speed Potion",
+        type: "craftspeed",
+        power: 2,
+        duration: 2 * 60 * 1000, // 2 minutes
+        image: "Craft Speed Potion.png",
         effectType: "time" // Effet basé sur le temps
     }
 ];
 
 const cardsGroupes = [
     { name: "Nature", content: ["Grass", "Bush", "Tree", "Apple"], color: "rgb(6, 65, 11)" },
-    { name: "Biomes", content: ["Snow Mountains", "Beach", "Sky"], color: "rgb(129, 148, 131)" },
-    { name: "Food", content: ["Sugar", "Burger", "Apple", "Tacos"], color: "rgb(216, 177, 47)" },
+    { name: "Biomes", content: ["Snow Mountains", "Beach", "Sky", "Clouds", "Overworld", "Iceberg"], color: "rgb(129, 148, 131)" },
+    { name: "Food", content: ["Sugar", "Burger", "Apple", "Tacos", "Nars"], color: "rgb(216, 177, 47)" },
     { name: "Planets", content: ["Mars", "Earth"], color: "rgb(54, 54, 54)" },
     { name: "Weapons", content: ["Sword", "Gun"], color: "rgb(30, 30, 30)" },
     { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" },
     { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" },
-    { name: "Body Parts", content: ["Bones", "Hearth", "Pierced Hearth"], color: "rgb(207, 43, 88)" }
+    { name: "Body Parts", content: ["Bones", "Hearth", "Pierced Hearth"], color: "rgb(207, 43, 88)" },
+    { name: "Concepts", content: ["Cute", "Ugly", "Infinity"], color: "rgb(196, 94, 255)" },
+    { name: "Entities", content: ["Noob", "Evil"], color: "rgb(116, 56, 0)" },
+    { name: "Buildings", content: ["Circus"], color: "rgb(192, 192, 192)" },
+    { name: "Objects", content: ["Cards", "Cards Circus"], color: "rgb(255, 243, 75)" },
+    { name: "Dangers", content: ["Ice Spikes"], color: "rgb(156, 18, 18)" }
 ];
 
 let collection = {};
@@ -104,6 +117,7 @@ let xpUpgradeLevel = 0;      // Niveau d'amélioration de gain XP
 let slotInterval = null;
 let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2 luck sur les cartes sweet)
 let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
+let obeseEndTime = 0; // End time for the Obese effect (x0.8 roll speed)
 
 let xp = 0;
 let level = 1;
@@ -174,6 +188,14 @@ const craftRecipes = [
         time: 1000 * 45,
     },
 	{
+        name: "Craft Speed Potion",
+        ingredients: [
+            { name: "Electricity", amount: 8 }
+        ],
+        time: 1000 * 45,
+        type: "potion"
+    },
+	{
         name: "Iceberg",
         ingredients: [
             { name: "Ice Spikes", amount: 100 }
@@ -192,10 +214,15 @@ function saveCraftingQueue() {
     localStorage.setItem('cards-craft-queue', JSON.stringify(simplified));
 }
 
+function getCraftSpeedMultiplier() {
+    return (activeEffects.craftspeed && activeEffects.craftspeed.endTime > Date.now())
+        ? activeEffects.craftspeed.power : 1;
+}
+
 function craftItem(recipe) {
     // Vérifier si on a les ingrédients nécessaires
     if (!hasIngredients(recipe)) {
-        showCraftMessage("Not enought items!", "error");
+        showCraftMessage("Not enough items!", "error");
         return false;
     }
     
@@ -204,15 +231,16 @@ function craftItem(recipe) {
     
     // Ajouter à la queue de craft
     const now = Date.now();
+    const effectiveTime = Math.round(recipe.time / getCraftSpeedMultiplier());
     let endTime;
     
     if (craftingQueue.length === 0) {
         // Premier craft - commence immédiatement
-        endTime = now + recipe.time;
+        endTime = now + effectiveTime;
     } else {
         // Craft suivant - commence après la fin du dernier craft
         const lastJob = craftingQueue[craftingQueue.length - 1];
-        endTime = lastJob.endTime + recipe.time;
+        endTime = lastJob.endTime + effectiveTime;
     }
     
     const craftJob = {
@@ -231,6 +259,28 @@ function craftItem(recipe) {
 
     updateCraftButtons();
     return true;
+}
+
+function craftMultiple(recipe, n) {
+    if (!n || n < 1) return;
+    let crafted = 0;
+    const effectiveTime = Math.round(recipe.time / getCraftSpeedMultiplier());
+    for (let i = 0; i < n; i++) {
+        if (!hasIngredients(recipe)) break;
+        consumeIngredients(recipe);
+        const lastJob = craftingQueue[craftingQueue.length - 1];
+        const endTime = lastJob ? lastJob.endTime + effectiveTime : Date.now() + effectiveTime;
+        craftingQueue.push({ recipe, startTime: Date.now(), endTime, id: Date.now() + Math.random() });
+        crafted++;
+    }
+    if (crafted > 0) {
+        saveCraftingQueue();
+        startCraftingInterval();
+        updateCraftButtons();
+        showCraftMessage(`${crafted}× ${recipe.name} added to the queue!`, "success");
+    } else {
+        showCraftMessage("Not enough items!", "error");
+    }
 }
 
 function hasIngredients(recipe) {
@@ -302,7 +352,7 @@ function processCraftingQueue() {
         updateCollection();
         updateInventoryStats();
         updatePotionsInventory();
-        showCraftMessage(`${recipe.name} successfuly crafted!`, "success");
+        showCraftMessage(`${recipe.name} successfully crafted!`, "success");
 
         // Corriger le temps du prochain si nécessaire
         if (craftingQueue.length > 0) {
@@ -650,14 +700,59 @@ function renderSelectedRecipe(recipe) {
     }
     box.appendChild(ingsRow);
 
-    // Bouton craft
+    // Craft buttons row
+    const btnsRow = document.createElement('div');
+    btnsRow.style.cssText = 'display:flex;gap:0.5em;flex-wrap:wrap;margin-top:0.5em;';
+
+    // CRAFT ×1
     const btn = document.createElement('button');
     btn.className = 'craft-selected-btn' + (canCraft ? ' active' : ' disabled');
-    btn.textContent = canCraft ? `CRAFT ${recipe.name}` : 'Missing ingredients';
+    btn.style.cssText = 'flex:1;min-width:80px;';
+    btn.textContent = canCraft ? `CRAFT ×1` : 'Missing';
     btn.onclick = canCraft
-        ? () => { craftItem(recipe); updateCraftButtons(); }
+        ? () => { craftItem(recipe); renderSelectedRecipe(recipe); }
         : () => showCraftMessage("Not enough items!", "error");
-    box.appendChild(btn);
+    btnsRow.appendChild(btn);
+
+    // CRAFT ALL
+    const btnAll = document.createElement('button');
+    btnAll.className = 'craft-selected-btn' + (maxCrafts > 0 ? ' active' : ' disabled');
+    btnAll.style.cssText = 'flex:1;min-width:80px;background:linear-gradient(135deg,#27ae60,#1e8449);';
+    btnAll.textContent = maxCrafts > 0 ? `ALL ×${maxCrafts}` : 'ALL';
+    btnAll.onclick = maxCrafts > 0
+        ? () => { craftMultiple(recipe, maxCrafts); renderSelectedRecipe(recipe); }
+        : () => showCraftMessage("Not enough items!", "error");
+    btnsRow.appendChild(btnAll);
+
+    // CRAFT N row
+    const btnNRow = document.createElement('div');
+    btnNRow.style.cssText = 'display:flex;gap:0.4em;align-items:center;width:100%;margin-top:0.3em;';
+
+    const nInput = document.createElement('input');
+    nInput.type = 'number';
+    nInput.min = '1';
+    nInput.max = String(maxCrafts);
+    nInput.value = '1';
+    nInput.style.cssText = 'flex:1;padding:0.5em 0.7em;border-radius:8px;border:1.5px solid rgba(52,152,219,0.4);background:rgba(255,255,255,0.07);color:#fff;font-size:1em;text-align:center;outline:none;min-width:0;';
+    nInput.placeholder = 'N';
+
+    const btnN = document.createElement('button');
+    btnN.className = 'craft-selected-btn active';
+    btnN.style.cssText = 'flex:2;min-width:80px;background:linear-gradient(135deg,#2980b9,#1a5276);';
+    btnN.textContent = 'CRAFT ×N';
+    btnN.onclick = () => {
+        const n = parseInt(nInput.value);
+        if (!n || n < 1) { showCraftMessage("Enter a valid number!", "error"); return; }
+        const actualMax = Math.min(...recipe.ingredients.map(ing => Math.floor((collection[ing.name] || 0) / ing.amount)));
+        if (n > actualMax) { showCraftMessage(`Not enough items (max: ${actualMax})`, "error"); return; }
+        craftMultiple(recipe, n);
+        renderSelectedRecipe(recipe);
+    };
+    btnNRow.appendChild(nInput);
+    btnNRow.appendChild(btnN);
+
+    box.appendChild(btnsRow);
+    if (maxCrafts > 0) box.appendChild(btnNRow);
 }
 
 function updateActiveEffectsDisplay() {
@@ -677,7 +772,7 @@ function updateActiveEffectsDisplay() {
     // Mettre à jour les stats si des effets ont été supprimés
     if (effectsRemoved) {
         updateActiveEffects();
-        showCraftMessage("Effet ended", "info");
+        showCraftMessage("Effect ended", "info");
     }
     
     activeEffectsDiv.innerHTML = '';
@@ -741,6 +836,31 @@ function updateActiveEffectsDisplay() {
     // ── Effets actifs ──
     let hasActiveEffects = false;
 
+    // Effet Obese
+    if (obeseEndTime > now) {
+        hasActiveEffects = true;
+        const timeLeft = obeseEndTime - now;
+        const totalDuration = 60000;
+        const pct = (timeLeft / totalDuration) * 100;
+        const obeseDiv = document.createElement('div');
+        obeseDiv.style.cssText = "background:linear-gradient(135deg,#c0392b,#8e44ad);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        obeseDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">🍔 Obese</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">Roll Speed ×0.8</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + Math.ceil(timeLeft / 1000) + 's left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">' + Math.floor((totalDuration - timeLeft)/1000) + 's / 60s</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
+        activeEffectsDiv.appendChild(obeseDiv);
+    }
+
     // Effets de potions (temporels)
     for (let effectType in activeEffects) {
         hasActiveEffects = true;
@@ -751,12 +871,14 @@ function updateActiveEffectsDisplay() {
         const queued = potionQueues[effectType] || 0;
         let effectName = "", effectIcon = "?";
         switch (effectType) {
-            case "rollspeed": effectName = "Roll Speed";  effectIcon = "??"; break;
-            case "luck":      effectName = "Luck";        effectIcon = "??"; break;
-            case "tokenspeed":effectName = "Token Speed"; effectIcon = "??"; break;
+            case "rollspeed":  effectName = "Roll Speed";  effectIcon = "⚡"; break;
+            case "luck":       effectName = "Luck";        effectIcon = "🍀"; break;
+            case "tokenspeed": effectName = "Token Speed"; effectIcon = "🪙"; break;
+            case "craftspeed": effectName = "Craft Speed"; effectIcon = "⚗️"; break;
         }
+        const bg = effectType === "craftspeed" ? "background:linear-gradient(135deg,#16a085,#1abc9c)" : "background:linear-gradient(135deg,#9b59b6,#8e44ad)";
         const effectDiv = document.createElement('div');
-        effectDiv.style.cssText = "background:linear-gradient(135deg,#9b59b6,#8e44ad);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        effectDiv.style.cssText = bg + ";color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
         const queueDots = queued > 0
             ? Array.from({length: Math.min(queued, 8)}).map(() =>
                 '<div style="height:5px;flex:1;max-width:24px;background:rgba(241,196,15,0.7);border-radius:999px;"></div>'
@@ -765,12 +887,12 @@ function updateActiveEffectsDisplay() {
             '<div style="display:flex;justify-content:space-between;align-items:center;">' +
                 '<div>' +
                     '<div style="font-weight:bold;">' + effectIcon + ' ' + effect.potionName + '</div>' +
-                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' x' + effect.power + '</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' ×' + effect.power + '</div>' +
                 '</div>' +
                 '<div style="text-align:right;">' +
                     '<div style="font-size:0.9em;font-weight:bold;">' + Math.ceil(timeLeft / 1000) + 's left</div>' +
                     '<div style="font-size:0.75em;opacity:0.75;">' + Math.floor((totalDuration - timeLeft)/1000) + 's / ' + Math.floor(totalDuration/1000) + 's</div>' +
-                    (queued > 0 ? '<div style="font-size:0.78em;color:#f1c40f;margin-top:0.2em;">? ' + queued + ' in queue</div>' : '') +
+                    (queued > 0 ? '<div style="font-size:0.78em;color:#f1c40f;margin-top:0.2em;">⏳ ' + queued + ' in queue</div>' : '') +
                 '</div>' +
             '</div>' +
             '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
@@ -786,9 +908,10 @@ function updateActiveEffectsDisplay() {
         const pct = ((effect.rollLimit - effect.rollsUsed) / effect.rollLimit) * 100;
         let effectName = "", effectIcon = "?";
         switch (effectType) {
-            case "rollspeed": effectName = "Roll Speed";  effectIcon = "??"; break;
-            case "luck":      effectName = "Luck";        effectIcon = "??"; break;
-            case "tokenspeed":effectName = "Token Speed"; effectIcon = "??"; break;
+            case "rollspeed":  effectName = "Roll Speed";  effectIcon = "⚡"; break;
+            case "luck":       effectName = "Luck";        effectIcon = "🍀"; break;
+            case "tokenspeed": effectName = "Token Speed"; effectIcon = "🪙"; break;
+            case "craftspeed": effectName = "Craft Speed"; effectIcon = "⚗️"; break;
         }
         const effectDiv = document.createElement('div');
         effectDiv.style.cssText = "background:linear-gradient(135deg,#e67e22,#d35400);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
@@ -796,7 +919,7 @@ function updateActiveEffectsDisplay() {
             '<div style="display:flex;justify-content:space-between;align-items:center;">' +
                 '<div>' +
                     '<div style="font-weight:bold;">' + effectIcon + ' ' + effect.potionName + '</div>' +
-                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' x' + effect.power + '</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">' + effectName + ' ×' + effect.power + '</div>' +
                 '</div>' +
                 '<div style="text-align:right;">' +
                     '<div style="font-size:0.9em;font-weight:bold;">' + (effect.rollLimit - effect.rollsUsed) + ' rolls left</div>' +
@@ -816,8 +939,8 @@ function updateActiveEffectsDisplay() {
         srDiv.style.cssText = "background:linear-gradient(135deg,#f39c12,#e67e22);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
         srDiv.innerHTML =
             '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-                '<div><div style="font-weight:bold;">?? Sugar Rush</div>' +
-                '<div style="font-size:0.8em;opacity:0.9;">Luck x2 on sweet cards</div></div>' +
+                '<div><div style="font-weight:bold;">🍬 Sugar Rush</div>' +
+                '<div style="font-size:0.8em;opacity:0.9;">Luck ×2</div></div>' +
                 '<div style="text-align:right;">' +
                     '<div style="font-size:0.9em;font-weight:bold;">' + sugarRushRolls + ' rolls left</div>' +
                     '<div style="font-size:0.75em;opacity:0.75;">Active for ' + (10 - sugarRushRolls) + ' / 10 rolls</div>' +
@@ -837,8 +960,8 @@ function updateActiveEffectsDisplay() {
         vpDiv.style.cssText = "background:linear-gradient(135deg,#e67e22,#c0392b);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
         vpDiv.innerHTML =
             '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-                '<div><div style="font-weight:bold;">?? Ventre Plein</div>' +
-                '<div style="font-size:0.8em;opacity:0.9;">Luck x1.5 on caloric cards</div></div>' +
+                '<div><div style="font-weight:bold;">🍔 Full Belly</div>' +
+                '<div style="font-size:0.8em;opacity:0.9;">Luck ×1.5</div></div>' +
                 '<div style="text-align:right;">' +
                     '<div style="font-size:0.9em;font-weight:bold;">' + ventrePleinRolls + ' rolls left</div>' +
                     '<div style="font-size:0.75em;opacity:0.75;">Active for ' + (10 - ventrePleinRolls) + ' / 10 rolls</div>' +
@@ -909,11 +1032,17 @@ function updateRollEffectsIndicator() {
         indicator.appendChild(makeChip('#d35400', icon, 'x' + effect.power, effect.rollsUsed + '/' + effect.rollLimit, pct));
     }
 
-    if (sugarRushRolls > 0) {
-        indicator.appendChild(makeChip('#e67e22', '??', 'x2', sugarRushRolls + '/10', (sugarRushRolls/10)*100));
-    }
-    if (ventrePleinRolls > 0) {
-        indicator.appendChild(makeChip('#c0392b', '??', 'x1.5', ventrePleinRolls + '/10', (ventrePleinRolls/10)*100));
+    if (obeseEndTime > now) {
+        const timeLeft = obeseEndTime - now;
+        const pct = (timeLeft / 60000) * 100;
+        indicator.appendChild(makeChip('#c0392b', '🍔', 'x0.8', Math.ceil(timeLeft/1000) + 's', pct));
+    } else {
+        if (sugarRushRolls > 0) {
+            indicator.appendChild(makeChip('#f39c12', '🍬', '×2', sugarRushRolls + '/10', (sugarRushRolls/10)*100));
+        }
+        if (ventrePleinRolls > 0) {
+            indicator.appendChild(makeChip('#c0392b', '🍔', '×1.5', ventrePleinRolls + '/10', (ventrePleinRolls/10)*100));
+        }
     }
 }
 
@@ -976,13 +1105,13 @@ function updatePotionsInventory() {
         let typeText = "";
         switch (potion.type) {
             case "rollspeed":
-                typeText = "Vitesse de roll";
+                typeText = "Roll Speed";
                 break;
             case "luck":
-                typeText = "Chance";
+                typeText = "Luck";
                 break;
             case "tokenspeed":
-                typeText = "Vitesse de tokens";
+                typeText = "Token Speed";
                 break;
         }
         
@@ -1011,7 +1140,7 @@ function updatePotionsInventory() {
             cursor: pointer;
             transition: all 0.3s ease;
         `;
-        useButton.innerText = 'Utiliser';
+        useButton.innerText = 'Use';
         useButton.onclick = () => usePotion(potionName);
         
         potionItem.appendChild(img);
@@ -1057,9 +1186,10 @@ function applyPotionEffect(potion) {
         };
         let msg = "";
         switch (potion.type) {
-            case "rollspeed": msg = "Roll Speed x" + potion.power + " for " + rollLimit + " rolls !"; break;
-            case "luck":      msg = "Luck x" + potion.power + " for " + rollLimit + " rolls !"; break;
-            case "tokenspeed":msg = "Tokens Speed x" + potion.power + " for " + rollLimit + " rolls !"; break;
+            case "rollspeed":  msg = "Roll Speed ×" + potion.power + " for " + rollLimit + " rolls!"; break;
+            case "luck":       msg = "Luck ×" + potion.power + " for " + rollLimit + " rolls!"; break;
+            case "tokenspeed": msg = "Token Speed ×" + potion.power + " for " + rollLimit + " rolls!"; break;
+            case "craftspeed": msg = "Craft Speed ×" + potion.power + " for " + rollLimit + " rolls!"; break;
         }
         showCraftMessage(msg, "success");
     } else {
@@ -1070,9 +1200,10 @@ function applyPotionEffect(potion) {
             activatePotionEffect(potion.type, potion.power, potion.name, potion.duration);
             let msg = "";
             switch (potion.type) {
-                case "rollspeed": msg = "Roll Speed x" + potion.power + " !"; break;
-                case "luck":      msg = "Luck x" + potion.power + " !"; break;
-                case "tokenspeed":msg = "Tokens Speed x" + potion.power + " !"; break;
+                case "rollspeed":  msg = "Roll Speed ×" + potion.power + "!"; break;
+                case "luck":       msg = "Luck ×" + potion.power + "!"; break;
+                case "tokenspeed": msg = "Token Speed ×" + potion.power + "!"; break;
+                case "craftspeed": msg = "Craft Speed ×" + potion.power + "!"; break;
             }
             showCraftMessage(msg, "success");
         }
@@ -1106,7 +1237,7 @@ function consumePotionEffectOrDequeue(effectType) {
         showCraftMessage("Next " + nm + " from queue! (" + (potionQueues[effectType] || 0) + " left)", "success");
     } else {
         delete activeEffects[effectType];
-        showCraftMessage(effectType + " effect ended", "info");
+        showCraftMessage(effectType.replace("rollspeed","Roll Speed").replace("luck","Luck").replace("tokenspeed","Token Speed").replace("craftspeed","Craft Speed") + " effect ended", "info");
     }
     saveCollection();
     updateActiveEffects();
@@ -1132,13 +1263,21 @@ function updateActiveEffects() {
     let rollSpeedMultiplier = 1;
     let luckMultiplier = 1;
     let tokenSpeedMultiplier = 1;
+    let craftSpeedMultiplier = 1;
     for (let effectType in activeEffects) {
         switch (effectType) {
-            case "rollspeed":  rollSpeedMultiplier = activeEffects[effectType].power; break;
-            case "luck":       luckMultiplier      = activeEffects[effectType].power; break;
+            case "rollspeed":  rollSpeedMultiplier  = activeEffects[effectType].power; break;
+            case "luck":       luckMultiplier       = activeEffects[effectType].power; break;
             case "tokenspeed": tokenSpeedMultiplier = activeEffects[effectType].power; break;
+            case "craftspeed": craftSpeedMultiplier = activeEffects[effectType].power; break;
         }
     }
+    
+    // Obese reduces roll speed to 0.8x
+    if (obeseEndTime > now) {
+        rollSpeedMultiplier *= 0.8;
+    }
+
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
     tokenRate = (0.2 + tokenUpgradeLevel * 0.1) * tokenSpeedMultiplier;
@@ -1409,7 +1548,7 @@ function rollItem() {
                 // Effet terminé
                 delete rollBasedEffects[effectType];
                 updateActiveEffects();
-                showCraftMessage("Effet basé sur les rolls terminé", "info");
+                showCraftMessage("Roll-based effect ended", "info");
             }
         }
     
@@ -1514,22 +1653,33 @@ function rollItem() {
                 showCraftMessage("🍬 Sugar Rush ended!", "info");
             }
         }
-        // ── Ventre Plein ──
+        // ── Ventre Plein / Obese ──
         const rolledIsCaloric = Array.isArray(selected.tags) && selected.tags.includes('caloric');
 
         if (rolledIsCaloric) {
-            // Roll caloric : ajoute entre 2 et 5 rolls, cap 10, ne consomme PAS le compteur
-            const added = Math.floor(Math.random() * 4) + 2; // 2–5
-            const before = ventrePleinRolls;
-            ventrePleinRolls = Math.min(10, ventrePleinRolls + added);
-            const actualAdded = ventrePleinRolls - before;
-            if (actualAdded > 0) {
-                showCraftMessage(`🍔 Ventre Plein! +${actualAdded} roll${actualAdded > 1 ? 's' : ''} (${ventrePleinRolls} remaining)`, "success");
+            if (obeseEndTime > Date.now()) {
+                // Do nothing if already Obese
+            } else {
+                // Roll caloric : ajoute entre 2 et 5 rolls, cap 10, ne consomme PAS le compteur
+                const added = Math.floor(Math.random() * 4) + 2; // 2–5
+                const before = ventrePleinRolls;
+                ventrePleinRolls += added;
+                if (ventrePleinRolls > 10) {
+                    ventrePleinRolls = 0;
+                    obeseEndTime = Date.now() + 60000;
+                    showCraftMessage(`🍔 Obese! Roll speed ×0.8 for 60s`, "error");
+                    updateActiveEffects();
+                } else {
+                    const actualAdded = ventrePleinRolls - before;
+                    if (actualAdded > 0) {
+                        showCraftMessage(`🍔 Full Belly! +${actualAdded} roll${actualAdded > 1 ? 's' : ''} (${ventrePleinRolls} remaining)`, "success");
+                    }
+                }
             }
         } else if (ventrePleinRolls > 0) {
             ventrePleinRolls--;
             if (ventrePleinRolls === 0) {
-                showCraftMessage("🍔 Ventre Plein ended!", "info");
+                showCraftMessage("🍔 Full Belly ended!", "info");
             }
         }
 
@@ -1603,6 +1753,7 @@ function updateCollection() {
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
                         <span class=\"rarity-tag-container\">${goldTag}${specialTags}</span>
+                        <span class=\"rarity-tag-container\" style=\"top:auto;bottom:5px;\">${rarityTag}</span>
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
@@ -1648,10 +1799,11 @@ function updateCollection() {
                             </div>
                             <div style='padding:1.2em 0.5em 0.5em 0.5em;width:100%;text-align:center;'>
                                 <b style='font-size:1.25em;'>${displayName}</b><br>
-                                <div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0.3em;margin:0.4em 0;'>${rarityTag}${goldTag}${specialTags}</div>
-                                <button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
-                                <button id='decompressor-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button>
-                                <button id='diamond-press-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#9b59b6;color:white;border:none;cursor:pointer;'>💎 Press</button><br>
+                                <div style='font-size:0.85em;color:#7f8c8d;margin:0.2em 0;'>1 in ${chanceDisplay.toLocaleString()}</div>
+                                <div style='display:flex;flex-wrap:wrap;justify-content:center;gap:0.3em;margin:0.3em 0;'>${rarityTag}${goldTag}${specialTags}</div>
+                                ${level >= 3 ? `<button id='compressor-btn' style='margin-top:1em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#3498db;color:white;border:none;cursor:pointer;'>Compressor</button>
+                                <button id='decompressor-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#16a085;color:white;border:none;cursor:pointer;'>Decompressor</button>` : ''}
+                                ${level >= 7 ? `<button id='diamond-press-btn' style='margin-left:0.5em;padding:0.5em 1.5em;font-size:1em;border-radius:10px;background:#9b59b6;color:white;border:none;cursor:pointer;'>💎 Press</button>` : ''}<br>
                                 <span style='font-size:0.9em;color:#888'>(Tap anywhere to close)</span>
                             </div>
                         </div>`;
@@ -1678,7 +1830,7 @@ function updateCollection() {
                                 div.style.textTransform = "uppercase"
                                 div.style.marginLeft = "2px"
                                 div.style.cursor = "pointer"
-                                div.title = `Voir le groupe ${groupe.name}`
+                                div.title = `View group ${groupe.name}`
                                 div.onclick = (e) => {
                                     e.stopPropagation();
                                     showGroupPopup(groupe);
@@ -1696,17 +1848,19 @@ function updateCollection() {
                     overlay.onclick = closePopup;
                     popup.onclick = closePopup;
                     // Prevent closing when clicking compressor button
-                    document.getElementById('compressor-btn').onclick = (e) => {
-                        e.stopPropagation();
-                        showCompressorMenu(baseName, type);
-                    };
+                    if (level >= 3) {
+                        document.getElementById('compressor-btn').onclick = (e) => {
+                            e.stopPropagation();
+                            showCompressorMenu(baseName, type);
+                        };
+                    }
         var decompressBtn = document.getElementById('decompressor-btn');
-        if (decompressBtn) decompressBtn.onclick = (e) => {
+        if (decompressBtn && level >= 3) decompressBtn.onclick = (e) => {
             e.stopPropagation();
             showDecompressorMenu(baseName, type);
         };
         var diamondPressBtn = document.getElementById('diamond-press-btn');
-        if (diamondPressBtn) {
+        if (diamondPressBtn && level >= 7) {
             const itemForDiamond = items.find(i => i.name === baseName);
             if (itemForDiamond) {
                 let chanceForDiamond = itemForDiamond.chance;
@@ -1715,31 +1869,36 @@ function updateCollection() {
                 else if (type === 'Rainbow') chanceForDiamond *= 100;
                 else if (type === 'Gold') chanceForDiamond *= 10;
                 const gain = Math.floor(Math.sqrt(chanceForDiamond));
-                diamondPressBtn.innerHTML = `💎 Press (+${gain})`;
-                if (owned <= 0) {
-                    diamondPressBtn.disabled = true;
-                    diamondPressBtn.style.opacity = '0.5';
-                    diamondPressBtn.style.cursor = 'not-allowed';
-                } else {
-                    diamondPressBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        const cardKey = type ? `${baseName} (${type})` : baseName;
-                        const cur = collection[cardKey] || 0;
-                        if (cur <= 0) return;
-                        diamonds += gain;
-                        collection[cardKey]--;
-                        if (collection[cardKey] <= 0) delete collection[cardKey];
-                        gainXp(gain);
-                        saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons(); updateDiamondsDisplay();
-                        const newOwned = collection[cardKey] || 0;
-                        if (newOwned <= 0) {
-                            diamondPressBtn.disabled = true;
-                            diamondPressBtn.style.opacity = '0.5';
-                            diamondPressBtn.style.cursor = 'not-allowed';
-                        }
-                        diamondPressBtn.innerHTML = `💎 Press (+${gain})`;
-                    };
+                const cardKey = type ? `${baseName} (${type})` : baseName;
+                const curOwned = collection[cardKey] || 0;
+
+                function refreshDiamondBtn() {
+                    const q = collection[cardKey] || 0;
+                    if (q <= 0) {
+                        diamondPressBtn.disabled = true;
+                        diamondPressBtn.style.opacity = '0.5';
+                        diamondPressBtn.style.cursor = 'not-allowed';
+                        diamondPressBtn.innerHTML = '💎 Press (empty)';
+                    } else {
+                        diamondPressBtn.disabled = false;
+                        diamondPressBtn.style.opacity = '1';
+                        diamondPressBtn.style.cursor = 'pointer';
+                        diamondPressBtn.innerHTML = `💎 +${gain} (×${q})`;
+                    }
                 }
+                refreshDiamondBtn();
+
+                diamondPressBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const cur = collection[cardKey] || 0;
+                    if (cur <= 0) return;
+                    diamonds += gain;
+                    collection[cardKey]--;
+                    if (collection[cardKey] <= 0) delete collection[cardKey];
+                    gainXp(gain);
+                    saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons(); updateDiamondsDisplay();
+                    refreshDiamondBtn();
+                };
             }
         }
     
@@ -1904,7 +2063,7 @@ function showDecompressorMenu(cardName, cardType) {
     else if (cardType === 'Shiny')   { prevType = 'Rainbow'; resultName = cardName + ' (Rainbow)'; }
     else if (cardType === 'Nuclear') { prevType = 'Shiny'; resultName = cardName + ' (Shiny)'; }
     else {
-        comp.innerHTML = "<b>Pas de rareté supérieure à décompresser.</b>";
+        comp.innerHTML = "<b>No higher rarity to decompress.</b>";
         comp.style.display = 'block';
         return;
     }
@@ -2053,7 +2212,7 @@ function showGroupPopup(groupe) {
             <div style="font-size:0.78em;font-weight:bold;color:#2c3e50;margin-bottom:0.2em;">${cardName}</div>
             <div style="font-size:0.7em;color:#7f8c8d;">1 in ${item.chance}</div>
             <div style="margin:0.2em 0;">${rarityTag}</div>
-            ${isOwned ? `<div style="font-size:0.68em;color:#27ae60;margin-top:0.2em;">${variantText}</div>` : `<div style="font-size:0.68em;color:#bdc3c7;margin-top:0.2em;">Non obtenu</div>`}
+            ${isOwned ? `<div style="font-size:0.68em;color:#27ae60;margin-top:0.2em;">${variantText}</div>` : `<div style="font-size:0.68em;color:#bdc3c7;margin-top:0.2em;">Not obtained</div>`}
         `;
         grid.appendChild(card);
     }
@@ -2322,6 +2481,7 @@ function loadCollection() {
     updateTokensDisplay();
     updateDiamondsDisplay();
     updateLevelXpDisplay();
+    updateUnlockables();
 }
 function saveLastConnection() {
     const now = new Date();
@@ -2357,7 +2517,7 @@ function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate) {
     let timeStr = '';
     if (hours > 0) timeStr += hours + 'h ';
     timeStr += minutes + 'min';
-    el.innerHTML = `Dernière connexion : <b>${dateStr}</b><br>Temps écoulé : <b>${timeStr}</b><br>Tokens gagnés : <b>${tokensToAdd}</b><br><br><span style='font-size:0.9em;color:#888'>(Clique pour continuer)</span>`;
+    el.innerHTML = `Last connection: <b>${dateStr}</b><br>Time elapsed: <b>${timeStr}</b><br>Tokens earned: <b>${tokensToAdd}</b><br><br><span style='font-size:0.9em;color:#888'>(Click to continue)</span>`;
     el.style.display = 'block';
     overlay.style.display = 'block';
     el.style.cursor = 'pointer';
@@ -2592,11 +2752,12 @@ function renderPressCardList(mode) {
 
     if (entries.length === 0) {
         if (emptyMsg) {
-            if (mode === 'compress') emptyMsg.textContent = "Aucune carte compressable pour l'instant.";
-            else if (mode === 'decompress') emptyMsg.textContent = "Aucune carte décompressable pour l'instant.";
-            else emptyMsg.textContent = "Aucune carte disponible pour le Diamond Press pour l'instant.";
+            if (mode === 'compress') emptyMsg.textContent = "No cards available to compress right now.";
+            else if (mode === 'decompress') emptyMsg.textContent = "No cards available to decompress right now.";
+            else emptyMsg.textContent = "No cards available for Diamond Press right now.";
             emptyMsg.style.display = 'block';
         }
+        updatePressAllBtn();
         return;
     }
 
@@ -2608,6 +2769,7 @@ function renderPressCardList(mode) {
     });
     const overlay = document.getElementById('blur-overlay');
 
+    updatePressAllBtn();
     entries.forEach(entry => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.4em 0.6em;border-bottom:1px solid rgba(0,0,0,0.05);';
@@ -2713,6 +2875,7 @@ function pressAll(mode) {
     const entries = getPressEntries(mode);
     if (!entries.length) return;
     const keepQtyNow = pressKeep ? 1 : 0;
+    let diamondsGainedThisPress = 0;
     entries.forEach(entry => {
         const cur = collection[entry.name] || 0;
         const eff = Math.max(0, cur - keepQtyNow);
@@ -2731,7 +2894,9 @@ function pressAll(mode) {
             collection[entry.resultName] = (collection[entry.resultName] || 0) + eff * 5;
             gainXp(Math.floor(Math.sqrt(entry.chanceDisplay)) * eff);
         } else if (mode === 'diamond') {
-            diamonds += Math.floor(eff * entry.diamondsGain);
+            const gained = Math.floor(eff * entry.diamondsGain);
+            diamonds += gained;
+            diamondsGainedThisPress += gained;
             collection[entry.name] = cur - eff;
             if (collection[entry.name] <= 0) delete collection[entry.name];
             gainXp(Math.floor(Math.sqrt(entry.chanceDisplay)) * eff);
@@ -2739,6 +2904,9 @@ function pressAll(mode) {
     });
     saveCollection(); updateCollection(); updateInventoryStats(); updateCraftButtons(); updateDiamondsDisplay();
     renderPressCardList(mode);
+    if (mode === 'diamond' && diamondsGainedThisPress > 0) {
+        showCraftMessage('💎 +' + diamondsGainedThisPress + ' diamonds!', 'success');
+    }
 }
 
 function updatePressPreview(mode) {
@@ -2747,7 +2915,7 @@ function updatePressPreview(mode) {
     const entries = getPressEntries(mode === 'diamond' ? 'diamond' : mode);
     preview.innerHTML = '';
     if (entries.length === 0) {
-        preview.innerHTML = `<span style="color:#7f8c8d;font-size:0.9em;">Aucune combinaison disponible pour l'instant...</span>`;
+        preview.innerHTML = `<span style="color:#7f8c8d;font-size:0.9em;">No combination available right now...</span>`;
         return;
     }
     const entry = entries[Math.floor(Math.random() * entries.length)];
@@ -2888,6 +3056,27 @@ if (pressAllBtn) {
     };
 }
 
+function updatePressAllBtn() {
+    const modal = document.getElementById('press-modal');
+    if (!modal) return;
+    const btn = document.getElementById('press-all-btn');
+    if (!btn) return;
+    const mode = modal.getAttribute('data-mode') || 'compress';
+    if (mode === 'diamond') {
+        const entries = getPressEntries('diamond');
+        const keepQtyNow = pressKeep ? 1 : 0;
+        let total = 0;
+        entries.forEach(e => {
+            const cur = collection[e.name] || 0;
+            const eff = Math.max(0, cur - keepQtyNow);
+            total += Math.floor(eff * e.diamondsGain);
+        });
+        btn.textContent = total > 0 ? 'All  💎+' + total : 'All';
+    } else {
+        btn.textContent = 'All';
+    }
+}
+
 // ----- Raretés utilisées pour la barre -----
 const rarityLevels = [
     { key: 'common',    name: 'Common',    class: 'rarity-common',    order: 1 },
@@ -2947,6 +3136,7 @@ function gainXp(amount) {
     if (leveledUp) {
         // Optionally, show a level up notification
         // alert(`Level up! You are now level ${level}`);
+        updateUnlockables();
     }
 }
 
@@ -3094,12 +3284,29 @@ function createAutoRollButton() {
 // Show/hide auto roll button based on level
 function updateUnlockables() {
     let btn = document.getElementById('auto-roll-btn');
-    if (!btn) return;
-    if (level >= 5) {
-        btn.style.display = 'block';
-        btn.disabled = false;
-    } else {
-        btn.style.display = 'none';
+    if (btn) {
+        if (level >= 5) {
+            btn.style.display = 'block';
+            btn.disabled = false;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+    let pressBtn = document.getElementById('press-btn');
+    if (pressBtn) {
+        if (level >= 3) {
+            pressBtn.style.display = 'flex';
+        } else {
+            pressBtn.style.display = 'none';
+        }
+    }
+    let diamondBtn = document.getElementById('press-mode-diamond');
+    if (diamondBtn) {
+        if (level >= 7) {
+            diamondBtn.style.display = 'inline-block';
+        } else {
+            diamondBtn.style.display = 'none';
+        }
     }
 }
 
@@ -3209,7 +3416,7 @@ function renderShop() {
             <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
                 <b style="color:#2ecc71;">${currentRate.toFixed(1)}/s</b> → <b style="color:#3498db;">${nextRate.toFixed(1)}/s</b>
             </div>
-            <div style="font-size:0.82em;color:#95a5a6;">Niveau <b style="color:#e67e22;">${tokenUpgradeLevel}</b></div>
+            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#e67e22;">${tokenUpgradeLevel}</b></div>
         </div>
         <button id="buy-speed-btn" style="
             padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
@@ -3244,7 +3451,7 @@ function renderShop() {
             <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
                 <b style="color:#2ecc71;">${currentMax}</b> → <b style="color:#3498db;">${nextMax}</b>
             </div>
-            <div style="font-size:0.82em;color:#95a5a6;">Niveau <b style="color:#e67e22;">${maxTokenUpgradeLevel}</b></div>
+            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#e67e22;">${maxTokenUpgradeLevel}</b></div>
         </div>
         <button id="buy-max-btn" style="
             padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
@@ -3269,7 +3476,7 @@ function renderShop() {
             <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
                 <b style="color:#2ecc71;">×${currentLuck.toFixed(1)}</b> → <b style="color:#39ff14;">×${nextLuck.toFixed(1)}</b>
             </div>
-            <div style="font-size:0.82em;color:#95a5a6;">Niveau <b style="color:#39ff14;">${luckUpgradeLevel}</b> · +0.5 par niveau</div>
+            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#39ff14;">${luckUpgradeLevel}</b> · +0.5 per level</div>
         </div>
         <button id="buy-luck-btn" style="padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;cursor:${canAffordLuck?'pointer':'not-allowed'};background:${canAffordLuck?'linear-gradient(90deg,#39ff14,#7fff00)':'#555'};color:${canAffordLuck?'#1a2900':'#888'};white-space:nowrap;min-width:110px;">💎 ${luckCost}</button>
     `;
@@ -3308,6 +3515,7 @@ function closeShopMenu() {
 }
 
 document.getElementById('shop-btn').onclick = openShopMenu;
+document.getElementById('unlocks-btn').onclick = () => openIndexSection('unlocks');
 document.getElementById('close-shop').onclick = closeShopMenu;
 document.getElementById('shop-modal').onclick = function(e) {
     if (e.target === this) closeShopMenu();
@@ -3328,6 +3536,8 @@ function closeIndexMenu() {
 function openIndexSection(section) {
     if (section === 'cards') {
         document.getElementById('index-cards-modal').style.display = 'flex';
+        const listEl = document.getElementById('index-cards-list');
+        if (listEl) listEl.dataset.activeTab = 'cards';
         renderIndexCards();
         const searchEl = document.getElementById('index-search');
         if (searchEl) {
@@ -3346,11 +3556,19 @@ function openIndexSection(section) {
     } else if (section === 'effects') {
         document.getElementById('index-effects-modal').style.display = 'flex';
         renderIndexEffects();
+    } else if (section === 'unlocks') {
+        document.getElementById('index-unlocks-modal').style.display = 'flex';
+        renderIndexUnlocks();
     }
 }
 
 function closeIndexSection() {
     document.getElementById('index-cards-modal').style.display = 'none';
+    document.getElementById('index-potions-modal').style.display = 'none';
+    document.getElementById('index-tags-modal').style.display = 'none';
+    document.getElementById('index-specialtags-modal').style.display = 'none';
+    document.getElementById('index-effects-modal').style.display = 'none';
+    document.getElementById('index-unlocks-modal').style.display = 'none';
 }
 
 function closeIndexCardDetail() {
@@ -3375,11 +3593,44 @@ function getRarityColor(chance) {
     return '#e74c3c';
 }
 
-function renderIndexCards(filter) {
+function renderIndexCards(filter, tab) {
     const listEl = document.getElementById('index-cards-list');
     const countEl = document.getElementById('index-cards-count');
     if (!listEl) return;
+
+    // Tab selector: Cards | Groups
+    const activeTab = tab || listEl.dataset.activeTab || 'cards';
+    listEl.dataset.activeTab = activeTab;
+
+    // Render tab bar once (check if already exists)
+    let tabBar = document.getElementById('index-cards-tab-bar');
+    if (!tabBar) {
+        tabBar = document.createElement('div');
+        tabBar.id = 'index-cards-tab-bar';
+        tabBar.style.cssText = 'display:flex;gap:0.5em;padding:0.6em 1em 0;background:rgba(0,0,0,0.15);';
+        ['cards','groups'].forEach(t => {
+            const tb = document.createElement('button');
+            tb.dataset.tab = t;
+            tb.textContent = t === 'cards' ? '🎴 Cards' : '📂 Groups';
+            tb.style.cssText = 'flex:1;padding:0.45em 0.8em;border-radius:8px;border:none;cursor:pointer;font-weight:bold;font-size:0.95em;transition:background 0.15s;';
+            tb.onclick = () => { listEl.dataset.activeTab = t; renderIndexCards(filter, t); };
+            tabBar.appendChild(tb);
+        });
+        listEl.parentNode.insertBefore(tabBar, listEl);
+    }
+    // Update tab styles
+    tabBar.querySelectorAll('button').forEach(tb => {
+        tb.style.background = tb.dataset.tab === activeTab ? 'rgba(78,205,196,0.25)' : 'rgba(255,255,255,0.07)';
+        tb.style.color = tb.dataset.tab === activeTab ? '#4ecdc4' : '#7f8c8d';
+    });
+
     listEl.innerHTML = '';
+
+    if (activeTab === 'groups') {
+        renderIndexGroupsList(listEl);
+        if (countEl) countEl.textContent = cardsGroupes.length + ' groups';
+        return;
+    }
 
     // Only base (non-variant) items
     const rollableAll = items.filter(i => !i.name.includes('('));
@@ -3425,11 +3676,9 @@ function renderIndexCards(filter) {
         row.innerHTML = `
             <img src="Cards-Icons/${item.name}.png" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">
             <div style="flex:1;min-width:0;">
-                <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    ${item.name}${Array.isArray(item.tags) && item.tags.includes('sweet') ? ' <span style="background:linear-gradient(90deg,#f39c12,#e67e22);color:#fff;font-size:0.6em;font-weight:bold;border-radius:5px;padding:1px 5px;vertical-align:middle;">🍬</span>' : ''}
-                </div>
+                <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
                 <div style="font-size:0.78em;color:${rarityColor};font-weight:bold;">${rarityName} · 1 in ${item.chance.toLocaleString()}</div>
-                <div>${getSweetTag(item)}</div>
+                <div style="margin-top:0.15em;">${getSpecialTags(item)}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <div style="font-size:0.85em;color:#4ecdc4;font-weight:bold;">×${totalOwned}</div>
@@ -3438,6 +3687,51 @@ function renderIndexCards(filter) {
             <span style="color:#4ecdc4;font-size:1.2em;">›</span>
         `;
         row.onclick = () => openIndexCardDetail(item.name);
+        listEl.appendChild(row);
+    });
+}
+
+function renderIndexGroupsList(listEl) {
+    listEl.innerHTML = '';
+    cardsGroupes.forEach(groupe => {
+        const totalCards = groupe.content.length;
+        const ownedCards = groupe.content.filter(name => {
+            const variants = ['', ' (Gold)', ' (Rainbow)', ' (Shiny)', ' (Nuclear)'];
+            return variants.some(v => (collection[name + v] || 0) > 0);
+        }).length;
+
+        const row = document.createElement('div');
+        row.style.cssText = `background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:0.85em 1em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.15s;`;
+        row.onmouseenter = () => row.style.background = 'rgba(255,255,255,0.1)';
+        row.onmouseleave = () => row.style.background = 'rgba(255,255,255,0.05)';
+
+        // Colour swatch
+        const swatch = document.createElement('div');
+        swatch.style.cssText = `width:40px;height:40px;border-radius:10px;background:${groupe.color};flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.3em;`;
+        swatch.textContent = '📂';
+        row.appendChild(swatch);
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = `
+            <div style="font-weight:bold;color:#fff;font-size:1em;">${groupe.name}</div>
+            <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.1em;">${ownedCards} / ${totalCards} cards discovered</div>
+        `;
+        row.appendChild(info);
+
+        // Progress bar
+        const prog = document.createElement('div');
+        prog.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:0.25em;flex-shrink:0;';
+        prog.innerHTML = `
+            <div style="font-size:0.82em;color:#4ecdc4;font-weight:bold;">${ownedCards}/${totalCards}</div>
+            <div style="width:60px;height:6px;background:rgba(255,255,255,0.1);border-radius:999px;overflow:hidden;">
+                <div style="width:${Math.round(ownedCards/totalCards*100)}%;height:100%;background:${groupe.color};border-radius:999px;"></div>
+            </div>
+        `;
+        row.appendChild(prog);
+        row.appendChild(Object.assign(document.createElement('span'), { textContent: '›', style: 'color:#4ecdc4;font-size:1.2em;' }));
+
+        row.onclick = () => openIndexGroupDetail(groupe.name);
         listEl.appendChild(row);
     });
 }
@@ -3715,13 +4009,13 @@ function renderIndexSpecialTags() {
             <span style="font-size:2.2em;">🍔</span>
             <div>
                 <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Caloric</div>
-                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers Ventre Plein</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers Full Belly</div>
             </div>
         </div>
 
         <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
             <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Effect</div>
-            <div style="color:#fff;line-height:1.5;">When a <span style="color:#e67e22;font-weight:bold;">Caloric</span> card is rolled, it adds <span style="color:#f39c12;font-weight:bold;">2 to 5 rolls</span> to <span style="color:#e67e22;font-weight:bold;">Ventre Plein</span> (max 10). Rolling a Caloric card <b>does not</b> consume a Ventre Plein roll.</div>
+            <div style="color:#fff;line-height:1.5;">When a <span style="color:#e67e22;font-weight:bold;">Caloric</span> card is rolled, it adds <span style="color:#f39c12;font-weight:bold;">2 to 5 rolls</span> to <span style="color:#e67e22;font-weight:bold;">Full Belly</span> (max 10). Rolling a Caloric card <b>does not</b> consume a Full Belly roll.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
@@ -3754,7 +4048,7 @@ function renderIndexSpecialTags() {
             <div onclick="closeIndexSpecialTags();openIndexSection('effects');" style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.3);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
                 <span style="font-size:1.3em;">🍔</span>
                 <div>
-                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Ventre Plein</div>
+                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Full Belly</div>
                     <div style="font-size:0.75em;color:#7f8c8d;">×1.5 Luck · roll-based</div>
                 </div>
                 <span style="margin-left:auto;color:#e67e22;">›</span>
@@ -3839,7 +4133,7 @@ function renderIndexEffects() {
             <span style="font-size:2.2em;">🍔</span>
             <div style="flex:1;">
                 <div style="display:flex;align-items:center;gap:0.5em;">
-                    <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Ventre Plein</div>
+                    <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Full Belly</div>
                     ${vpActive ? `<span style="background:#e67e22;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${ventrePleinRolls} rolls</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
                 </div>
                 <div style="font-size:0.82em;color:#7f8c8d;">Roll-based passive effect</div>
@@ -3879,13 +4173,123 @@ function renderIndexEffects() {
                 <span style="font-size:1.3em;">🍔</span>
                 <div>
                     <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Caloric</div>
-                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Ventre Plein</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Full Belly</div>
                 </div>
                 <span style="margin-left:auto;color:#e67e22;">›</span>
             </div>
         </div>
     `;
     list.appendChild(vpCard);
+
+    // ── Obese ──
+    const obeseCard = document.createElement('div');
+    obeseCard.style.cssText = 'background:rgba(192,57,43,0.08);border:1.5px solid rgba(192,57,43,0.35);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    const obeseNow = obeseEndTime > Date.now();
+    const obeseLeft = obeseNow ? Math.ceil((obeseEndTime - Date.now()) / 1000) : 0;
+    obeseCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🫃</span>
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:0.5em;">
+                    <div style="font-weight:bold;font-size:1.15em;color:#c0392b;">Obese</div>
+                    ${obeseNow ? `<span style="background:#c0392b;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${obeseLeft}s</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
+                </div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Time-based debuff</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What it does</div>
+            <div style="color:#fff;line-height:1.5;">Reduces <span style="color:#e74c3c;font-weight:bold;">Roll Speed ×0.8</span> for <b>60 seconds</b>. While Obese is active, <span style="color:#e67e22;font-weight:bold;">Full Belly</span> cannot be triggered — any Caloric card rolled is ignored.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Roll Speed</div><div style="color:#e74c3c;font-weight:bold;">×0.8</div>
+                <div style="color:#7f8c8d;">Duration</div><div style="color:#fff;font-weight:bold;">60 seconds</div>
+                <div style="color:#7f8c8d;">Blocks</div><div style="color:#e67e22;font-weight:bold;">Full Belly</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">How it triggers</div>
+            <div style="font-size:0.85em;color:#fff;">Triggered when a <span style="color:#e67e22;font-weight:bold;">🍔 Caloric</span> card pushes <span style="color:#e67e22;font-weight:bold;">Full Belly</span> above 10 rolls. The counter resets to 0 and Obese begins.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related effects</div>
+            <div onclick="closeIndexEffects();openIndexSection('specialtags');" style="background:rgba(243,156,18,0.1);border:1px solid rgba(243,156,18,0.25);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;margin-bottom:0.4em;">
+                <span style="font-size:1.2em;">🍔</span>
+                <div><div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Full Belly</div><div style="font-size:0.75em;color:#7f8c8d;">×1.5 Luck · roll-based</div></div>
+                <span style="margin-left:auto;color:#e67e22;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(obeseCard);
+}
+
+// ===== INDEX: UNLOCKS =====
+
+function renderIndexUnlocks() {
+    const list = document.getElementById('index-unlocks-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const unlocks = [
+        { level: 3,  name: 'Press Menu',       description: 'Compress and decompress cards. Access card compressor, decompressor in the card popup.', icon: '🗜️' },
+        { level: 5,  name: 'Auto Roll',         description: 'Automatic rolling that spends tokens passively without manual input.', icon: '🔄' },
+        { level: 7,  name: 'Diamond Press',     description: 'Convert cards into 💎 Diamonds to spend in the Shop.', icon: '💎' },
+    ];
+
+    // Current level progress header
+    const header = document.createElement('div');
+    header.style.cssText = 'background:rgba(52,152,219,0.1);border:1.5px solid rgba(52,152,219,0.25);border-radius:14px;padding:1em 1.2em;display:flex;align-items:center;gap:1em;margin-bottom:0.2em;';
+    const unlockedCount = unlocks.filter(u => level >= u.level).length;
+    header.innerHTML = `
+        <span style="font-size:2em;">🔓</span>
+        <div style="flex:1;">
+            <div style="font-weight:bold;color:#3498db;font-size:1.05em;">Level ${level}</div>
+            <div style="font-size:0.82em;color:#7f8c8d;">${unlockedCount} / ${unlocks.length} features unlocked</div>
+            <div style="margin-top:0.4em;height:6px;background:rgba(255,255,255,0.1);border-radius:999px;overflow:hidden;">
+                <div style="width:${Math.round(unlockedCount/unlocks.length*100)}%;height:100%;background:linear-gradient(90deg,#3498db,#2ecc71);border-radius:999px;transition:width 0.4s;"></div>
+            </div>
+        </div>
+    `;
+    list.appendChild(header);
+
+    unlocks.forEach(unlock => {
+        const unlocked = level >= unlock.level;
+        const color = unlocked ? '#3498db' : '#555';
+        const card = document.createElement('div');
+        card.style.cssText = `background:${unlocked ? 'rgba(52,152,219,0.08)' : 'rgba(255,255,255,0.03)'};border:1.5px solid ${unlocked ? 'rgba(52,152,219,0.3)' : 'rgba(255,255,255,0.08)'};border-radius:14px;padding:1.1em 1.2em;display:flex;flex-direction:column;gap:0.7em;`;
+
+        const levelsLeft = unlock.level - level;
+        const progressPct = unlocked ? 100 : Math.max(0, Math.round((level / unlock.level) * 100));
+
+        card.innerHTML = `
+            <div style="display:flex;align-items:center;gap:0.9em;">
+                <span style="font-size:2em;${unlocked ? '' : 'filter:grayscale(1);opacity:0.5;'}">${unlock.icon}</span>
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:0.5em;flex-wrap:wrap;">
+                        <div style="font-weight:bold;font-size:1.05em;color:${color};">${unlock.name}</div>
+                        ${unlocked
+                            ? '<span style="background:#27ae60;color:#fff;font-size:0.68em;font-weight:bold;border-radius:6px;padding:2px 8px;">✓ UNLOCKED</span>'
+                            : `<span style="background:rgba(255,255,255,0.07);color:#7f8c8d;font-size:0.68em;font-weight:bold;border-radius:6px;padding:2px 8px;">🔒 Level ${unlock.level}</span>`}
+                    </div>
+                    <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.1em;">${unlocked ? `Unlocked at level ${unlock.level}` : `${levelsLeft} level${levelsLeft > 1 ? 's' : ''} away`}</div>
+                </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.7em 0.9em;font-size:0.85em;color:${unlocked ? '#bdc3c7' : '#555'};">
+                ${unlock.description}
+            </div>
+            <div style="height:4px;background:rgba(255,255,255,0.07);border-radius:999px;overflow:hidden;">
+                <div style="width:${progressPct}%;height:100%;background:${unlocked ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : 'linear-gradient(90deg,#3498db,#2980b9)'};border-radius:999px;transition:width 0.4s;"></div>
+            </div>
+        `;
+        list.appendChild(card);
+    });
 }
 
 // ===== INDEX: POTIONS =====

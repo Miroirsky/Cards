@@ -1596,7 +1596,8 @@ body {
 /* ===== INDEX SYSTEM ===== */
 #index-modal,
 #index-cards-modal,
-#index-card-detail {
+#index-card-detail,
+#index-unlocks-modal {
     overflow: hidden;
 }
 
