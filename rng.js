@@ -153,7 +153,7 @@ const cardsGroupes = [
     // ── Nature & Vegetation ──
     { name: "Nature",    content: ["Grass", "Bush", "Tree", "Apple", "Wood"],                                           color: "rgb(34, 110, 46)" },
     // ── Biomes & Environments ──
-    { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg"],                 color: "rgb(78, 140, 160)" },
+    { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg", "Sugar", "Sugar Cube"],                 color: "rgb(78, 140, 160)" },
     // ── Food & Sweets ──
     { name: "Food",      content: ["Sugar", "Sugar Cube", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
     // ── Space & Celestial ──
@@ -321,6 +321,23 @@ const craftRecipes = [
             { name: "Water", amount: 1 }
         ],
         time: 1000 * 60,
+    },
+	{
+        name: "Sugar Cube",
+        ingredients: [
+            { name: "Sugar", amount: 7 }
+        ],
+        time: 1000 * 30,
+    },
+	{
+        name: "Sugar",
+        ingredients: [
+            { name: "Sugar Cube", amount: 1 }
+        ],
+        time: 1000 * 30,
+        rewards: [
+            { name: "Sugar", amount: 5 }
+        ]
     }
 ];
 
@@ -465,7 +482,14 @@ function processCraftingQueue() {
             artifactInventory[recipe.name] = (artifactInventory[recipe.name] || 0) + 1;
             updateArtifactsUI();
         } else {
-            collection[recipe.name] = (collection[recipe.name] || 0) + 1;
+            // Handle rewards for regular items
+            if (recipe.rewards) {
+                for (let reward of recipe.rewards) {
+                    collection[reward.name] = (collection[reward.name] || 0) + reward.amount;
+                }
+            } else {
+                collection[recipe.name] = (collection[recipe.name] || 0) + 1;
+            }
         }
 
         craftingQueue.shift();
@@ -475,7 +499,22 @@ function processCraftingQueue() {
         updateCollection();
         updateInventoryStats();
         updatePotionsInventory();
-        showCraftMessage(`${recipe.name} successfully crafted!`, "success");
+
+        // Generate success message based on what was gained
+        let message = "";
+        if (recipe.type === "potion") {
+            message = `Gained: 1 ${recipe.name}`;
+        } else if (recipe.type === "artifact") {
+            message = `Gained: 1 ${recipe.name}`;
+        } else {
+            if (recipe.rewards) {
+                const rewardStrings = recipe.rewards.map(r => `${r.amount} ${r.name}`);
+                message = `Gained: ${rewardStrings.join(", ")}`;
+            } else {
+                message = `Gained: 1 ${recipe.name}`;
+            }
+        }
+        showCraftMessage(message, "success");
 
         // Corriger le temps du prochain si nécessaire
         if (craftingQueue.length > 0) {
