@@ -1,4 +1,5 @@
 const items = [
+    { name: "Sword", chance: 2, rollable: true, tags: ["Sharp"] },
     { name: "Grass", chance: 2, rollable: true },
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
@@ -7,12 +8,11 @@ const items = [
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
-    { name: "Sword", chance: 25, rollable: true },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
     { name: "Earth", chance: 100, rollable: true },
-    { name: "Ice Spikes", chance: 150, rollable: true },
+    { name: "Ice Spikes", chance: 150, rollable: true, tags: ["Sharp"] },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
     { name: "Coal", chance: 350, rollable: true, tags: ["ai"] },
@@ -24,6 +24,7 @@ const items = [
     { name: "Sun", chance: 999, rollable: true, tags: ["ai"] },
     { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
+    { name: "Spikes", chance: 2000, rollable: false, tags: ["ai", "Sharp"] },
     { name: "Ugly", chance: 2500, rollable: true },
     { name: "Cute", chance: 2500, rollable: true },
     { name: "Zombie", chance: 3500, rollable: true, tags: ["ai"] },
@@ -200,6 +201,9 @@ let tokens = 10;
 let tokenRate = 0.2; // tokens par seconde (base)
 let tokenAccumulator = 0; // accumulateur fractionnaire
 let tokenRechargeIntervalId = null;
+let bleedingIntervalId = null;
+let bleedingAnimationId = null;
+let bleedingParticles = [];
 let realTimeEffectsIntervalId = null;
 const TOKEN_TICK_MS = 100; // tick toutes les 100ms
 let pressPreviewIntervalId = null;
@@ -222,6 +226,7 @@ let slotInterval = null;
 let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2 luck sur les cartes sweet)
 let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
 let obeseEndTime = 0; // End time for the Obese effect (x0.8 roll speed)
+let bleedingEndTime = 0; // End time for the Bleeding effect (token loss)
 
 let xp = 0;
 let level = 1;
@@ -1033,6 +1038,31 @@ function updateActiveEffectsDisplay() {
         activeEffectsDiv.appendChild(obeseDiv);
     }
 
+    // Effet Bleeding
+    if (bleedingEndTime > now) {
+        hasActiveEffects = true;
+        const timeLeft = bleedingEndTime - now;
+        const totalDuration = 60000;
+        const pct = (timeLeft / totalDuration) * 100;
+        const bleedingDiv = document.createElement('div');
+        bleedingDiv.style.cssText = "background:linear-gradient(135deg,#8b0000,#ff0000);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        bleedingDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">🩸 Bleeding</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">1/3 chance to lose token per second</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + Math.ceil(timeLeft / 1000) + 's left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">' + Math.floor((totalDuration - timeLeft)/1000) + 's / 60s</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
+        activeEffectsDiv.appendChild(bleedingDiv);
+    }
+
     // Effets de potions (temporels)
     for (let effectType in activeEffects) {
         hasActiveEffects = true;
@@ -1623,8 +1653,15 @@ function getAiTag(item) {
     return '';
 }
 
+function getSharpTag(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('Sharp')) {
+        return '<span class="rarity-tag rarity-cutting">🗡️ Sharp</span>';
+    }
+    return '';
+}
+
 function getSpecialTags(item) {
-    return getSweetTag(item) + getCaloricTag(item) + getAiTag(item);
+    return getSweetTag(item) + getCaloricTag(item) + getAiTag(item) + getSharpTag(item);
 }
 
 
@@ -1733,6 +1770,145 @@ function stopTokenRecharge() {
 function restartTokenRecharge() {
     stopTokenRecharge();
     startTokenRecharge();
+}
+
+function startBleeding() {
+    if (bleedingIntervalId !== null) return;
+
+    const rollBtn = document.getElementById('roll-button');
+    if (rollBtn) rollBtn.classList.add('bleeding');
+
+    let tickCounter = 0;
+    bleedingIntervalId = setInterval(() => {
+        if (Date.now() < bleedingEndTime) {
+            // Continuous particle stream (≈10/s)
+            showBleedingEffect(1, false);
+
+            // Every 10 ticks (≈1 second) evaluate token loss
+            tickCounter++;
+            if (tickCounter >= 10) {
+                tickCounter = 0;
+                if (Math.floor(Math.random() * 3) === 0) {
+                    if (tokens > 0) {
+                        tokens--;
+                        updateTokensDisplay();
+                    }
+                    // Burst of particles when token loss is attempted (pulse)
+                    showBleedingEffect(100, true);
+                }
+            }
+        } else {
+            stopBleeding();
+        }
+    }, 100); // 10 ticks per second
+}
+
+function stopBleeding() {
+    if (bleedingIntervalId !== null) {
+        clearInterval(bleedingIntervalId);
+        bleedingIntervalId = null;
+    }
+    stopBleedingAnimation();
+
+    const rollBtn = document.getElementById('roll-button');
+    if (rollBtn) rollBtn.classList.remove('bleeding');
+
+    updateActiveEffectsDisplay();
+}
+
+function startBleedingAnimation() {
+    if (bleedingAnimationId !== null) return;
+    let lastTs = null;
+
+    const animate = (ts) => {
+        if (lastTs === null) lastTs = ts;
+        const dt = Math.min(50, ts - lastTs);
+        lastTs = ts;
+
+        // Update particles
+        for (let i = bleedingParticles.length - 1; i >= 0; i--) {
+            const p = bleedingParticles[i];
+            p.life -= dt;
+            if (p.life <= 0) {
+                if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
+                bleedingParticles.splice(i, 1);
+                continue;
+            }
+
+            // Physics
+            p.vy += p.gravity * (dt / 16);
+            p.x += p.vx * (dt / 16);
+            p.y += p.vy * (dt / 16);
+            const alpha = Math.max(0, p.life / p.maxLife);
+
+            p.el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rotation}deg)`;
+            p.el.style.opacity = alpha;
+        }
+
+        if (bleedingParticles.length > 0) {
+            bleedingAnimationId = requestAnimationFrame(animate);
+        } else {
+            bleedingAnimationId = null;
+        }
+    };
+
+    bleedingAnimationId = requestAnimationFrame(animate);
+}
+
+function stopBleedingAnimation() {
+    if (bleedingAnimationId !== null) {
+        cancelAnimationFrame(bleedingAnimationId);
+        bleedingAnimationId = null;
+    }
+    bleedingParticles.forEach(p => {
+        if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
+    });
+    bleedingParticles = [];
+}
+
+function showBleedingEffect(count, tokenLost) {
+    const container = document.body;
+
+    for (let i = 0; i < count; i++) {
+        const delay = Math.random() * 250;
+        setTimeout(() => {
+            const size = 12 + Math.random() * 18; // 12–30px
+            const el = document.createElement('div');
+            el.style.cssText = `
+                position: fixed;
+                width: ${size}px;
+                height: ${size}px;
+                background-color: rgba(255,0,0,${0.45 + Math.random() * 0.35});
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 9999;
+                transform-origin: center;
+            `;
+
+            const centerX = window.innerWidth / 2;
+            const startX = centerX + (Math.random() - 0.5) * (tokenLost ? 80 : window.innerWidth);
+            const startY = tokenLost ? window.innerHeight + 40 : -size - Math.random() * 20;
+
+            const particle = {
+                el,
+                x: startX,
+                y: startY,
+                vx: (Math.random() - 0.5) * (tokenLost ? 40 : 10),
+                vy: tokenLost ? -(18 + Math.random() * 12) : (2 + Math.random() * 4),
+                gravity: tokenLost ? 0.35 : 0.05,
+                rotation: Math.random() * 360,
+                life: tokenLost ? 1600 + Math.random() * 400 : 1200 + Math.random() * 400,
+                maxLife: tokenLost ? 1600 + Math.random() * 400 : 1200 + Math.random() * 400,
+            };
+
+            el.style.left = `${particle.x}px`;
+            el.style.top = `${particle.y}px`;
+            container.appendChild(el);
+
+            bleedingParticles.push(particle);
+            startBleedingAnimation();
+        }, delay);
+    }
 }
 
 // Fonction pour obtenir le temps restant avant le prochain token
@@ -1994,6 +2170,18 @@ function rollItem() {
             ventrePleinRolls--;
             if (ventrePleinRolls === 0) {
                 showCraftMessage("🍔 Full Belly ended!", "info");
+            }
+        }
+        // ── Sharp / Bleeding ──
+        const rolledIsSharp = Array.isArray(selected.tags) && selected.tags.includes('Sharp');
+
+        if (rolledIsSharp) {
+            // 1/4 chance to trigger bleeding
+            if (Math.floor(Math.random() * 4) === 0) {
+                bleedingEndTime = Date.now() + 60000; // 60 seconds
+                startBleeding();
+                showCraftMessage(`🩸 Bleeding! Losing tokens for 60s`, "error");
+                updateActiveEffects();
             }
         }
 
@@ -2738,6 +2926,7 @@ function saveCollection() {
     localStorage.setItem('cards-xp-upgrade', xpUpgradeLevel.toString());
     localStorage.setItem('cards-discovered-tags', JSON.stringify([...discoveredTags]));
     localStorage.setItem('cards-sugar-rush', sugarRushRolls.toString());
+    localStorage.setItem('cards-bleeding-end-time', bleedingEndTime.toString());
     localStorage.setItem('cards-artifact-inventory', JSON.stringify(artifactInventory));
     localStorage.setItem('cards-equipped-artifacts', JSON.stringify(equippedArtifacts));
 }
@@ -2862,6 +3051,14 @@ function loadCollection() {
     
     const sugarRushData = localStorage.getItem('cards-sugar-rush');
     if (sugarRushData) sugarRushRolls = Math.max(0, parseInt(sugarRushData) || 0);
+
+    const bleedingData = localStorage.getItem('cards-bleeding-end-time');
+    if (bleedingData) {
+        bleedingEndTime = parseInt(bleedingData) || 0;
+        if (bleedingEndTime > Date.now()) {
+            startBleeding();
+        }
+    }
 
     updateTokensDisplay();
     updateDiamondsDisplay();
@@ -3593,6 +3790,8 @@ if (resetBtn) {
             localStorage.removeItem('cards-luck-upgrade');
             localStorage.removeItem('cards-roll-speed-upgrade');
             localStorage.removeItem('cards-xp-upgrade');
+            localStorage.removeItem('cards-sugar-rush');
+            localStorage.removeItem('cards-bleeding-end-time');
             localStorage.removeItem('cards-discovered-tags');
             localStorage.removeItem('cards-artifact-inventory');
             localStorage.removeItem('cards-equipped-artifacts');
@@ -3615,6 +3814,9 @@ if (resetBtn) {
             xp = 0;
             level = 1;
             xpNext = 50;
+            obeseEndTime = 0;
+            bleedingEndTime = 0;
+            stopBleeding();
             updateTokensDisplay();
             updateDiamondsDisplay();
             updateLevelXpDisplay();
@@ -4563,6 +4765,63 @@ function renderIndexSpecialTags() {
     `;
     list.appendChild(caloricCard);
 
+    // ── Sharp card ──
+    const sharpItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('Sharp'));
+    const sharpCard = document.createElement('div');
+    sharpCard.style.cssText = 'background:rgba(231,76,60,0.08);border:1.5px solid rgba(231,76,60,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+    sharpCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🗡️</span>
+            <div>
+                <div style="font-weight:bold;font-size:1.15em;color:#e74c3c;">Sharp</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers Bleeding</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Effect</div>
+            <div style="color:#fff;line-height:1.5;">When a <span style="color:#e74c3c;font-weight:bold;">Sharp</span> card is rolled, there is a <span style="color:#f39c12;font-weight:bold;">1 in 4</span> chance to apply <span style="color:#e74c3c;font-weight:bold;">Bleeding</span> for 60 seconds. While bleeding, every second has a 1 in 3 chance to lose a token.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Chance table</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Trigger chance</div><div style="color:#f39c12;font-weight:bold;">1 in 4 per roll</div>
+                <div style="color:#7f8c8d;">Duration</div><div style="color:#fff;font-weight:bold;">60 seconds</div>
+                <div style="color:#7f8c8d;">Token loss chance</div><div style="color:#e74c3c;font-weight:bold;">1 in 3 per second</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Cards with Sharp tag</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${sharpItems.map(item => {
+                    const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
+                    const safeName = item.name.replace(/'/g, "\\'");
+                    return '<div onclick="openIndexCardDetail(\'' + safeName + '\');closeIndexSpecialTags();" style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">'
+                        + '<img src="' + getCardImageSrc(item) + '" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
+                        + '<span style="color:#fff;font-size:0.88em;">' + item.name + '</span>'
+                        + '<span style="color:#7f8c8d;font-size:0.78em;">×' + owned + '</span>'
+                        + '<span style="color:#e74c3c;font-size:0.75em;">1 in ' + item.chance + '</span>'
+                        + '</div>';
+                }).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related effect</div>
+            <div onclick="closeIndexSpecialTags();openIndexSection('effects');" style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🩸</span>
+                <div>
+                    <div style="font-weight:bold;color:#e74c3c;font-size:0.9em;">Bleeding</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Time-based debuff — token loss</div>
+                </div>
+                <span style="margin-left:auto;color:#e74c3c;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(sharpCard);
+
     // ── AI card ──
     const aiItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('ai'));
     const aiCard = document.createElement('div');
@@ -4770,6 +5029,65 @@ function renderIndexEffects() {
         </div>
     `;
     list.appendChild(obeseCard);
+
+    // ── Bleeding ──
+    const sharpItems2 = items.filter(i => Array.isArray(i.tags) && i.tags.includes('Sharp'));
+    const bleedingCard = document.createElement('div');
+    bleedingCard.style.cssText = 'background:rgba(136,0,0,0.08);border:1.5px solid rgba(136,0,0,0.35);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    const bleedingNow = bleedingEndTime > Date.now();
+    const bleedingLeft = bleedingNow ? Math.ceil((bleedingEndTime - Date.now()) / 1000) : 0;
+    bleedingCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🩸</span>
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:0.5em;">
+                    <div style="font-weight:bold;font-size:1.15em;color:#8b0000;">Bleeding</div>
+                    ${bleedingNow ? `<span style="background:#8b0000;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${bleedingLeft}s left</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
+                </div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Time-based debuff effect</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What it does</div>
+            <div style="color:#fff;line-height:1.5;">Every second while active, there is a <span style="color:#e74c3c;font-weight:bold;">1 in 3 chance</span> to lose 1 token. Red squares fall from the top of the screen to indicate pulses, with more squares when a token is actually lost.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Duration</div><div style="color:#fff;font-weight:bold;">60 seconds</div>
+                <div style="color:#7f8c8d;">Token loss chance</div><div style="color:#e74c3c;font-weight:bold;">1 in 3 per second</div>
+                <div style="color:#7f8c8d;">Visual effect</div><div style="color:#8b0000;font-weight:bold;">Red squares</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">How to obtain</div>
+            <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#e74c3c;font-weight:bold;">🗡️ Sharp</span> tag. There is a 1 in 4 chance to trigger Bleeding.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${sharpItems2.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(231,76,60,0.12);border:1px solid rgba(231,76,60,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
+                    <img src="${getCardImageSrc(item)}" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <span style="color:#e74c3c;font-size:0.85em;font-weight:bold;">${item.name}</span>
+                    <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related special tag</div>
+            <div onclick="closeIndexEffects();openIndexSection('specialtags');" style="background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.25);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🗡️</span>
+                <div>
+                    <div style="font-weight:bold;color:#e74c3c;font-size:0.9em;">Sharp</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Bleeding</div>
+                </div>
+                <span style="margin-left:auto;color:#e74c3c;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(bleedingCard);
 }
 
 // ===== INDEX: UNLOCKS =====

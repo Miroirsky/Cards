@@ -757,6 +757,16 @@ body.rarity-tags-onclick .card-inventory:active .rarity-tag-container.rarity-fro
     text-shadow: 0 0 2px #222, 0 0 6px #b0c4de;
 }
 
+.roll-btn.bleeding {
+    box-shadow: 0 0 18px rgba(231, 76, 60, 0.8);
+    animation: bleedPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes bleedPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
+}
+
 .rarity-caloric {
     background: linear-gradient(45deg, #f39c12, #e67e22);
     color: #fff;
@@ -1631,4 +1641,37 @@ body.rarity-tags-onclick .card-inventory:active .rarity-tag-container.rarity-fro
 @keyframes notifSlideIn {
     from { opacity: 0; transform: translateX(-16px); }
     to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bleedFall {
+    from { 
+        opacity: 1; 
+        transform: translateY(0) rotate(0deg); 
+    }
+    to { 
+        opacity: 0; 
+        transform: translateY(100vh) rotate(360deg); 
+    }
+}
+
+@keyframes bleedRise {
+    from {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-110vh) rotate(-360deg);
+    }
+}
+
+@keyframes bleedRiseFast {
+    from {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-140vh) rotate(-720deg);
+    }
 }
