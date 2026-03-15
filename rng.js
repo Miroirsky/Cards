@@ -6,6 +6,7 @@ const items = [
     { name: "Sugar", chance: 7, rollable: true, tags: ["sweet"] },
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
+    { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
     { name: "Sword", chance: 25, rollable: true },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
@@ -96,13 +97,65 @@ const potions = [
     }
 ];
 
+// ===== ARTIFACTS =====
+const artifactDefinitions = [
+    {
+        name: "Sugar Magnet",
+        description: "Sweet cards always trigger Sugar Rush (no more 1/3 chance). Each equipped copy adds +1 roll to Sugar Rush, up to the cap.",
+        effect: "sugarMagnet",
+        craft: [
+            { name: "Sugar Cube", amount: 5 },
+            { name: "Sugar",      amount: 50 }
+        ],
+        craftTime: 60 * 1000 * 2, // 2 minutes
+        image: "Main/Artifacts-Icons/Sugar Magnet.png"
+    }
+];
+
+let artifactInventory = {};   // { "Sugar Magnet": 2 }  — owned but not equipped
+let equippedArtifacts = [];   // [{ name, slot }]  — ordered list of equipped artifacts
+
+const ARTIFACT_SLOT_LEVELS = [10, 20, 30, 40, 50];
+
+function getMaxArtifactSlots() {
+    return ARTIFACT_SLOT_LEVELS.filter(l => level >= l).length;
+}
+function getEquippedCount(artifactName) {
+    return equippedArtifacts.filter(a => a.name === artifactName).length;
+}
+function equipArtifact(name) {
+    const maxSlots = getMaxArtifactSlots();
+    if (equippedArtifacts.length >= maxSlots) {
+        showCraftMessage('No artifact slot available!', 'error');
+        return false;
+    }
+    if ((artifactInventory[name] || 0) <= 0) {
+        showCraftMessage('No ' + name + ' in inventory!', 'error');
+        return false;
+    }
+    artifactInventory[name]--;
+    if (artifactInventory[name] <= 0) delete artifactInventory[name];
+    equippedArtifacts.push({ name });
+    saveCollection();
+    updateArtifactsUI();
+    return true;
+}
+function unequipArtifact(index) {
+    if (index < 0 || index >= equippedArtifacts.length) return;
+    const { name } = equippedArtifacts[index];
+    equippedArtifacts.splice(index, 1);
+    artifactInventory[name] = (artifactInventory[name] || 0) + 1;
+    saveCollection();
+    updateArtifactsUI();
+}
+
 const cardsGroupes = [
     // ── Nature & Vegetation ──
     { name: "Nature",    content: ["Grass", "Bush", "Tree", "Apple", "Wood"],                                           color: "rgb(34, 110, 46)" },
     // ── Biomes & Environments ──
     { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg"],                 color: "rgb(78, 140, 160)" },
     // ── Food & Sweets ──
-    { name: "Food",      content: ["Sugar", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
+    { name: "Food",      content: ["Sugar", "Sugar Cube", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
     // ── Space & Celestial ──
     { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus"],                                           color: "rgb(20, 30, 80)" },
     // ── Weapons ──
@@ -236,6 +289,15 @@ const craftRecipes = [
             { name: "Cards", amount: 2 }
         ],
         time: 1000 * 45,
+    },
+	{
+        name: "Sugar Magnet",
+        ingredients: [
+            { name: "Sugar Cube", amount: 5 },
+            { name: "Sugar",      amount: 50 }
+        ],
+        time: 1000 * 60 * 2,
+        type: "artifact"
     },
 	{
         name: "Craft Speed Potion",
@@ -399,6 +461,9 @@ function processCraftingQueue() {
 
         if (recipe.type === "potion") {
             potionInventory[recipe.name] = (potionInventory[recipe.name] || 0) + 1;
+        } else if (recipe.type === "artifact") {
+            artifactInventory[recipe.name] = (artifactInventory[recipe.name] || 0) + 1;
+            updateArtifactsUI();
         } else {
             collection[recipe.name] = (collection[recipe.name] || 0) + 1;
         }
@@ -1843,13 +1908,17 @@ function rollItem() {
         // ── Sugar Rush ──
         const rolledIsSweet = Array.isArray(selected.tags) && selected.tags.includes('sweet');
 
+        const sugarMagnetCount = getEquippedCount('Sugar Magnet');
         if (rolledIsSweet) {
-            // Roll sweet : 1/3 chance d'ajouter 4 rolls, cap 10, ne consomme PAS le compteur
-            if (Math.floor(Math.random() * 3) === 0) {
+            // Sugar Magnet: always trigger, +1 roll per equipped (not cumulable for the base +4)
+            const guaranteed = sugarMagnetCount > 0;
+            if (guaranteed || Math.floor(Math.random() * 3) === 0) {
+                const bonusRolls = 4 + sugarMagnetCount; // base +4, +1 per magnet
                 const before = sugarRushRolls;
-                sugarRushRolls = Math.min(10, sugarRushRolls + 4);
+                sugarRushRolls = Math.min(10, sugarRushRolls + bonusRolls);
                 const added = sugarRushRolls - before;
-                showCraftMessage(`🍬 Sugar Rush! +${added} roll${added > 1 ? 's' : ''} (${sugarRushRolls} remaining)`, "success");
+                const magnetNote = sugarMagnetCount > 0 ? ` 🧲×${sugarMagnetCount}` : '';
+                showCraftMessage(`🍬 Sugar Rush! +${added} roll${added > 1 ? 's' : ''}${magnetNote} (${sugarRushRolls} remaining)`, "success");
             }
         } else if (sugarRushRolls > 0) {
             // Roll normal : décrémente le compteur
@@ -2628,6 +2697,8 @@ function saveCollection() {
     localStorage.setItem('cards-xp-upgrade', xpUpgradeLevel.toString());
     localStorage.setItem('cards-discovered-tags', JSON.stringify([...discoveredTags]));
     localStorage.setItem('cards-sugar-rush', sugarRushRolls.toString());
+    localStorage.setItem('cards-artifact-inventory', JSON.stringify(artifactInventory));
+    localStorage.setItem('cards-equipped-artifacts', JSON.stringify(equippedArtifacts));
 }
 
 // Charge l'inventaire depuis localStorage
@@ -2725,6 +2796,11 @@ function loadCollection() {
 
     const xpUpgradeData = localStorage.getItem('cards-xp-upgrade');
     xpUpgradeLevel = xpUpgradeData !== null ? (parseInt(xpUpgradeData) || 0) : 0;
+
+    const artifactInvData = localStorage.getItem('cards-artifact-inventory');
+    if (artifactInvData) artifactInventory = JSON.parse(artifactInvData);
+    const equippedArtData = localStorage.getItem('cards-equipped-artifacts');
+    if (equippedArtData) equippedArtifacts = JSON.parse(equippedArtData);
 
     const discoveredTagsData = localStorage.getItem('cards-discovered-tags');
     if (discoveredTagsData) {
@@ -3473,7 +3549,11 @@ if (resetBtn) {
             localStorage.removeItem('cards-luck-upgrade');
             localStorage.removeItem('cards-xp-upgrade');
             localStorage.removeItem('cards-discovered-tags');
+            localStorage.removeItem('cards-artifact-inventory');
+            localStorage.removeItem('cards-equipped-artifacts');
             // Reset in-memory variables
+            artifactInventory = {};
+            equippedArtifacts = [];
             collection = {};
             discoveredTags = new Set();
             rolls = 0;
@@ -3626,6 +3706,12 @@ function updateUnlockables() {
             diamondBtn.style.display = 'none';
         }
     }
+    // Artifacts unlock at level 10
+    let artifactsBtn = document.getElementById('artifacts-nav-btn');
+    if (artifactsBtn) {
+        artifactsBtn.style.display = level >= 10 ? 'flex' : 'none';
+    }
+    updateArtifactsUI();
 }
 
 // Call these on page load and after level up
@@ -3877,6 +3963,9 @@ function openIndexSection(section) {
     } else if (section === 'unlocks') {
         document.getElementById('index-unlocks-modal').style.display = 'flex';
         renderIndexUnlocks();
+    } else if (section === 'artifacts') {
+        document.getElementById('index-artifacts-modal').style.display = 'flex';
+        renderIndexArtifacts();
     }
 }
 
@@ -3887,6 +3976,8 @@ function closeIndexSection() {
     document.getElementById('index-specialtags-modal').style.display = 'none';
     document.getElementById('index-effects-modal').style.display = 'none';
     document.getElementById('index-unlocks-modal').style.display = 'none';
+    const artModal = document.getElementById('index-artifacts-modal');
+    if (artModal) artModal.style.display = 'none';
 }
 
 function closeIndexCardDetail() {
@@ -4594,6 +4685,7 @@ function renderIndexUnlocks() {
         { level: 3,  name: 'Press Menu',       description: 'Compress and decompress cards. Access card compressor, decompressor in the card popup.', icon: '🗜️' },
         { level: 5,  name: 'Auto Roll',         description: 'Automatic rolling that spends tokens passively without manual input.', icon: '🔄' },
         { level: 7,  name: 'Diamond Press',     description: 'Convert cards into 💎 Diamonds to spend in the Shop.', icon: '💎' },
+        { level: 10, name: 'Artifacts',          description: 'Equip special artifacts that permanently modify your game. +1 slot every 10 levels (10, 20, 30, 40, 50).', icon: '🧲' },
     ];
 
     // Current level progress header
@@ -4639,6 +4731,122 @@ function renderIndexUnlocks() {
             </div>
             <div style="height:4px;background:rgba(255,255,255,0.07);border-radius:999px;overflow:hidden;">
                 <div style="width:${progressPct}%;height:100%;background:${unlocked ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : 'linear-gradient(90deg,#3498db,#2980b9)'};border-radius:999px;transition:width 0.4s;"></div>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+// ===== ARTIFACTS UI =====
+
+function updateArtifactsUI() {
+    // Update equipped slots panel
+    const slotsEl = document.getElementById('artifact-slots');
+    const invEl   = document.getElementById('artifact-inventory');
+    if (!slotsEl || !invEl) return;
+
+    const maxSlots = getMaxArtifactSlots();
+
+    // ── Equipped slots ──
+    slotsEl.innerHTML = '';
+    for (let i = 0; i < Math.max(maxSlots, 1); i++) {
+        const slot = document.createElement('div');
+        const equipped = equippedArtifacts[i];
+        const unlocked = i < maxSlots;
+        slot.style.cssText = `
+            width:72px;height:72px;border-radius:12px;display:flex;flex-direction:column;
+            align-items:center;justify-content:center;gap:4px;position:relative;cursor:pointer;
+            background:${equipped ? 'rgba(243,156,18,0.15)' : unlocked ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.3)'};
+            border:2px solid ${equipped ? 'rgba(243,156,18,0.6)' : unlocked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)'};
+            transition:all 0.2s;
+        `;
+        if (equipped) {
+            const def = artifactDefinitions.find(a => a.name === equipped.name);
+            slot.innerHTML = `<img src="${def ? def.image : ''}" style="width:40px;height:40px;object-fit:contain;" onerror="this.style.display='none'">
+                <div style="font-size:0.55em;color:#f39c12;text-align:center;line-height:1.1;">${equipped.name}</div>`;
+            slot.title = 'Click to unequip ' + equipped.name;
+            slot.onclick = () => { unequipArtifact(i); };
+        } else if (unlocked) {
+            slot.innerHTML = `<div style="font-size:1.5em;color:#555;">＋</div>
+                <div style="font-size:0.6em;color:#555;">Empty</div>`;
+            slot.title = 'Empty artifact slot';
+        } else {
+            const neededLvl = ARTIFACT_SLOT_LEVELS[i];
+            slot.innerHTML = `<div style="font-size:1.1em;">🔒</div>
+                <div style="font-size:0.55em;color:#555;text-align:center;">Lv.${neededLvl}</div>`;
+        }
+        slotsEl.appendChild(slot);
+    }
+
+    // ── Inventory ──
+    invEl.innerHTML = '';
+    const hasAny = Object.keys(artifactInventory).some(k => artifactInventory[k] > 0);
+    if (!hasAny) {
+        invEl.innerHTML = '<div style="color:#7f8c8d;font-style:italic;text-align:center;padding:1em;">No artifacts in inventory.<br><span style="font-size:0.85em;">Craft them in the Craft menu.</span></div>';
+        return;
+    }
+    Object.entries(artifactInventory).forEach(([name, qty]) => {
+        if (!qty) return;
+        const def = artifactDefinitions.find(a => a.name === name);
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(243,156,18,0.08);border:1px solid rgba(243,156,18,0.25);border-radius:10px;padding:0.6em 0.9em;';
+        row.innerHTML = `
+            <img src="${def ? def.image : ''}" style="width:38px;height:38px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+            <div style="flex:1;">
+                <div style="font-weight:bold;color:#f39c12;">${name}</div>
+                <div style="font-size:0.78em;color:#7f8c8d;">×${qty} in inventory</div>
+            </div>
+            <button style="padding:0.4em 1em;border-radius:8px;border:none;background:${getMaxArtifactSlots() > equippedArtifacts.length ? 'linear-gradient(90deg,#f39c12,#e67e22)' : '#555'};color:#fff;font-weight:bold;cursor:pointer;font-size:0.9em;"
+                onclick="equipArtifact('${name.replace(/'/g,"\'")}')">Equip</button>
+        `;
+        invEl.appendChild(row);
+    });
+}
+
+function closeIndexArtifacts() {
+    const m = document.getElementById('index-artifacts-modal');
+    if (m) m.style.display = 'none';
+}
+
+function renderIndexArtifacts() {
+    const list = document.getElementById('index-artifacts-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    artifactDefinitions.forEach(def => {
+        const equippedCount = getEquippedCount(def.name);
+        const ownedCount    = artifactInventory[def.name] || 0;
+        const totalCount    = equippedCount + ownedCount;
+
+        const card = document.createElement('div');
+        card.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+        card.innerHTML = `
+            <div style="display:flex;align-items:center;gap:0.9em;">
+                <img src="${def.image}" style="width:54px;height:54px;object-fit:contain;border-radius:10px;background:rgba(243,156,18,0.12);padding:4px;flex-shrink:0;" onerror="this.style.display='none'">
+                <div style="flex:1;">
+                    <div style="font-weight:bold;font-size:1.1em;color:#f39c12;">${def.name}</div>
+                    <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.1em;">
+                        ${equippedCount > 0 ? `<span style="color:#2ecc71;">✓ ${equippedCount} equipped</span>  ` : ''}${ownedCount > 0 ? `×${ownedCount} in inventory` : equippedCount === 0 ? 'Not obtained' : ''}
+                    </div>
+                </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;color:#bdc3c7;">
+                ${def.description}
+            </div>
+            <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.7em 0.9em;">
+                <div style="font-size:0.75em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:0.5em;">Craft Recipe</div>
+                <div style="display:flex;flex-wrap:wrap;gap:0.4em;">
+                    ${def.craft.map(ing => {
+                        const have = collection[ing.name] || 0;
+                        const ok   = have >= ing.amount;
+                        return `<div style="background:rgba(255,255,255,0.07);border-radius:7px;padding:0.3em 0.7em;font-size:0.83em;">
+                            <span style="color:#fff;font-weight:bold;">${ing.amount}×</span>
+                            <span style="color:${ok ? '#2ecc71' : '#e74c3c'};">${ing.name}</span>
+                            <span style="color:#7f8c8d;"> (${have})</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.3em;">⏱ ${Math.round(def.craftTime/1000)}s</div>
             </div>
         `;
         list.appendChild(card);

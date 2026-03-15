@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.22.3</div>
+    <div class="update-text">Update 0.23.0</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -230,6 +230,26 @@
         </div>
     </div>
 
+    <!-- Artifacts Panel (shown at level 10) -->
+    <div id="artifacts-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3400;background:#1a1a2e;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(243,156,18,0.3);">
+            <button onclick="document.getElementById('artifacts-panel').style.display='none';document.body.style.overflow='';" style="background:none;border:none;color:#f39c12;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#f39c12;font-size:1.3em;">🧲 Artifacts</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:1.2em;display:flex;flex-direction:column;gap:1em;">
+            <!-- Equipped slots -->
+            <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Equipped Slots</div>
+                <div id="artifact-slots" style="display:flex;flex-wrap:wrap;gap:0.6em;"></div>
+            </div>
+            <!-- Inventory -->
+            <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Inventory</div>
+                <div id="artifact-inventory"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bottom nav hover trigger -->
     <div id="bottom-nav-trigger"></div>
 
@@ -250,6 +270,10 @@
         <button class="bottom-nav-btn" id="nav-index" onclick="openIndexMenu()">
             <span class="bottom-nav-icon">📖</span>
             <span class="bottom-nav-label">Index</span>
+        </button>
+        <button class="bottom-nav-btn" id="artifacts-nav-btn" onclick="document.getElementById('artifacts-panel').style.display='flex';document.body.style.overflow='hidden';updateArtifactsUI();" style="display:none;">
+            <span class="bottom-nav-icon">🧲</span>
+            <span class="bottom-nav-label">Artifacts</span>
         </button>
     </nav>
 
@@ -313,6 +337,15 @@
                     <div style="font-size:0.82em;color:#7f8c8d;">Level-based features and upgrades</div>
                 </div>
                 <span style="margin-left:auto;color:#3498db;font-size:1.3em;">›</span>
+            </div>
+            <!-- Option Artifacts -->
+            <div onclick="openIndexSection('artifacts')" style="background:rgba(255,255,255,0.07);border:2px solid rgba(243,156,18,0.3);border-radius:16px;padding:1.2em 1.5em;display:flex;align-items:center;gap:1em;cursor:pointer;transition:background 0.2s;">
+                <span style="font-size:2em;">🧲</span>
+                <div>
+                    <div style="font-weight:bold;font-size:1.1em;color:#fff;">Artifacts</div>
+                    <div style="font-size:0.82em;color:#7f8c8d;">Equippable items that modify your game</div>
+                </div>
+                <span style="margin-left:auto;color:#f39c12;font-size:1.3em;">›</span>
             </div>
         </div>
     </div>
@@ -382,6 +415,15 @@
             <h2 style="margin:0;color:#f39c12;font-size:1.3em;">Effects</h2>
         </div>
         <div id="index-effects-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
+    </div>
+
+    <!-- Index Artifacts Section -->
+    <div id="index-artifacts-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3600;background:#1a3a1a;flex-direction:column;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.3);border-bottom:2px solid rgba(243,156,18,0.3);">
+            <button onclick="closeIndexArtifacts()" style="background:none;border:none;color:#f39c12;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#f39c12;font-size:1.3em;">🧲 Artifacts</h2>
+        </div>
+        <div id="index-artifacts-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.6em;"></div>
     </div>
 
     <!-- Index Unlocks Section -->
