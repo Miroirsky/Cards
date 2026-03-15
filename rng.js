@@ -1,4 +1,5 @@
 const items = [
+    { name: "Sword", chance: 2, rollable: true, tags: ["Sharp"] },
     { name: "Grass", chance: 2, rollable: true },
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
@@ -7,7 +8,6 @@ const items = [
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
-    { name: "Sword", chance: 25, rollable: true, tags: ["Sharp"] },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
@@ -2906,6 +2906,59 @@ function showCompressorFromPress(cardName, cardType) {
     }
 }
 
+// ══════════════════════════════════════════════════════════
+// SYSTÈME D'INTÉGRITÉ ANTI-TRICHE
+// ══════════════════════════════════════════════════════════
+
+// Seed secret obscurcié (découper en morceaux pour compliquer la recherche)
+const _s = [0x4b,0x61,0x72,0x64,0x73,0x47,0x61,0x6d,0x65,0x53,0x65,0x63,0x72,0x65,0x74,0x58];
+
+function _computeIntegrity(fields) {
+    // Construire une chaîne de tous les champs clés
+    const keys = Object.keys(fields).sort();
+    let raw = keys.map(k => k + '=' + fields[k]).join('|');
+    // Ajouter le seed
+    for (let i = 0; i < _s.length; i++) raw += String.fromCharCode(_s[i]);
+    // Hash djb2-like
+    let h = 5381;
+    for (let i = 0; i < raw.length; i++) {
+        h = ((h << 5) + h) ^ raw.charCodeAt(i);
+        h = h >>> 0; // force unsigned 32-bit
+    }
+    return h.toString(36);
+}
+
+function _buildIntegrityFields() {
+    // Resume partiel : on hash uniquement les valeurs numériques clés
+    // (pas la collection entière pour les performances)
+    return {
+        tk: tokens,
+        dm: diamonds,
+        xp: xp,
+        lv: level,
+        xn: xpNext,
+        ro: rolls,
+        tu: tokenUpgradeLevel,
+        mu: maxTokenUpgradeLevel,
+        lu: luckUpgradeLevel,
+        rs: rollSpeedUpgradeLevel,
+        xu: xpUpgradeLevel,
+        sr: sugarRushRolls,
+    };
+}
+
+function _resetToDefaults() {
+    // Vide tout le localStorage du jeu et recharge la page
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('cards-'));
+    keys.forEach(k => localStorage.removeItem(k));
+    // Afficher un message avant reload
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:1.3em;font-family:sans-serif;text-align:center;padding:2em;box-sizing:border-box;';
+    msg.innerHTML = '<div style="font-size:2em;margin-bottom:0.5em;">⚠️</div><b>Save data corrupted</b><br><span style="color:#aaa;font-size:0.85em;margin-top:0.5em;">Tampering detected. Progress has been reset.</span>';
+    document.body.appendChild(msg);
+    setTimeout(() => location.reload(), 2500);
+}
+
 // Sauvegarde l'inventaire dans localStorage
 function saveCollection() {
     localStorage.setItem('cards-collection', JSON.stringify(collection));
@@ -2929,6 +2982,8 @@ function saveCollection() {
     localStorage.setItem('cards-bleeding-end-time', bleedingEndTime.toString());
     localStorage.setItem('cards-artifact-inventory', JSON.stringify(artifactInventory));
     localStorage.setItem('cards-equipped-artifacts', JSON.stringify(equippedArtifacts));
+    // Écrire le hash d'intégrité EN DERNIER
+    localStorage.setItem('cards-integrity', _computeIntegrity(_buildIntegrityFields()));
 }
 
 // Charge l'inventaire depuis localStorage
@@ -2942,30 +2997,105 @@ function loadCollection() {
     const xpData = localStorage.getItem('cards-xp');
     const levelData = localStorage.getItem('cards-level');
     const xpNextData = localStorage.getItem('cards-xpNext');
-    
+
+    // ── Pré-charger les valeurs numériques pour la vérification d'intégrité ──
+    const _rolls    = rollsData    ? (parseInt(rollsData)    || 0) : 0;
+    const _tokens   = tokensData   ? (parseInt(tokensData)   || 0) : 10;
+    const _diamonds = diamondsData ? (parseInt(diamondsData) || 0) : 0;
+    const _xp       = xpData       ? (parseInt(xpData)       || 0) : 0;
+    const _level    = levelData    ? (parseInt(levelData)    || 1) : 1;
+    const _xpNext   = xpNextData   ? (parseInt(xpNextData)   || 50) : 50;
+
+    const _tokenU  = parseInt(localStorage.getItem('cards-token-upgrade')     || '0') || 0;
+    const _maxTokU = parseInt(localStorage.getItem('cards-max-token-upgrade') || '0') || 0;
+    const _luckU   = parseInt(localStorage.getItem('cards-luck-upgrade')      || '0') || 0;
+    const _rsU     = parseInt(localStorage.getItem('cards-roll-speed-upgrade')|| '0') || 0;
+    const _xpU     = parseInt(localStorage.getItem('cards-xp-upgrade')        || '0') || 0;
+    const _sr      = Math.max(0, parseInt(localStorage.getItem('cards-sugar-rush') || '0') || 0);
+
+    // ── Vérification d'intégrité ──
+    const storedHash = localStorage.getItem('cards-integrity');
+    if (storedHash !== null) {
+        // Une sauvegarde avec hash existe → on la vérifie
+        const expectedHash = _computeIntegrity({
+            tk: _tokens, dm: _diamonds, xp: _xp, lv: _level, xn: _xpNext,
+            ro: _rolls, tu: _tokenU, mu: _maxTokU, lu: _luckU, rs: _rsU,
+            xu: _xpU, sr: _sr,
+        });
+        if (storedHash !== expectedHash) {
+            _resetToDefaults();
+            return; // Arrêter le chargement
+        }
+    }
+    // (Si storedHash === null : ancienne sauvegarde sans hash → on accepte et on hashera à la prochaine sauvegarde)
+
+    // ── Validation des plages (valeurs aberrantes) ──
+    const MAX_LEVEL   = 200;
+    const MAX_UPGRADE = 50;
+    const MAX_TOKENS_POSSIBLE = BASE_MAX_TOKEN + MAX_UPGRADE * 5; // 20 + 250 = 270
+    const MAX_DIAMONDS = 10_000_000;
+    const MAX_XP       = 1_000_000_000;
+    const MAX_ROLLS    = 1_000_000_000;
+
+    if (
+        _tokens   < 0 || _tokens   > MAX_TOKENS_POSSIBLE ||
+        _diamonds < 0 || _diamonds > MAX_DIAMONDS         ||
+        _xp       < 0 || _xp       > MAX_XP              ||
+        _level    < 1 || _level    > MAX_LEVEL            ||
+        _rolls    < 0 || _rolls    > MAX_ROLLS            ||
+        _tokenU   < 0 || _tokenU   > MAX_UPGRADE         ||
+        _maxTokU  < 0 || _maxTokU  > MAX_UPGRADE         ||
+        _luckU    < 0 || _luckU    > MAX_UPGRADE         ||
+        _rsU      < 0 || _rsU      > MAX_UPGRADE         ||
+        _xpU      < 0 || _xpU      > MAX_UPGRADE
+    ) {
+        _resetToDefaults();
+        return;
+    }
+
+    // ── Chargement effectif ──
     if (data) {
-        collection = JSON.parse(data);
+        try {
+            const parsed = JSON.parse(data);
+            // Nettoyer les quantités négatives / aberrantes dans la collection
+            for (const key of Object.keys(parsed)) {
+                const v = parsed[key];
+                if (typeof v !== 'number' || v < 0 || v > 1_000_000) {
+                    delete parsed[key];
+                }
+            }
+            collection = parsed;
+        } catch(e) { collection = {}; }
     }
     
     if (potionsData) {
-        potionInventory = JSON.parse(potionsData);
+        try {
+            const parsed = JSON.parse(potionsData);
+            for (const key of Object.keys(parsed)) {
+                const v = parsed[key];
+                if (typeof v !== 'number' || v < 0 || v > 10_000) delete parsed[key];
+            }
+            potionInventory = parsed;
+        } catch(e) { potionInventory = {}; }
     }
     
     if (effectsData) {
-        activeEffects = JSON.parse(effectsData);
-        const now = Date.now();
-        for (let effectType of Object.keys(activeEffects)) {
-            const effect = activeEffects[effectType];
-            const remaining = effect.endTime - now;
-            if (remaining <= 0) {
-                setTimeout(function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType), 0);
-            } else {
-                effect._timeoutId = setTimeout(
-                    function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType),
-                    remaining
-                );
+        try {
+            activeEffects = JSON.parse(effectsData);
+            const now = Date.now();
+            for (let effectType of Object.keys(activeEffects)) {
+                const effect = activeEffects[effectType];
+                const remaining = effect.endTime - now;
+                if (remaining <= 0) {
+                    setTimeout(function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType), 0);
+                } else {
+                    effect._timeoutId = setTimeout(
+                        function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType),
+                        remaining
+                    );
+                }
             }
-        }
+        } catch(e) { activeEffects = {}; }
     }
 
     const potionQueuesData = localStorage.getItem('cards-potion-queues');
@@ -2975,71 +3105,38 @@ function loadCollection() {
     
     const rollEffectsData = localStorage.getItem('cards-roll-effects');
     if (rollEffectsData) {
-        rollBasedEffects = JSON.parse(rollEffectsData);
+        try { rollBasedEffects = JSON.parse(rollEffectsData); } catch(e) { rollBasedEffects = {}; }
     }
     
-    if (rollsData) {
-        rolls = parseInt(rollsData);
-        document.getElementById('rolls-count').innerText = rolls;
-    }
-    
-    if (tokensData) {
-        tokens = parseInt(tokensData);
-        if (tokens > maxToken) tokens = maxToken;
-        if (tokens <= 0) tokens = 1; // Toujours au moins 1 token au démarrage
-    } else {
-        tokens = 10;
-    }
+    rolls = _rolls;
+    document.getElementById('rolls-count').innerText = rolls;
 
-    if (diamondsData) {
-        diamonds = parseInt(diamondsData);
-    } else {
-        diamonds = 0;
-    }
-    
-    if (xpData) {
-        xp = parseInt(xpData);
-    }
-    
-    if (levelData) {
-        level = parseInt(levelData);
-    }
-    
-    if (xpNextData) {
-        xpNext = parseInt(xpNextData);
-    }
+    tokens   = Math.min(Math.max(_tokens, 1), MAX_TOKENS_POSSIBLE);
+    diamonds = _diamonds;
+    xp       = _xp;
+    level    = _level;
+    xpNext   = _xpNext;
 
-    const tokenUpgradeData = localStorage.getItem('cards-token-upgrade');
-    if (tokenUpgradeData) {
-        tokenUpgradeLevel = parseInt(tokenUpgradeData);
-        tokenRate = 0.2 + tokenUpgradeLevel * 0.1;
-    }
+    tokenUpgradeLevel    = _tokenU;
+    tokenRate            = 0.2 + tokenUpgradeLevel * 0.1;
+    maxTokenUpgradeLevel = _maxTokU;
+    maxToken             = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
+    // Clamp tokens against newly-computed maxToken
+    tokens               = Math.min(tokens, maxToken);
 
-    const maxTokenUpgradeData = localStorage.getItem('cards-max-token-upgrade');
-    if (maxTokenUpgradeData) {
-        maxTokenUpgradeLevel = parseInt(maxTokenUpgradeData);
-        maxToken = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
-    }
-
-    const luckUpgradeData = localStorage.getItem('cards-luck-upgrade');
-    luckUpgradeLevel = luckUpgradeData !== null ? (parseInt(luckUpgradeData) || 0) : 0;
-
-    const rollSpeedUpgradeData = localStorage.getItem('cards-roll-speed-upgrade');
-    rollSpeedUpgradeLevel = rollSpeedUpgradeData !== null ? (parseInt(rollSpeedUpgradeData) || 0) : 0;
-
-    const xpUpgradeData = localStorage.getItem('cards-xp-upgrade');
-    xpUpgradeLevel = xpUpgradeData !== null ? (parseInt(xpUpgradeData) || 0) : 0;
+    luckUpgradeLevel      = _luckU;
+    rollSpeedUpgradeLevel = _rsU;
+    xpUpgradeLevel        = _xpU;
 
     const artifactInvData = localStorage.getItem('cards-artifact-inventory');
-    if (artifactInvData) artifactInventory = JSON.parse(artifactInvData);
+    if (artifactInvData) { try { artifactInventory = JSON.parse(artifactInvData); } catch(e) {} }
     const equippedArtData = localStorage.getItem('cards-equipped-artifacts');
-    if (equippedArtData) equippedArtifacts = JSON.parse(equippedArtData);
+    if (equippedArtData) { try { equippedArtifacts = JSON.parse(equippedArtData); } catch(e) {} }
 
     const discoveredTagsData = localStorage.getItem('cards-discovered-tags');
     if (discoveredTagsData) {
-        discoveredTags = new Set(JSON.parse(discoveredTagsData));
+        try { discoveredTags = new Set(JSON.parse(discoveredTagsData)); } catch(e) {}
     } else {
-        // Rebuild from existing collection on first load (migration)
         discoveredTags = new Set();
         for (const key of Object.keys(collection)) {
             for (const t of ['Gold','Rainbow','Shiny','Nuclear']) {
@@ -3048,9 +3145,7 @@ function loadCollection() {
         }
     }
 
-    
-    const sugarRushData = localStorage.getItem('cards-sugar-rush');
-    if (sugarRushData) sugarRushRolls = Math.max(0, parseInt(sugarRushData) || 0);
+    sugarRushRolls = _sr;
 
     const bleedingData = localStorage.getItem('cards-bleeding-end-time');
     if (bleedingData) {
