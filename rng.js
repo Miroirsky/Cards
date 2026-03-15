@@ -214,6 +214,7 @@ let diamonds = 0;
 let tokenUpgradeLevel = 0; // Niveau d'amélioration de vitesse de tokens
 let maxTokenUpgradeLevel = 0; // Niveau d'amélioration de max tokens
 let luckUpgradeLevel = 0; // Niveau d'amélioration de chance
+let rollSpeedUpgradeLevel = 0; // Niveau d'amélioration de vitesse de roll
 let xpUpgradeLevel = 0;      // Niveau d'amélioration de gain XP
 
 
@@ -953,10 +954,10 @@ function updateActiveEffectsDisplay() {
     const potionLuckMult    = activeEffects.luck        ? activeEffects.luck.power        : 1;
     const potionTokenSpeed  = activeEffects.tokenspeed ? activeEffects.tokenspeed.power : 1;
 
-    const upgradeRollSpeed  = 1; // pas d'upgrade roll speed pour l'instant
+    const upgradeRollSpeed  = 1 + rollSpeedUpgradeLevel * 0.2; // +0.2 roll/s per level
     const upgradeLuckMult   = 1 + luckUpgradeLevel  * 0.5;
     const upgradeTokenSpeed = 1 + tokenUpgradeLevel * 0.5;  // chaque niveau = +50% de la base
-    const upgradeTokenRate  = (0.2 + tokenUpgradeLevel * 0.1).toFixed(1); // tokens/s réels
+    const upgradeTokenRate  = (0.2 + tokenUpgradeLevel * 0.2).toFixed(1); // tokens/s réels
 
     const totalRollSpeed  = potionRollSpeed  * upgradeRollSpeed;
     const sugarRushMult   = sugarRushRolls > 0 ? 2 : 1;
@@ -2733,6 +2734,7 @@ function saveCollection() {
     localStorage.setItem('cards-token-upgrade', tokenUpgradeLevel.toString());
     localStorage.setItem('cards-max-token-upgrade', maxTokenUpgradeLevel.toString());
     localStorage.setItem('cards-luck-upgrade', luckUpgradeLevel.toString());
+    localStorage.setItem('cards-roll-speed-upgrade', rollSpeedUpgradeLevel.toString());
     localStorage.setItem('cards-xp-upgrade', xpUpgradeLevel.toString());
     localStorage.setItem('cards-discovered-tags', JSON.stringify([...discoveredTags]));
     localStorage.setItem('cards-sugar-rush', sugarRushRolls.toString());
@@ -2832,6 +2834,9 @@ function loadCollection() {
 
     const luckUpgradeData = localStorage.getItem('cards-luck-upgrade');
     luckUpgradeLevel = luckUpgradeData !== null ? (parseInt(luckUpgradeData) || 0) : 0;
+
+    const rollSpeedUpgradeData = localStorage.getItem('cards-roll-speed-upgrade');
+    rollSpeedUpgradeLevel = rollSpeedUpgradeData !== null ? (parseInt(rollSpeedUpgradeData) || 0) : 0;
 
     const xpUpgradeData = localStorage.getItem('cards-xp-upgrade');
     xpUpgradeLevel = xpUpgradeData !== null ? (parseInt(xpUpgradeData) || 0) : 0;
@@ -3586,6 +3591,7 @@ if (resetBtn) {
             localStorage.removeItem('cards-token-upgrade');
             localStorage.removeItem('cards-max-token-upgrade');
             localStorage.removeItem('cards-luck-upgrade');
+            localStorage.removeItem('cards-roll-speed-upgrade');
             localStorage.removeItem('cards-xp-upgrade');
             localStorage.removeItem('cards-discovered-tags');
             localStorage.removeItem('cards-artifact-inventory');
@@ -3601,6 +3607,7 @@ if (resetBtn) {
             tokenUpgradeLevel = 0;
             maxTokenUpgradeLevel = 0;
             luckUpgradeLevel = 0;
+            rollSpeedUpgradeLevel = 0;
             xpUpgradeLevel = 0;
             maxToken = BASE_MAX_TOKEN;
             tokenRate = 0.2;
@@ -3763,6 +3770,8 @@ const MAX_TOKEN_UPGRADE_BASE_COST = 100;
 const MAX_TOKEN_UPGRADE_COST_MULTIPLIER = 2.5;
 const LUCK_UPGRADE_BASE_COST = 75;
 const LUCK_UPGRADE_COST_MULTIPLIER = 2.5;
+const ROLL_SPEED_UPGRADE_BASE_COST = 150;
+const ROLL_SPEED_UPGRADE_COST_MULTIPLIER = 2.5;
 const XP_UPGRADE_BASE_COST = 60;
 const XP_UPGRADE_COST_MULTIPLIER = 2.5;
 
@@ -3776,6 +3785,10 @@ function getMaxTokenUpgradeCost(level) {
 
 function getLuckUpgradeCost(level) {
     return Math.round(LUCK_UPGRADE_BASE_COST * Math.pow(LUCK_UPGRADE_COST_MULTIPLIER, level));
+}
+
+function getRollSpeedUpgradeCost(level) {
+    return Math.round(ROLL_SPEED_UPGRADE_BASE_COST * Math.pow(ROLL_SPEED_UPGRADE_COST_MULTIPLIER, level));
 }
 
 function getXpUpgradeCost(level) {
@@ -3816,6 +3829,16 @@ function buyLuckUpgrade() {
     renderShop();
 }
 
+function buyRollSpeedUpgrade() {
+    const cost = getRollSpeedUpgradeCost(rollSpeedUpgradeLevel);
+    if (diamonds < cost) return;
+    diamonds -= cost;
+    rollSpeedUpgradeLevel++;
+    saveCollection();
+    updateDiamondsDisplay();
+    renderShop();
+}
+
 function buyXpUpgrade() {
     const cost = getXpUpgradeCost(xpUpgradeLevel);
     if (diamonds < cost) return;
@@ -3836,8 +3859,8 @@ function renderShop() {
     list.innerHTML = '';
 
     // --- Upgrade Token Speed ---
-    const currentRate = 0.2 + tokenUpgradeLevel * 0.1;
-    const nextRate = currentRate + 0.1;
+    const currentRate = 0.2 + tokenUpgradeLevel * 0.2;
+    const nextRate = currentRate + 0.2;
     const speedCost = getTokenUpgradeCost(tokenUpgradeLevel);
     const canAffordSpeed = diamonds >= speedCost;
 
@@ -3859,7 +3882,7 @@ function renderShop() {
             <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
                 <b style="color:#2ecc71;">${currentRate.toFixed(1)}/s</b> → <b style="color:#3498db;">${nextRate.toFixed(1)}/s</b>
             </div>
-            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#e67e22;">${tokenUpgradeLevel}</b></div>
+            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#e67e22;">${tokenUpgradeLevel}</b> · +0.2 per level</div>
         </div>
         <button id="buy-speed-btn" style="
             padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
@@ -3905,6 +3928,42 @@ function renderShop() {
     `;
     if (canAffordMax) maxItem.querySelector('#buy-max-btn').onclick = buyMaxTokenUpgrade;
     list.appendChild(maxItem);
+
+    // --- Upgrade Roll Speed ---
+    const currentRollSpeed = 1 + rollSpeedUpgradeLevel * 0.2;
+    const nextRollSpeed = currentRollSpeed + 0.2;
+    const rollSpeedCost = getRollSpeedUpgradeCost(rollSpeedUpgradeLevel);
+    const canAffordRollSpeed = diamonds >= rollSpeedCost;
+
+    const rollSpeedItem = document.createElement('div');
+    rollSpeedItem.style.cssText = `
+        background: linear-gradient(135deg, #2c3e50, #34495e);
+        border-radius: 16px;
+        padding: 1.2em 1.5em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+        margin-bottom: 0.8em;
+    `;
+    rollSpeedItem.innerHTML = `
+        <div style="flex:1;">
+            <div style="font-size:1.15em;font-weight:bold;color:#e74c3c;margin-bottom:0.25em;">⚡ Roll Speed</div>
+            <div style="font-size:0.88em;color:#bdc3c7;margin-bottom:0.3em;">
+                <b style="color:#2ecc71;">${currentRollSpeed.toFixed(1)}/s</b> → <b style="color:#e74c3c;">${nextRollSpeed.toFixed(1)}/s</b>
+            </div>
+            <div style="font-size:0.82em;color:#95a5a6;">Level <b style="color:#e67e22;">${rollSpeedUpgradeLevel}</b> · +0.2 per level</div>
+        </div>
+        <button id="buy-roll-speed-btn" style="
+            padding:0.65em 1.4em;border-radius:10px;border:none;font-size:1em;font-weight:bold;
+            cursor:${canAffordRollSpeed ? 'pointer' : 'not-allowed'};
+            background:${canAffordRollSpeed ? 'linear-gradient(90deg,#e74c3c,#c0392b)' : '#555'};
+            color:${canAffordRollSpeed ? '#fff' : '#888'};white-space:nowrap;min-width:110px;
+        ">💎 ${rollSpeedCost}</button>
+    `;
+    if (canAffordRollSpeed) rollSpeedItem.querySelector('#buy-roll-speed-btn').onclick = buyRollSpeedUpgrade;
+    list.appendChild(rollSpeedItem);
 
     // --- Upgrade Luck ---
     const currentLuck = 1 + luckUpgradeLevel * 0.5;
