@@ -652,6 +652,17 @@ body {
     z-index: 10;
 }
 
+/* Rarity tags hidden on front when setting = onclick */
+body.rarity-tags-onclick .rarity-tag-container.rarity-front {
+    opacity: 0;
+    visibility: hidden;
+}
+body.rarity-tags-onclick .card-inventory:active .rarity-tag-container.rarity-front {
+    opacity: 1;
+    visibility: visible;
+    transition: all 0.2s ease;
+}
+
 .rarity-tag-container.rarity-hidden {
     opacity: 0;
     visibility: hidden;

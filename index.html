@@ -8,7 +8,7 @@
 <body>
     <div id="blur-overlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;"></div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.22.0</div>
+    <div class="update-text">Update 0.22.1</div>
     <div id="last-connection" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;"></div>
     
     <!-- Interface Roll -->
@@ -156,6 +156,23 @@
                 <div class="rarity-bar-settings">
                     <label class="settings-label"><b>Sound notification from:</b></label>
                     <div id="rarity-bar"></div>
+                </div>
+                <div style="margin-top:1.5em;">
+                    <label class="settings-label" style="display:block;margin-bottom:0.4em;"><b>Show Rarity Tags:</b></label>
+                    <select id="rarity-tag-display-select" style="width:100%;padding:0.55em 0.8em;border-radius:8px;border:1.5px solid rgba(78,205,196,0.3);background:#1a2a1a;color:#fff;font-size:0.95em;outline:none;cursor:pointer;">
+                        <option value="always">Always (shown on cards)</option>
+                        <option value="onclick">On Click (shown on press)</option>
+                    </select>
+                </div>
+                <div style="margin-top:1.2em;display:flex;flex-direction:column;gap:0.6em;">
+                    <label style="display:flex;align-items:center;gap:0.7em;cursor:pointer;font-size:0.95em;">
+                        <input type="checkbox" id="notif-rarity-tags" style="width:16px;height:16px;accent-color:#f1c40f;cursor:pointer;">
+                        <span>Notify for <b style="color:#f1c40f;">Rarity Tags</b> <span style="color:#7f8c8d;font-size:0.85em;">(Gold, Rainbow, Shiny, Nuclear)</span></span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.7em;cursor:pointer;font-size:0.95em;">
+                        <input type="checkbox" id="notif-special-tags" style="width:16px;height:16px;accent-color:#ff69b4;cursor:pointer;">
+                        <span>Notify for <b style="color:#ff69b4;">Special Tags</b> <span style="color:#7f8c8d;font-size:0.85em;">(Sweet, Caloric, etc.)</span></span>
+                    </label>
                 </div>
                 <audio id="notification-sound" src="Roll-Notification.mp3" preload="auto"></audio>
                 <button id="reset-save-btn" class="reset-save-btn" style="margin-top:2em;background:#e74c3c;color:white;padding:0.7em 2em;border:none;border-radius:10px;font-size:1.1em;cursor:pointer;">Reset Save</button>

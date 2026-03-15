@@ -14,7 +14,7 @@ const items = [
     { name: "Ice Spikes", chance: 150, rollable: true },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
-    { name: "Coal", chance: 350, rollable: true, tags: ["ai"] },
+    { name: "Coal", chance: 350, rollable: true },
     { name: "Hearth", chance: 500, rollable: true },
     { name: "Lava", chance: 625, rollable: true, tags: ["ai"] },
     { name: "Evil", chance: 666, rollable: true },
@@ -1098,6 +1098,123 @@ function updateRollEffectsIndicator() {
     }
 }
 
+// ═══════════════════════════════════════════════
+// VISUAL EFFECTS SYSTEM
+// ═══════════════════════════════════════════════
+
+(function() {
+    // ── Sugar Rush: rising streaks ──
+    let srCanvas = null, srCtx = null, srAnim = null;
+    let srStreaks = [];
+
+    function srCreate() {
+        if (srCanvas) return;
+        srCanvas = document.createElement('canvas');
+        srCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;';
+        document.body.appendChild(srCanvas);
+        srCtx = srCanvas.getContext('2d');
+        srResize();
+        window.addEventListener('resize', srResize);
+    }
+    function srResize() {
+        if (!srCanvas) return;
+        srCanvas.width  = window.innerWidth;
+        srCanvas.height = window.innerHeight;
+    }
+    function srDestroy() {
+        if (srAnim) { cancelAnimationFrame(srAnim); srAnim = null; }
+        if (srCanvas) { srCanvas.remove(); srCanvas = null; srCtx = null; }
+        srStreaks = [];
+    }
+    function srSpawn() {
+        // Speed increases with fewer rolls left (inverse: faster when more rolls)
+        const intensity = sugarRushRolls / 10; // 0..1
+        const speedBase = 2 + intensity * 8;
+        srStreaks.push({
+            x: Math.random() * window.innerWidth,
+            y: window.innerHeight + 20,
+            len: 30 + Math.random() * 80,
+            speed: speedBase + Math.random() * 4,
+            alpha: 0.4 + Math.random() * 0.5,
+            color: Math.random() < 0.6 ? '#ffffff' : '#ffb6e6', // white or pink
+            width: 1 + Math.random() * 1.5,
+        });
+    }
+    function srTick() {
+        if (!srCanvas || sugarRushRolls <= 0) { srDestroy(); return; }
+        srCtx.clearRect(0, 0, srCanvas.width, srCanvas.height);
+        // Spawn new streaks based on intensity
+        const spawnRate = 1 + Math.floor(sugarRushRolls / 3);
+        for (let i = 0; i < spawnRate; i++) {
+            if (Math.random() < 0.3) srSpawn();
+        }
+        // Update and draw
+        srStreaks = srStreaks.filter(s => s.y + s.len > -10);
+        for (const s of srStreaks) {
+            s.y -= s.speed;
+            const grad = srCtx.createLinearGradient(s.x, s.y + s.len, s.x, s.y);
+            grad.addColorStop(0, 'transparent');
+            grad.addColorStop(1, s.color.replace(')', ',' + s.alpha + ')').replace('rgb','rgba').replace('#', 'rgba(').replace(/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i, (m,r,g,b) => parseInt(r,16)+','+parseInt(g,16)+','+parseInt(b,16)));
+            // Simpler: just use globalAlpha
+            srCtx.save();
+            srCtx.globalAlpha = s.alpha;
+            srCtx.strokeStyle = s.color;
+            srCtx.lineWidth = s.width;
+            srCtx.beginPath();
+            srCtx.moveTo(s.x, s.y + s.len);
+            srCtx.lineTo(s.x, s.y);
+            srCtx.stroke();
+            srCtx.restore();
+        }
+        srAnim = requestAnimationFrame(srTick);
+    }
+    function updateSugarRushFX() {
+        if (sugarRushRolls > 0) {
+            srCreate();
+            if (!srAnim) srAnim = requestAnimationFrame(srTick);
+        } else {
+            srDestroy();
+        }
+    }
+
+    // ── Full Belly / Obese: screen border glow ──
+    let borderDiv = null;
+    function updateBorderFX() {
+        const now = Date.now();
+        const isObese = obeseEndTime > now;
+        const isFullBelly = !isObese && ventrePleinRolls > 0;
+
+        if (!isObese && !isFullBelly) {
+            if (borderDiv) { borderDiv.remove(); borderDiv = null; }
+            return;
+        }
+        if (!borderDiv) {
+            borderDiv = document.createElement('div');
+            borderDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9997;border-radius:0;';
+            document.body.appendChild(borderDiv);
+        }
+        if (isObese) {
+            const pct = Math.max(0, (obeseEndTime - now) / 60000);
+            const alpha = 0.25 + pct * 0.25;
+            borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(192,57,43,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(192,57,43,${(alpha*0.5).toFixed(2)})`;
+        } else {
+            const pct = ventrePleinRolls / 10;
+            const alpha = 0.18 + pct * 0.22;
+            borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(230,126,34,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(230,126,34,${(alpha*0.5).toFixed(2)})`;
+        }
+    }
+
+    // ── Expose update functions ──
+    window._updateSugarRushFX = updateSugarRushFX;
+    window._updateBorderFX    = updateBorderFX;
+
+    // Animate border continuously
+    (function borderLoop() {
+        updateBorderFX();
+        requestAnimationFrame(borderLoop);
+    })();
+})();
+
 function updatePotionsInventory() {
     const potionsList = document.getElementById('potions-list');
     if (!potionsList) return;
@@ -1669,7 +1786,9 @@ function rollItem() {
         updateCardPreview({ selected, type, displayName, chanceDisplay });
 
         (function(){
-            // Calcul de la rareté
+            let shouldNotify = false;
+
+            // 1. Rarity threshold (existing behaviour)
             let thisRarity = '';
             if (chanceDisplay < 10) thisRarity = 'common';
             else if (chanceDisplay < 100) thisRarity = 'uncommon';
@@ -1679,9 +1798,21 @@ function rollItem() {
             else thisRarity = 'mythic';
             let idx = rarityOrderMap[thisRarity];
             let minIdx = loadRarityBarSetting();
-            if (idx >= minIdx) {
+            if (idx >= minIdx) shouldNotify = true;
+
+            // 2. Rarity multiplier tags (Gold / Rainbow / Shiny / Nuclear)
+            if (!shouldNotify && type && loadNotifRarityTags()) {
+                shouldNotify = true;
+            }
+
+            // 3. Special tags (sweet, caloric, …)
+            if (!shouldNotify && Array.isArray(selected.tags) && selected.tags.length > 0 && loadNotifSpecialTags()) {
+                shouldNotify = true;
+            }
+
+            if (shouldNotify) {
                 let audio = document.getElementById('notification-sound');
-                if(audio) { audio.currentTime = 0; audio.play(); }
+                if (audio) { audio.currentTime = 0; audio.play(); }
             }
         })();
 
@@ -1743,6 +1874,7 @@ function rollItem() {
         }
 
         updateLuck();
+        if (window._updateSugarRushFX) _updateSugarRushFX();
         updateActiveEffectsDisplay();
         
         saveCollection();
@@ -1757,14 +1889,9 @@ function rollItem() {
     }, rollDelay);
 }
 
-function updateCollection() {
-    const ul = document.getElementById('collection-list');
-    ul.innerHTML = '';
-
-    // Trier chaque carte indépendamment, sans regrouper les variantes
+function _getSortedCardNames() {
     let rarityOrder = chance => (chance < 10 ? 0 : chance < 100 ? 1 : chance < 1000 ? 2 : chance < 10000 ? 3 : chance < 100000 ? 4 : 5);
-    let typeOrder = t => t === 'Nuclear' ? 4 : t === 'Shiny' ? 3 : t === 'Rainbow' ? 2 : t === 'Gold' ? 1 : 0;
-    let sortedNames = Object.keys(collection).filter(name => {
+    return Object.keys(collection).filter(name => {
         let type = name.endsWith('(Nuclear)') ? 'Nuclear' : name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
         let base = type ? name.replace(` (${type})`, '') : name;
         return !!items.find(i => i.name === base);
@@ -1777,17 +1904,16 @@ function updateCollection() {
         let itemB = items.find(i => i.name === baseB);
         let chanceA = typeA === 'Nuclear' ? itemA.chance * 10000 : typeA === 'Shiny' ? itemA.chance * 1000 : typeA === 'Rainbow' ? itemA.chance * 100 : typeA === 'Gold' ? itemA.chance * 10 : itemA.chance;
         let chanceB = typeB === 'Nuclear' ? itemB.chance * 10000 : typeB === 'Shiny' ? itemB.chance * 1000 : typeB === 'Rainbow' ? itemB.chance * 100 : typeB === 'Gold' ? itemB.chance * 10 : itemB.chance;
-        // Par rareté affichée
         let rarityA = rarityOrder(chanceA);
         let rarityB = rarityOrder(chanceB);
         if (rarityA !== rarityB) return rarityA - rarityB;
-        // Par chance affichée croissante
         if (chanceA !== chanceB) return chanceA - chanceB;
-        // Par nom complet (y compris le tag)
         return a.localeCompare(b);
     });
+}
 
-    for (let name of sortedNames) {
+function _buildCardLi(name) {
+
         let type = name.endsWith('(Nuclear)') ? 'Nuclear' : name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
         let baseName = type ? name.replace(` (${type})`, '') : name;
         let item = items.find(i => i.name === baseName);
@@ -1812,7 +1938,7 @@ function updateCollection() {
                 <div class=\"card-flip-inner\">
                     <div class=\"card-flip-front\">
                         <span class=\"rarity-tag-container\">${goldTag}${specialTags}</span>
-                        <span class=\"rarity-tag-container\" style=\"top:auto;bottom:5px;\">${rarityTag}</span>
+                        <span class=\"rarity-tag-container rarity-front\" style=\"top:auto;bottom:5px;\">${rarityTag}</span>
                         <img class=\"card-img\" src=\"${imgSrc}\" alt=\"${displayName}\">
                         <span class=\"card-text\">${cardText}</span>
                     </div>
@@ -1823,7 +1949,7 @@ function updateCollection() {
                 </div>
             </div>
         `;
-        ul.appendChild(li);
+        // data-card-key set by updateCollection
         // Attacher les events long-press directement (pas besoin de setTimeout)
         const cardDiv = li.querySelector('.card-inventory');
         if (cardDiv) {
@@ -2088,10 +2214,72 @@ function updateCollection() {
                     }
                 });
         }
-    }
+        return li;
+}
+
+function updateCollection() {
+    const ul = document.getElementById('collection-list');
+    const sortedNames = _getSortedCardNames();
+
+    // Build a map of currently rendered cards
+    const existing = new Map();
+    ul.querySelectorAll('li[data-card-key]').forEach(li => {
+        existing.set(li.dataset.cardKey, li);
+    });
+
+    // Set of names that should now exist
+    const desired = new Set(sortedNames);
+
+    // 1. Remove cards no longer in collection
+    existing.forEach((li, key) => {
+        if (!desired.has(key)) {
+            li.style.transition = 'opacity 0.25s, transform 0.25s';
+            li.style.opacity = '0';
+            li.style.transform = 'scale(0.85)';
+            setTimeout(() => li.remove(), 260);
+        }
+    });
+
+    // 2. Insert / reorder cards
+    sortedNames.forEach((name, index) => {
+        let li = existing.get(name);
+        if (!li) {
+            // New card — build and animate in
+            li = _buildCardLi(name);
+            li.dataset.cardKey = name;
+            li.style.opacity = '0';
+            li.style.transform = 'translateY(12px)';
+            li.style.transition = 'opacity 0.3s, transform 0.3s';
+            // Insert at correct position
+            const refNode = ul.children[index] || null;
+            ul.insertBefore(li, refNode);
+            // Trigger animation
+            requestAnimationFrame(() => {
+                li.style.opacity = '1';
+                li.style.transform = '';
+            });
+        } else {
+            // Existing card — update count in detail text only
+            const detail = li.querySelector('.detail');
+            if (detail) {
+                const type = name.endsWith('(Nuclear)') ? 'Nuclear' : name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
+                const baseName = type ? name.replace(` (${type})`, '') : name;
+                const item = items.find(i => i.name === baseName);
+                const chanceDisplay = type === 'Nuclear' ? item.chance * 10000 : type === 'Shiny' ? item.chance * 1000 : type === 'Rainbow' ? item.chance * 100 : type === 'Gold' ? item.chance * 10 : item.chance;
+                detail.innerHTML = `${baseName}<br>1 in ${chanceDisplay}<br>×${collection[name]}`;
+            }
+            // Ensure correct DOM order
+            const currentIndex = Array.from(ul.children).indexOf(li);
+            if (currentIndex !== index) {
+                const refNode = ul.children[index] || null;
+                ul.insertBefore(li, refNode);
+            }
+        }
+    });
 
     if (window.updateCraftButtons) window.updateCraftButtons();
 }
+
 
 function showDecompressorMenu(cardName, cardType) {
     let item = items.find(i => i.name === cardName);
@@ -2589,6 +2777,21 @@ function displayLastConnectionInfo(tokensToAdd, diffMinutes, lastDate) {
     };
 }
 
+// ── Rarity tag display setting ──
+function loadRarityTagDisplaySetting() {
+    const v = localStorage.getItem('rarity-tag-display') || 'always';
+    applyRarityTagDisplaySetting(v);
+    const sel = document.getElementById('rarity-tag-display-select');
+    if (sel) sel.value = v;
+}
+function applyRarityTagDisplaySetting(value) {
+    if (value === 'onclick') {
+        document.body.classList.add('rarity-tags-onclick');
+    } else {
+        document.body.classList.remove('rarity-tags-onclick');
+    }
+}
+
 // Au chargement de la page, on restaure l'inventaire
 loadCollection();
 const offlineInfo = gainTokensSinceLastConnection();
@@ -2660,6 +2863,10 @@ function startRealTimeEffectsUpdate() {
 document.getElementById('settings-btn').onclick = function() {
     document.getElementById('settings-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
+    // Sync select to current setting
+    const sel = document.getElementById('rarity-tag-display-select');
+    if (sel) sel.value = localStorage.getItem('rarity-tag-display') || 'always';
+    syncNotifCheckboxes();
 };
 document.getElementById('close-settings').onclick = function() {
     document.getElementById('settings-modal').classList.remove('open');
@@ -3162,6 +3369,19 @@ function saveRarityBarSetting(idx) {
     localStorage.setItem('rarity-notif-threshold', idx.toString());
 }
 
+function loadNotifRarityTags() {
+    return localStorage.getItem('notif-rarity-tags') === 'true';
+}
+function loadNotifSpecialTags() {
+    return localStorage.getItem('notif-special-tags') === 'true';
+}
+function syncNotifCheckboxes() {
+    const cb1 = document.getElementById('notif-rarity-tags');
+    const cb2 = document.getElementById('notif-special-tags');
+    if (cb1) cb1.checked = loadNotifRarityTags();
+    if (cb2) cb2.checked = loadNotifSpecialTags();
+}
+
 // --- Génération de la barre ---
 function renderRarityBar() {
     const bar = document.getElementById('rarity-bar');
@@ -3272,6 +3492,25 @@ if (resetBtn) {
 
 // On page load, call renderRarityBar
 renderRarityBar();
+syncNotifCheckboxes();
+
+// Notif checkboxes
+(function() {
+    const cb1 = document.getElementById('notif-rarity-tags');
+    const cb2 = document.getElementById('notif-special-tags');
+    if (cb1) cb1.onchange = () => localStorage.setItem('notif-rarity-tags', cb1.checked);
+    if (cb2) cb2.onchange = () => localStorage.setItem('notif-special-tags', cb2.checked);
+})();
+
+// Rarity tag display setting
+loadRarityTagDisplaySetting();
+const rarityTagSelect = document.getElementById('rarity-tag-display-select');
+if (rarityTagSelect) {
+    rarityTagSelect.onchange = function() {
+        localStorage.setItem('rarity-tag-display', this.value);
+        applyRarityTagDisplaySetting(this.value);
+    };
+}
 
 // Add after DOMContentLoaded or at the end of the file
 function createAutoRollButton() {
