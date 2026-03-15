@@ -1,5 +1,4 @@
 const items = [
-    { name: "Sword", chance: 2, rollable: true, tags: ["Sharp"] },
     { name: "Grass", chance: 2, rollable: true },
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
@@ -8,6 +7,7 @@ const items = [
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
+    { name: "Sword", chance: 25, rollable: true, tags: ["Sharp"] },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
