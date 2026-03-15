@@ -97,22 +97,37 @@ const potions = [
 ];
 
 const cardsGroupes = [
-    { name: "Nature", content: ["Grass", "Bush", "Tree", "Apple"], color: "rgb(6, 65, 11)" },
-    { name: "Biomes", content: ["Snow Mountains", "Beach", "Sky", "Clouds", "Overworld", "Iceberg"], color: "rgb(129, 148, 131)" },
-    { name: "Food", content: ["Sugar", "Burger", "Apple", "Tacos", "Nars"], color: "rgb(216, 177, 47)" },
-    { name: "Planets", content: ["Mars", "Earth"], color: "rgb(54, 54, 54)" },
-    { name: "Weapons", content: ["Sword", "Gun"], color: "rgb(30, 30, 30)" },
-    { name: "Monster Loot", content: ["Bones"], color: "rgb(165, 33, 0)" },
-    { name: "Energy", content: ["Electricity", "Thunder"], color: "rgb(255, 245, 53)" },
-    { name: "Body Parts", content: ["Bones", "Hearth", "Pierced Hearth"], color: "rgb(207, 43, 88)" },
-    { name: "Concepts", content: ["Cute", "Ugly", "Infinity"], color: "rgb(196, 94, 255)" },
-    { name: "Entities", content: ["Noob", "Evil"], color: "rgb(116, 56, 0)" },
-    { name: "Buildings", content: ["Circus"], color: "rgb(192, 192, 192)" },
-    { name: "Objects", content: ["Cards", "Cards Circus"], color: "rgb(255, 243, 75)" },
-    { name: "Dangers", content: ["Ice Spikes"], color: "rgb(156, 18, 18)" },
-    { name: "AI", content: [], color: "rgb(112, 18, 156)" }
+    // ── Nature & Vegetation ──
+    { name: "Nature",    content: ["Grass", "Bush", "Tree", "Apple", "Wood"],                                           color: "rgb(34, 110, 46)" },
+    // ── Biomes & Environments ──
+    { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg"],                 color: "rgb(78, 140, 160)" },
+    // ── Food & Sweets ──
+    { name: "Food",      content: ["Sugar", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
+    // ── Space & Celestial ──
+    { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus"],                                           color: "rgb(20, 30, 80)" },
+    // ── Weapons ──
+    { name: "Weapons",   content: ["Sword", "Gun"],                                                                     color: "rgb(60, 60, 60)" },
+    // ── Energy & Elements ──
+    { name: "Energy",    content: ["Electricity", "Thunder", "Fire", "Lava", "Time"],                                           color: "rgb(230, 200, 30)" },
+    // ── Elements ──
+    { name: "Elements",  content: ["Water", "Lava", "Ice Spikes", "Sand", "Rock", "Coal", "Salt", "Iron"],              color: "rgb(70, 120, 180)" },
+    // ── Body & Anatomy ──
+    { name: "Body",      content: ["Bones", "Hearth", "Pierced Hearth"],                                                color: "rgb(200, 40, 80)" },
+    // ── Creatures & Monsters ──
+    { name: "Creatures", content: ["Evil", "Zombie", "Ghost", "Skeleton", "Monkey", "Slime", "Dog"],                    color: "rgb(100, 30, 10)" },
+    // ── Materials & Crafting ──
+    { name: "Materials", content: ["Wood", "Rock", "Coal", "Sand", "Salt", "Iron", "Brick", "Cog"],                     color: "rgb(130, 90, 50)" },
+    // ── Objects & Items ──
+    { name: "Objects",   content: ["Cards", "Cards Circus", "Rubiks Cube", "Empty Glass", "Water Glass", "Cog"],        color: "rgb(200, 190, 60)" },
+    // ── Buildings & Structures ──
+    { name: "Buildings", content: ["Circus", "House"],                                                                  color: "rgb(170, 170, 180)" },
+    // ── Concepts & Abstracts ──
+    { name: "Concepts",  content: ["Cute", "Ugly", "Noob", "Infinity", "Time"],                                        color: "rgb(160, 80, 230)" },
+    // ── AI-generated ──
+    { name: "AI",        content: [],                                                                                    color: "rgb(112, 18, 156)" }
 ];
 
+// Auto-populate AI group from item tags
 for (let item of items) {
     if (item.tags && item.tags.includes('ai') && !cardsGroupes.find(g => g.name === "AI").content.includes(item.name)) {
         cardsGroupes.find(g => g.name === "AI").content.push(item.name);
