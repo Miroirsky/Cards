@@ -6298,7 +6298,8 @@ async function buyListing(listing, btn) {
             // Send reward to seller
             const addReward = window._fbAddPendingReward;
             if (addReward && sellerUid) {
-                try { await addReward(sellerUid, priceTotal); } catch(_) {}
+                try { await addReward(sellerUid, priceTotal); }
+                catch(rewardErr) { console.warn('Reward failed:', rewardErr.message || rewardErr); }
             }
         }
 
@@ -6366,14 +6367,25 @@ async function refreshRewards() {
     if (!user) return;
     const get = window._fbGetPendingRewards;
     if (!get) return;
+
+    const refreshBtn = document.getElementById('refresh-rewards-btn');
+    if (refreshBtn) { refreshBtn.textContent = '↻ …'; refreshBtn.disabled = true; }
+
     try {
         const amount = await get(user.uid);
         const el = document.getElementById('rewards-amount');
         if (el) el.textContent = amount;
         const btn = document.getElementById('claim-rewards-btn');
-        if (btn) btn.disabled = amount <= 0;
+        if (btn) {
+            btn.disabled = amount <= 0;
+            btn.style.opacity = amount <= 0 ? '0.5' : '1';
+        }
         _updateRewardsBadge(amount);
-    } catch(e) {}
+    } catch(e) {
+        showCraftMessage('Failed to load rewards: ' + (e.message || e), 'error');
+    } finally {
+        if (refreshBtn) { refreshBtn.textContent = '↻ Refresh'; refreshBtn.disabled = false; }
+    }
 }
 
 function _updateRewardsBadge(amount) {

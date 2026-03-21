@@ -5,7 +5,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc,
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
          collection as fsCollection, addDoc, getDocs, query, where, orderBy, increment }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -161,7 +161,10 @@ export { auth, db };
 // Called when a buyer purchases — adds diamonds to seller's pending balance
 export async function addPendingReward(sellerUid, amount) {
     if (!amount || amount <= 0) return;
-    await setDoc(doc(db, "users", sellerUid), { pendingDiamonds: increment(amount) }, { merge: true });
+    // Use updateDoc (not setDoc+merge) so the Firestore 'allow update' rule applies
+    await updateDoc(doc(db, "users", sellerUid), {
+        pendingDiamonds: increment(amount)
+    });
 }
 
 // Seller claims their pending diamonds
