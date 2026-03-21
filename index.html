@@ -13,6 +13,10 @@
     </div>
     <!-- Update Text -->
     <div class="update-text">Update 0.24.0</div>
+    <!-- Logged-in user display -->
+    <div id="username-display" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;"></div>
+    <!-- Logout button -->
+    <button onclick="window._doLogout()" title="Logout" style="position:fixed;top:20px;left:20px;z-index:1000;background:rgba(44,62,80,0.85);border:none;border-radius:50%;width:42px;height:42px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1em;transition:background 0.2s;" onmouseover="this.style.background='#e74c3c'" onmouseout="this.style.background='rgba(44,62,80,0.85)'">🚪</button>
     <div id="last-connection"
         style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;">
     </div>
@@ -523,6 +527,46 @@
     </div>
 
     <script src="rng.js"></script>
+    <!-- Firebase auth guard: redirect to login if not signed in -->
+    <script type="module">
+        import { watchAuth, logout, saveToCloud } from './firebase.js';
+
+        // Called by rng.js when it needs to push a save
+        window._cloudSave = async function(saveData) {
+            const user = window._currentUser;
+            if (!user) return;
+            try { await saveToCloud(user.uid, saveData); }
+            catch(e) { console.warn('Cloud save failed:', e); }
+        };
+
+        watchAuth(
+            (user, cloudData) => {
+                window._currentUser    = user;
+                window._cloudUserData  = cloudData;
+
+                // Show username in top-left
+                const el = document.getElementById('username-display');
+                if (el) el.textContent = '👤 ' + (cloudData?.username || '');
+
+                // Signal rng.js that auth is ready and pass the cloud save
+                window._onAuthReady(cloudData?.save || null);
+            },
+            () => {
+                // Not logged in — go to login page
+                window.location.replace('./login.html');
+            }
+        );
+
+        // Logout handler
+        window._doLogout = async function() {
+            // Save first
+            if (window._currentUser && window._buildSaveData) {
+                await window._cloudSave(window._buildSaveData());
+            }
+            await logout();
+            window.location.replace('./login.html');
+        };
+    </script>
     <script>
         function navigateTo(section) {
             // Update active button

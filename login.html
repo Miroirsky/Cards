@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cards — Login</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a3a1a 0%, #1a6fa8 100%);
+            font-family: Arial, sans-serif;
+            color: #fff;
+            padding: 1em;
+        }
+
+        .card {
+            background: rgba(15, 20, 15, 0.92);
+            border: 2px solid rgba(78, 205, 196, 0.3);
+            border-radius: 24px;
+            padding: 2.5em 2.2em;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 16px 60px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 1.8em;
+        }
+        .logo .title {
+            font-size: 2em;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .logo .subtitle {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 0.3em;
+        }
+
+        /* Tab switcher */
+        .tabs {
+            display: flex;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 1.8em;
+            gap: 4px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 0.6em;
+            border: none;
+            border-radius: 9px;
+            font-size: 0.95em;
+            font-weight: bold;
+            cursor: pointer;
+            background: transparent;
+            color: #7f8c8d;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: rgba(78, 205, 196, 0.2);
+            color: #4ecdc4;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1.1em;
+        }
+        label {
+            display: block;
+            font-size: 0.82em;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.4em;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 0.75em 1em;
+            border-radius: 10px;
+            border: 1.5px solid rgba(78,205,196,0.25);
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: #4ecdc4;
+        }
+        input::placeholder { color: #555; }
+
+        /* Submit button */
+        .submit-btn {
+            width: 100%;
+            padding: 0.9em;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: #fff;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 0.5em;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 18px rgba(255,107,107,0.35);
+        }
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(255,107,107,0.5);
+        }
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Error / success messages */
+        .msg {
+            padding: 0.7em 1em;
+            border-radius: 10px;
+            font-size: 0.88em;
+            margin-bottom: 1em;
+            display: none;
+            text-align: center;
+        }
+        .msg.error   { background: rgba(231,76,60,0.18); border: 1px solid rgba(231,76,60,0.4); color: #e74c3c; }
+        .msg.success { background: rgba(39,174,96,0.18); border: 1px solid rgba(39,174,96,0.4); color: #2ecc71; }
+        .msg.show { display: block; }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 1em; height: 1em;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 0.4em;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Rules hint */
+        .rules {
+            font-size: 0.75em;
+            color: #555;
+            text-align: center;
+            margin-top: 1em;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="logo">
+        <div class="title">🎲 Cards</div>
+        <div class="subtitle">Sign in to save your progress</div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" id="tab-login"    onclick="switchTab('login')">Login</button>
+        <button class="tab-btn"        id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <div id="msg" class="msg"></div>
+
+    <!-- Login form -->
+    <div id="form-login">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="login-username" placeholder="Your username" autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="login-password" placeholder="Your password" autocomplete="current-password">
+        </div>
+        <button class="submit-btn" id="login-btn" onclick="doLogin()">LOGIN</button>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none;">
+        <div class="form-group">
+            <label>Choose a username</label>
+            <input type="text" id="reg-username" placeholder="e.g. CardMaster99" autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label>Choose a password</label>
+            <input type="password" id="reg-password" placeholder="At least 6 characters" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+            <label>Confirm password</label>
+            <input type="password" id="reg-password2" placeholder="Repeat your password" autocomplete="new-password">
+        </div>
+        <button class="submit-btn" id="register-btn" onclick="doRegister()">CREATE ACCOUNT</button>
+        <div class="rules">Usernames are case-sensitive. No spaces. Min. 2 characters.<br>Passwords: min. 6 characters.</div>
+    </div>
+</div>
+
+<script type="module">
+    import { register, login, watchAuth } from './firebase.js';
+
+    // If already logged in, go straight to game
+    watchAuth(
+        (user, data) => { window.location.replace('./index.html'); },
+        ()           => { /* not logged in — stay on login page */ }
+    );
+
+    window.switchTab = function(tab) {
+        document.getElementById('form-login').style.display    = tab === 'login'    ? '' : 'none';
+        document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+        document.getElementById('tab-login').classList.toggle('active',    tab === 'login');
+        document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+        hideMsg();
+    };
+
+    function showMsg(text, type) {
+        const el = document.getElementById('msg');
+        el.textContent = text;
+        el.className = 'msg show ' + type;
+    }
+    function hideMsg() {
+        document.getElementById('msg').className = 'msg';
+    }
+    function setLoading(btnId, loading) {
+        const btn = document.getElementById(btnId);
+        if (loading) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Please wait...';
+        } else {
+            btn.disabled = false;
+            btn.textContent = btnId === 'login-btn' ? 'LOGIN' : 'CREATE ACCOUNT';
+        }
+    }
+
+    window.doLogin = async function() {
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value;
+        hideMsg();
+        setLoading('login-btn', true);
+        try {
+            await login(username, password);
+            showMsg('Welcome back, ' + username + '! Loading game…', 'success');
+            setTimeout(() => window.location.replace('./index.html'), 800);
+        } catch(e) {
+            const msg = e.code === 'auth/invalid-credential'
+                ? 'Wrong username or password.'
+                : e.message || 'Login failed.';
+            showMsg(msg, 'error');
+            setLoading('login-btn', false);
+        }
+    };
+
+    window.doRegister = async function() {
+        const username  = document.getElementById('reg-username').value.trim();
+        const password  = document.getElementById('reg-password').value;
+        const password2 = document.getElementById('reg-password2').value;
+        hideMsg();
+        if (password !== password2) { showMsg('Passwords do not match.', 'error'); return; }
+        setLoading('register-btn', true);
+        try {
+            await register(username, password);
+            showMsg('Account created! Redirecting…', 'success');
+            setTimeout(() => window.location.replace('./index.html'), 800);
+        } catch(e) {
+            showMsg(e.message || 'Registration failed.', 'error');
+            setLoading('register-btn', false);
+        }
+    };
+
+    // Allow Enter key to submit
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const loginVisible = document.getElementById('form-login').style.display !== 'none';
+        if (loginVisible) window.doLogin();
+        else              window.doRegister();
+    });
+</script>
+</body>
+</html>

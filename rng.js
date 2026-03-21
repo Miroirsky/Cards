@@ -1,4 +1,5 @@
 const items = [
+    { name: "Sword", chance: 2, rollable: true, tags: ["Sharp"] },
     { name: "Grass", chance: 2, rollable: true },
     { name: "Bush", chance: 3, rollable: true },
     { name: "Tree", chance: 4, rollable: true },
@@ -7,7 +8,6 @@ const items = [
     { name: "Beach", chance: 10, rollable: true },
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
-    { name: "Sword", chance: 25, rollable: true, tags: ["Sharp"] },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
@@ -2029,7 +2029,7 @@ function rollItem() {
 
     // Simuler le roll
     setTimeout(() => {
-        // Système unifié : pool de toutes les cartes ET leurs variantes, chacune avec son poids
+        // ── Build Rarities list: every rollable card × every variant ──
         const variants = [
             { type: '',        mult: 1      },
             { type: 'Gold',    mult: 10     },
@@ -2038,33 +2038,44 @@ function rollItem() {
             { type: 'Nuclear', mult: 10000  },
         ];
 
-        const rollableItems = items.filter(item => item.rollable);
-
-        // Construire le pool : une entrée par (carte × variante)
-        // Le poids est 1 / chanceDisplay, modifié par luck
         const sugarRushActive = sugarRushRolls > 0;
-        const pool = [];
-        for (const item of rollableItems) {
+
+        const Rarities = [];
+        for (const item of items.filter(i => i.rollable)) {
             const isSweet = Array.isArray(item.tags) && item.tags.includes('sweet');
             for (const variant of variants) {
-                const chanceDisplay = item.chance * variant.mult;
-                // luck réduit la chance effective des cartes rares proportionnellement
-                let rarityFactor = Math.log10(chanceDisplay + 1);
-                let effectiveChance = chanceDisplay / (1 + (luck - 1) * rarityFactor * 0.25);
-                // Sugar Rush : ×2 sur les cartes sweet (multiplicatif)
-                let weight = 1 / effectiveChance;
-                if (sugarRushActive && isSweet) weight *= 2;
-                pool.push({ item, type: variant.type, chanceDisplay, weight });
+                let rarity = item.chance * variant.mult;
+                // Luck divides rarity, making cards more likely
+                // Sugar Rush halves the rarity of sweet cards (×2 chance)
+                if (sugarRushActive && isSweet) rarity = rarity / 2;
+                Rarities.push({ item, type: variant.type, chanceDisplay: item.chance * variant.mult, rarity });
             }
         }
 
-        const totalWeight = pool.reduce((sum, e) => sum + e.weight, 0);
-        let rand = Math.random() * totalWeight;
-        let chosen = pool[pool.length - 1];
-        for (const entry of pool) {
-            rand -= entry.weight;
-            if (rand <= 0) { chosen = entry; break; }
+        // ── Test each card against luck ──
+        // luck < rarity : random(0, rarity/luck) <= 1
+        // luck > rarity : random(0, luck/rarity) <= 1  (inverted — higher chance)
+        // luck === rarity: always add
+        const rolls = [];
+        for (const entry of Rarities) {
+            const rarity = entry.rarity;
+            let pass = false;
+            if (luck === rarity) {
+                pass = true;
+            } else if (luck < rarity) {
+                pass = Math.random() * (rarity / luck) <= 1;
+            } else {
+                // luck > rarity: flip the ratio so it becomes very likely
+                pass = Math.random() * (luck / rarity) <= 1;
+            }
+            if (pass) rolls.push(entry);
         }
+
+        // ── If nothing passed (extremely unlikely), fall back to the most common card ──
+        const pool = rolls.length > 0 ? rolls : [Rarities[0]];
+
+        // ── Pick one at random from the rolls list ──
+        const chosen = pool[Math.floor(Math.random() * pool.length)];
 
         const selected     = chosen.item;
         const type         = chosen.type;
@@ -2948,225 +2959,175 @@ function _buildIntegrityFields() {
 }
 
 function _resetToDefaults() {
-    // Vide tout le localStorage du jeu et recharge la page
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('cards-'));
-    keys.forEach(k => localStorage.removeItem(k));
-    // Afficher un message avant reload
-    const msg = document.createElement('div');
-    msg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:1.3em;font-family:sans-serif;text-align:center;padding:2em;box-sizing:border-box;';
-    msg.innerHTML = '<div style="font-size:2em;margin-bottom:0.5em;">⚠️</div><b>Save data corrupted</b><br><span style="color:#aaa;font-size:0.85em;margin-top:0.5em;">Tampering detected. Progress has been reset.</span>';
-    document.body.appendChild(msg);
-    setTimeout(() => location.reload(), 2500);
+    // No-op: anti-cheat is now handled by Firestore security rules.
 }
 
 // Sauvegarde l'inventaire dans localStorage
-function saveCollection() {
-    localStorage.setItem('cards-collection', JSON.stringify(collection));
-    localStorage.setItem('cards-potions', JSON.stringify(potionInventory));
-    localStorage.setItem('cards-effects', JSON.stringify(activeEffects));
-    localStorage.setItem('cards-potion-queues', JSON.stringify(potionQueues));
-    localStorage.setItem('cards-roll-effects', JSON.stringify(rollBasedEffects));
-    localStorage.setItem('cards-rolls', rolls.toString());
-    localStorage.setItem('cards-tokens', tokens.toString());
-    localStorage.setItem('cards-diamonds', diamonds.toString());
-    localStorage.setItem('cards-xp', xp.toString());
-    localStorage.setItem('cards-level', level.toString());
-    localStorage.setItem('cards-xpNext', xpNext.toString());
-    localStorage.setItem('cards-token-upgrade', tokenUpgradeLevel.toString());
-    localStorage.setItem('cards-max-token-upgrade', maxTokenUpgradeLevel.toString());
-    localStorage.setItem('cards-luck-upgrade', luckUpgradeLevel.toString());
-    localStorage.setItem('cards-roll-speed-upgrade', rollSpeedUpgradeLevel.toString());
-    localStorage.setItem('cards-xp-upgrade', xpUpgradeLevel.toString());
-    localStorage.setItem('cards-discovered-tags', JSON.stringify([...discoveredTags]));
-    localStorage.setItem('cards-sugar-rush', sugarRushRolls.toString());
-    localStorage.setItem('cards-bleeding-end-time', bleedingEndTime.toString());
-    localStorage.setItem('cards-artifact-inventory', JSON.stringify(artifactInventory));
-    localStorage.setItem('cards-equipped-artifacts', JSON.stringify(equippedArtifacts));
-    // Écrire le hash d'intégrité EN DERNIER
-    localStorage.setItem('cards-integrity', _computeIntegrity(_buildIntegrityFields()));
+// ── Build a plain-object snapshot of the entire game state ──
+function _buildSaveData() {
+    return {
+        collection:           collection,
+        potionInventory:      potionInventory,
+        potionQueues:         potionQueues,
+        rollBasedEffects:     rollBasedEffects,
+        rolls:                rolls,
+        tokens:               tokens,
+        diamonds:             diamonds,
+        xp:                   xp,
+        level:                level,
+        xpNext:               xpNext,
+        tokenUpgradeLevel:    tokenUpgradeLevel,
+        maxTokenUpgradeLevel: maxTokenUpgradeLevel,
+        luckUpgradeLevel:     luckUpgradeLevel,
+        rollSpeedUpgradeLevel:rollSpeedUpgradeLevel,
+        xpUpgradeLevel:       xpUpgradeLevel,
+        discoveredTags:       [...discoveredTags],
+        sugarRushRolls:       sugarRushRolls,
+        bleedingEndTime:      bleedingEndTime,
+        artifactInventory:    artifactInventory,
+        equippedArtifacts:    equippedArtifacts,
+        activeEffects:        Object.fromEntries(
+            Object.entries(activeEffects).map(([k,v]) => [k, {
+                power: v.power, endTime: v.endTime, startTime: v.startTime,
+                totalDuration: v.totalDuration, potionName: v.potionName,
+                _duration: v._duration, _power: v._power, _name: v._name
+            }])
+        ),
+        lastSaved:            Date.now(),
+    };
 }
 
-// Charge l'inventaire depuis localStorage
-function loadCollection() {
-    const data = localStorage.getItem('cards-collection');
-    const potionsData = localStorage.getItem('cards-potions');
-    const effectsData = localStorage.getItem('cards-effects');
-    const rollsData = localStorage.getItem('cards-rolls');
-    const tokensData = localStorage.getItem('cards-tokens');
-    const diamondsData = localStorage.getItem('cards-diamonds');
-    const xpData = localStorage.getItem('cards-xp');
-    const levelData = localStorage.getItem('cards-level');
-    const xpNextData = localStorage.getItem('cards-xpNext');
+// Expose for firebase.js usage
+window._buildSaveData = _buildSaveData;
 
-    // ── Pré-charger les valeurs numériques pour la vérification d'intégrité ──
-    const _rolls    = rollsData    ? (parseInt(rollsData)    || 0) : 0;
-    const _tokens   = tokensData   ? (parseInt(tokensData)   || 0) : 10;
-    const _diamonds = diamondsData ? (parseInt(diamondsData) || 0) : 0;
-    const _xp       = xpData       ? (parseInt(xpData)       || 0) : 0;
-    const _level    = levelData    ? (parseInt(levelData)    || 1) : 1;
-    const _xpNext   = xpNextData   ? (parseInt(xpNextData)   || 50) : 50;
+// saveCollection is now a no-op during gameplay (save happens on page close)
+function saveCollection() {
+    // Intentionally empty during play — data lives in JS variables.
+    // Cloud save fires on beforeunload / visibilitychange (see below).
+}
 
-    const _tokenU  = parseInt(localStorage.getItem('cards-token-upgrade')     || '0') || 0;
-    const _maxTokU = parseInt(localStorage.getItem('cards-max-token-upgrade') || '0') || 0;
-    const _luckU   = parseInt(localStorage.getItem('cards-luck-upgrade')      || '0') || 0;
-    const _rsU     = parseInt(localStorage.getItem('cards-roll-speed-upgrade')|| '0') || 0;
-    const _xpU     = parseInt(localStorage.getItem('cards-xp-upgrade')        || '0') || 0;
-    const _sr      = Math.max(0, parseInt(localStorage.getItem('cards-sugar-rush') || '0') || 0);
+// ── Push save to cloud on page close / tab hide ──
+async function _pushCloudSave() {
+    if (window._cloudSave) {
+        try { await window._cloudSave(_buildSaveData()); } catch(e) {}
+    }
+}
 
-    // ── Vérification d'intégrité ──
-    const storedHash = localStorage.getItem('cards-integrity');
-    if (storedHash !== null) {
-        // Une sauvegarde avec hash existe → on la vérifie
-        const expectedHash = _computeIntegrity({
-            tk: _tokens, dm: _diamonds, xp: _xp, lv: _level, xn: _xpNext,
-            ro: _rolls, tu: _tokenU, mu: _maxTokU, lu: _luckU, rs: _rsU,
-            xu: _xpU, sr: _sr,
-        });
-        if (storedHash !== expectedHash) {
-            _resetToDefaults();
-            return; // Arrêter le chargement
+window.addEventListener('beforeunload',  () => { _pushCloudSave(); });
+window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') _pushCloudSave();
+});
+
+// ── Apply a cloud save snapshot to all game variables ──
+function _applyCloudSave(save) {
+    if (!save) return;  // new account — start fresh
+
+    // Collection
+    if (save.collection && typeof save.collection === 'object') {
+        collection = {};
+        for (const [k, v] of Object.entries(save.collection)) {
+            if (typeof v === 'number' && v > 0 && v <= 1_000_000) collection[k] = v;
         }
     }
-    // (Si storedHash === null : ancienne sauvegarde sans hash → on accepte et on hashera à la prochaine sauvegarde)
-
-    // ── Validation des plages (valeurs aberrantes) ──
-    const MAX_LEVEL   = 200;
-    const MAX_UPGRADE = 50;
-    const MAX_TOKENS_POSSIBLE = BASE_MAX_TOKEN + MAX_UPGRADE * 5; // 20 + 250 = 270
-    const MAX_DIAMONDS = 10_000_000;
-    const MAX_XP       = 1_000_000_000;
-    const MAX_ROLLS    = 1_000_000_000;
-
-    if (
-        _tokens   < 0 || _tokens   > MAX_TOKENS_POSSIBLE ||
-        _diamonds < 0 || _diamonds > MAX_DIAMONDS         ||
-        _xp       < 0 || _xp       > MAX_XP              ||
-        _level    < 1 || _level    > MAX_LEVEL            ||
-        _rolls    < 0 || _rolls    > MAX_ROLLS            ||
-        _tokenU   < 0 || _tokenU   > MAX_UPGRADE         ||
-        _maxTokU  < 0 || _maxTokU  > MAX_UPGRADE         ||
-        _luckU    < 0 || _luckU    > MAX_UPGRADE         ||
-        _rsU      < 0 || _rsU      > MAX_UPGRADE         ||
-        _xpU      < 0 || _xpU      > MAX_UPGRADE
-    ) {
-        _resetToDefaults();
-        return;
+    if (save.potionInventory) {
+        potionInventory = {};
+        for (const [k, v] of Object.entries(save.potionInventory)) {
+            if (typeof v === 'number' && v > 0 && v <= 10_000) potionInventory[k] = v;
+        }
     }
+    if (save.potionQueues)    { try { potionQueues    = save.potionQueues;    } catch(e) {} }
+    if (save.rollBasedEffects){ try { rollBasedEffects= save.rollBasedEffects;} catch(e) {} }
 
-    // ── Chargement effectif ──
-    if (data) {
-        try {
-            const parsed = JSON.parse(data);
-            // Nettoyer les quantités négatives / aberrantes dans la collection
-            for (const key of Object.keys(parsed)) {
-                const v = parsed[key];
-                if (typeof v !== 'number' || v < 0 || v > 1_000_000) {
-                    delete parsed[key];
-                }
-            }
-            collection = parsed;
-        } catch(e) { collection = {}; }
-    }
-    
-    if (potionsData) {
-        try {
-            const parsed = JSON.parse(potionsData);
-            for (const key of Object.keys(parsed)) {
-                const v = parsed[key];
-                if (typeof v !== 'number' || v < 0 || v > 10_000) delete parsed[key];
-            }
-            potionInventory = parsed;
-        } catch(e) { potionInventory = {}; }
-    }
-    
-    if (effectsData) {
-        try {
-            activeEffects = JSON.parse(effectsData);
-            const now = Date.now();
-            for (let effectType of Object.keys(activeEffects)) {
-                const effect = activeEffects[effectType];
-                const remaining = effect.endTime - now;
-                if (remaining <= 0) {
-                    setTimeout(function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType), 0);
-                } else {
-                    effect._timeoutId = setTimeout(
-                        function(et) { return function() { consumePotionEffectOrDequeue(et); }; }(effectType),
-                        remaining
-                    );
-                }
-            }
-        } catch(e) { activeEffects = {}; }
-    }
+    // Numerics
+    rolls                = Number(save.rolls)                || 0;
+    tokens               = Number(save.tokens)               || 10;
+    diamonds             = Number(save.diamonds)             || 0;
+    xp                   = Number(save.xp)                   || 0;
+    level                = Number(save.level)                || 1;
+    xpNext               = Number(save.xpNext)               || 50;
+    tokenUpgradeLevel    = Number(save.tokenUpgradeLevel)    || 0;
+    maxTokenUpgradeLevel = Number(save.maxTokenUpgradeLevel) || 0;
+    luckUpgradeLevel     = Number(save.luckUpgradeLevel)     || 0;
+    rollSpeedUpgradeLevel= Number(save.rollSpeedUpgradeLevel)|| 0;
+    xpUpgradeLevel       = Number(save.xpUpgradeLevel)       || 0;
+    sugarRushRolls       = Number(save.sugarRushRolls)       || 0;
+    bleedingEndTime      = Number(save.bleedingEndTime)      || 0;
 
-    const potionQueuesData = localStorage.getItem('cards-potion-queues');
-    if (potionQueuesData) {
-        try { potionQueues = JSON.parse(potionQueuesData); } catch(e) { potionQueues = {}; }
-    }
-    
-    const rollEffectsData = localStorage.getItem('cards-roll-effects');
-    if (rollEffectsData) {
-        try { rollBasedEffects = JSON.parse(rollEffectsData); } catch(e) { rollBasedEffects = {}; }
-    }
-    
-    rolls = _rolls;
-    document.getElementById('rolls-count').innerText = rolls;
+    // Derived
+    tokenRate = 0.2 + tokenUpgradeLevel * 0.1;
+    maxToken  = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
+    tokens    = Math.min(tokens, maxToken);
 
-    tokens   = Math.min(Math.max(_tokens, 1), MAX_TOKENS_POSSIBLE);
-    diamonds = _diamonds;
-    xp       = _xp;
-    level    = _level;
-    xpNext   = _xpNext;
+    // Artifacts
+    if (save.artifactInventory) artifactInventory = save.artifactInventory;
+    if (save.equippedArtifacts) equippedArtifacts = save.equippedArtifacts;
 
-    tokenUpgradeLevel    = _tokenU;
-    tokenRate            = 0.2 + tokenUpgradeLevel * 0.1;
-    maxTokenUpgradeLevel = _maxTokU;
-    maxToken             = BASE_MAX_TOKEN + maxTokenUpgradeLevel * 5;
-    // Clamp tokens against newly-computed maxToken
-    tokens               = Math.min(tokens, maxToken);
-
-    luckUpgradeLevel      = _luckU;
-    rollSpeedUpgradeLevel = _rsU;
-    xpUpgradeLevel        = _xpU;
-
-    const artifactInvData = localStorage.getItem('cards-artifact-inventory');
-    if (artifactInvData) { try { artifactInventory = JSON.parse(artifactInvData); } catch(e) {} }
-    const equippedArtData = localStorage.getItem('cards-equipped-artifacts');
-    if (equippedArtData) { try { equippedArtifacts = JSON.parse(equippedArtData); } catch(e) {} }
-
-    const discoveredTagsData = localStorage.getItem('cards-discovered-tags');
-    if (discoveredTagsData) {
-        try { discoveredTags = new Set(JSON.parse(discoveredTagsData)); } catch(e) {}
+    // Discovered tags
+    if (Array.isArray(save.discoveredTags)) {
+        discoveredTags = new Set(save.discoveredTags);
     } else {
         discoveredTags = new Set();
-        for (const key of Object.keys(collection)) {
+        for (const k of Object.keys(collection)) {
             for (const t of ['Gold','Rainbow','Shiny','Nuclear']) {
-                if (key.endsWith(`(${t})`)) discoveredTags.add(t);
+                if (k.endsWith('(' + t + ')')) discoveredTags.add(t);
             }
         }
     }
 
-    sugarRushRolls = _sr;
-
-    const bleedingData = localStorage.getItem('cards-bleeding-end-time');
-    if (bleedingData) {
-        bleedingEndTime = parseInt(bleedingData) || 0;
-        if (bleedingEndTime > Date.now()) {
-            startBleeding();
+    // Active effects (re-arm timeouts)
+    if (save.activeEffects && typeof save.activeEffects === 'object') {
+        const now = Date.now();
+        activeEffects = {};
+        for (const [effectType, effect] of Object.entries(save.activeEffects)) {
+            const remaining = (effect.endTime || 0) - now;
+            if (remaining <= 0) continue;
+            activeEffects[effectType] = { ...effect };
+            activeEffects[effectType]._timeoutId = setTimeout(
+                (et => () => consumePotionEffectOrDequeue(et))(effectType),
+                remaining
+            );
         }
     }
 
+    // Bleeding
+    if (bleedingEndTime > Date.now()) startBleeding();
+
+    // UI
+    document.getElementById('rolls-count').innerText = rolls;
     updateTokensDisplay();
     updateDiamondsDisplay();
     updateLevelXpDisplay();
     updateUnlockables();
 }
+
+// ── _onAuthReady: called by Firebase module once auth resolves ──
+// save = cloud save object or null (new account)
+window._onAuthReady = function(save) {
+    _applyCloudSave(save);
+
+    updateCollection();
+    updateInventoryStats();
+    updateCraftButtons();
+    updatePotionsInventory();
+    updateActiveEffects();
+    updateActiveEffectsDisplay();
+    resetCardPreview();
+    updateLuck();
+
+    if (craftingQueue.length > 0) startCraftingInterval();
+    startRealTimeEffectsUpdate();
+    startTokenRecharge();
+    updateTokensDisplay();
+};
+
+// Kept for backward-compat (called in a few places but now a no-op)
+function loadCollection() {}
 function saveLastConnection() {
     const now = new Date();
     localStorage.setItem('cards-last-connection', now.toISOString());
 }
 
-// Enregistrer la date de dernière connexion à la déconnexion
-window.addEventListener('beforeunload', saveLastConnection);
+// (Cloud save fires on beforeunload via _pushCloudSave in saveCollection block above)
 
 function gainTokensSinceLastConnection() {
     const last = localStorage.getItem('cards-last-connection');
@@ -3219,28 +3180,9 @@ function applyRarityTagDisplaySetting(value) {
     }
 }
 
-// Au chargement de la page, on restaure l'inventaire
-loadCollection();
-const offlineInfo = gainTokensSinceLastConnection();
-updateCollection();
-updateInventoryStats();
-updateCraftButtons();
-updatePotionsInventory();
-updateActiveEffects();
-updateActiveEffectsDisplay();
-resetCardPreview();
-displayLastConnectionInfo(offlineInfo.tokensToAdd, offlineInfo.diffMinutes, offlineInfo.lastDate);
-updateLuck();
-
-// Reprendre la queue de craft si elle était en cours
-if (craftingQueue.length > 0) startCraftingInterval();
-
-// Démarrer la mise à jour en temps réel des effets
-startRealTimeEffectsUpdate();
-
-// Démarrer la recharge de tokens
-startTokenRecharge();
-updateTokensDisplay(); // S'assurer que l'état du bouton est correct au démarrage
+// Initialization is deferred until _onAuthReady() is called by the
+// Firebase module in index.html once the user's cloud save is fetched.
+// Nothing to do here — rng.js variables start at their default values.
 
 // Ajouter des styles CSS pour les animations
 const style = document.createElement('style');
