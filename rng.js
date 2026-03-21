@@ -4404,7 +4404,6 @@ function closeShopMenu() {
 }
 
 document.getElementById('shop-btn').onclick = openShopMenu;
-document.getElementById('rewards-btn').onclick = openRewardsPanel;
 document.getElementById('close-shop').onclick = closeShopMenu;
 document.getElementById('shop-modal').onclick = function(e) {
     if (e.target === this) closeShopMenu();
