@@ -1327,14 +1327,15 @@ function updateRollEffectsIndicator() {
         }
     }
 
-    // ── Full Belly / Obese: screen border glow ──
+    // ── Full Belly / Obese / Bleeding: screen border glows ──
     let borderDiv = null;
     function updateBorderFX() {
         const now = Date.now();
-        const isObese = obeseEndTime > now;
+        const isObese    = obeseEndTime    > now;
+        const isBleeding = bleedingEndTime > now;
         const isFullBelly = !isObese && ventrePleinRolls > 0;
 
-        if (!isObese && !isFullBelly) {
+        if (!isObese && !isFullBelly && !isBleeding) {
             if (borderDiv) { borderDiv.remove(); borderDiv = null; }
             return;
         }
@@ -1343,11 +1344,18 @@ function updateRollEffectsIndicator() {
             borderDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9997;border-radius:0;';
             document.body.appendChild(borderDiv);
         }
+
         if (isObese) {
             const pct = Math.max(0, (obeseEndTime - now) / 60000);
             const alpha = 0.25 + pct * 0.25;
             borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(192,57,43,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(192,57,43,${(alpha*0.5).toFixed(2)})`;
-        } else {
+        } else if (isBleeding) {
+            // Pulsing red glow — faster pulse as time runs out
+            const pct = Math.max(0, (bleedingEndTime - now) / 60000);
+            const pulse = 0.5 + 0.5 * Math.sin(now / (200 + pct * 300)); // faster near end
+            const alpha = (0.2 + pct * 0.2) * (0.7 + 0.3 * pulse);
+            borderDiv.style.boxShadow = `inset 0 0 80px 30px rgba(180,0,0,${alpha.toFixed(2)}), inset 0 0 160px 60px rgba(120,0,0,${(alpha*0.4).toFixed(2)})`;
+        } else if (isFullBelly) {
             const pct = ventrePleinRolls / 10;
             const alpha = 0.18 + pct * 0.22;
             borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(230,126,34,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(230,126,34,${(alpha*0.5).toFixed(2)})`;
@@ -1870,35 +1878,52 @@ function showBleedingEffect(count, tokenLost) {
     const container = document.body;
 
     for (let i = 0; i < count; i++) {
-        const delay = Math.random() * 250;
+        const delay = Math.random() * (tokenLost ? 80 : 300);
         setTimeout(() => {
-            const size = 12 + Math.random() * 18; // 12–30px
+            // Drop shape: tall and narrow (like a blood drop)
+            const w = 5 + Math.random() * 7;
+            const h = w * (1.5 + Math.random());
             const el = document.createElement('div');
+            const alpha = 0.5 + Math.random() * 0.45;
             el.style.cssText = `
                 position: fixed;
-                width: ${size}px;
-                height: ${size}px;
-                background-color: rgba(255,0,0,${0.45 + Math.random() * 0.35});
-                border-radius: 4px;
+                width: ${w}px;
+                height: ${h}px;
+                background-color: rgba(${tokenLost ? '220,20,20' : '180,10,10'},${alpha});
+                border-radius: 50% 50% 60% 60%;
                 pointer-events: none;
                 z-index: 9999;
-                transform-origin: center;
+                transform-origin: center top;
             `;
 
-            const centerX = window.innerWidth / 2;
-            const startX = centerX + (Math.random() - 0.5) * (tokenLost ? 80 : window.innerWidth);
-            const startY = tokenLost ? window.innerHeight + 40 : -size - Math.random() * 20;
+            let startX, startY, vx, vy, gravity, maxLife;
+
+            if (tokenLost) {
+                // Burst from center — blood splatter flying up then falling
+                startX = window.innerWidth / 2 + (Math.random() - 0.5) * 120;
+                startY = window.innerHeight / 2 + (Math.random() - 0.5) * 80;
+                vx = (Math.random() - 0.5) * 30;
+                vy = -(10 + Math.random() * 20);
+                gravity = 0.8;
+                maxLife = 1200 + Math.random() * 600;
+            } else {
+                // Drip from top edge, falling down
+                startX = Math.random() * window.innerWidth;
+                startY = -h;
+                vx = (Math.random() - 0.5) * 2;
+                vy = 1.5 + Math.random() * 2.5;
+                gravity = 0.04;
+                maxLife = 1800 + Math.random() * 800;
+            }
 
             const particle = {
                 el,
                 x: startX,
                 y: startY,
-                vx: (Math.random() - 0.5) * (tokenLost ? 40 : 10),
-                vy: tokenLost ? -(18 + Math.random() * 12) : (2 + Math.random() * 4),
-                gravity: tokenLost ? 0.35 : 0.05,
-                rotation: Math.random() * 360,
-                life: tokenLost ? 1600 + Math.random() * 400 : 1200 + Math.random() * 400,
-                maxLife: tokenLost ? 1600 + Math.random() * 400 : 1200 + Math.random() * 400,
+                vx, vy, gravity,
+                rotation: Math.random() * 20 - 10,
+                life: maxLife,
+                maxLife,
             };
 
             el.style.left = `${particle.x}px`;
@@ -3000,10 +3025,39 @@ function _buildSaveData() {
 // Expose for firebase.js usage
 window._buildSaveData = _buildSaveData;
 
-// saveCollection is now a no-op during gameplay (save happens on page close)
+// saveCollection: triggers a cloud push (debounced to avoid hammering)
+let _saveDebounceTimer = null;
 function saveCollection() {
-    // Intentionally empty during play — data lives in JS variables.
-    // Cloud save fires on beforeunload / visibilitychange (see below).
+    // Debounce: collapse rapid successive calls into one write 2s later
+    clearTimeout(_saveDebounceTimer);
+    _saveDebounceTimer = setTimeout(() => { _pushCloudSave(); }, 2000);
+}
+
+// Manual save — called by the Save button, saves immediately
+async function manualSave() {
+    const btn = document.getElementById('manual-save-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '💾 Saving…';
+    }
+    try {
+        await _pushCloudSave();
+        if (btn) {
+            btn.textContent = '✅ Saved!';
+            setTimeout(() => {
+                btn.textContent = '💾 Save';
+                btn.disabled = false;
+            }, 1500);
+        }
+    } catch(e) {
+        if (btn) {
+            btn.textContent = '❌ Failed';
+            setTimeout(() => {
+                btn.textContent = '💾 Save';
+                btn.disabled = false;
+            }, 2000);
+        }
+    }
 }
 
 // ── Push save to cloud on page close / tab hide ──
@@ -3863,9 +3917,10 @@ if (resetBtn) {
             updatePotionsInventory();
             updateActiveEffectsDisplay();
             resetCardPreview();
-            alert('Progress has been reset!');
-            // Optionally reload the page
-            // location.reload();
+            // Push the wiped save to cloud
+            _pushCloudSave().then(() => {
+                alert('Progress has been reset!');
+            });
         }
     };
 }

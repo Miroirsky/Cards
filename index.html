@@ -198,9 +198,12 @@
                     </label>
                 </div>
                 <audio id="notification-sound" src="Roll-Notification.mp3" preload="auto"></audio>
-                <button id="reset-save-btn" class="reset-save-btn"
-                    style="margin-top:2em;background:#e74c3c;color:white;padding:0.7em 2em;border:none;border-radius:10px;font-size:1.1em;cursor:pointer;">Reset
-                    Save</button>
+                <div style="display:flex;gap:0.8em;margin-top:2em;flex-wrap:wrap;">
+                    <button id="manual-save-btn" onclick="manualSave()"
+                        style="flex:1;min-width:100px;background:linear-gradient(90deg,#27ae60,#2ecc71);color:white;padding:0.7em 1.2em;border:none;border-radius:10px;font-size:1.05em;font-weight:bold;cursor:pointer;">💾 Save</button>
+                    <button id="reset-save-btn" class="reset-save-btn"
+                        style="flex:1;min-width:100px;background:#e74c3c;color:white;padding:0.7em 1.2em;border:none;border-radius:10px;font-size:1.05em;cursor:pointer;">🗑️ Reset</button>
+                </div>
             </div>
         </div>
     </div>
