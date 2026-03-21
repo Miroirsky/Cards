@@ -109,7 +109,7 @@ const artifactDefinitions = [
             { name: "Sugar",      amount: 50 }
         ],
         craftTime: 60 * 1000 * 2, // 2 minutes
-        image: "Main/Artifacts-Icons/Sugar Magnet.png"
+        image: "Artifacts-Icons/Sugar Magnet.png"
     }
 ];
 
@@ -191,6 +191,8 @@ for (let item of items) {
 
 let collection = {};
 let discoveredTags = new Set(); // tracks tag types ever obtained (Gold, Rainbow, Shiny, Nuclear)
+let discoveredEffects     = new Set(); // 'sugarRush', 'fullBelly', 'obese', 'bleeding'
+let discoveredSpecialTags = new Set(); // 'sweet', 'caloric', 'sharp', 'ai'
 let potionInventory = {}; // Inventaire des potions et items spéciaux
 let activeEffects = {}; // Effets actuellement actifs
 let potionQueues = {};
@@ -2156,6 +2158,14 @@ function rollItem() {
         }
         // Track discovered tag types
         if (type) discoveredTags.add(type);
+        // Track discovered special tags from the rolled card
+        if (Array.isArray(selected.tags)) {
+            for (const t of selected.tags) {
+                if (['sweet','caloric','Sharp','ai'].includes(t)) {
+                    discoveredSpecialTags.add(t.toLowerCase());
+                }
+            }
+        }
 
         // ── Sugar Rush ──
         const rolledIsSweet = Array.isArray(selected.tags) && selected.tags.includes('sweet');
@@ -2170,6 +2180,7 @@ function rollItem() {
                 sugarRushRolls = Math.min(10, sugarRushRolls + bonusRolls);
                 const added = sugarRushRolls - before;
                 const magnetNote = sugarMagnetCount > 0 ? ` 🧲×${sugarMagnetCount}` : '';
+                discoveredEffects.add('sugarRush');
                 showCraftMessage(`🍬 Sugar Rush! +${added} roll${added > 1 ? 's' : ''}${magnetNote} (${sugarRushRolls} remaining)`, "success");
             }
         } else if (sugarRushRolls > 0) {
@@ -2193,11 +2204,13 @@ function rollItem() {
                 if (ventrePleinRolls > 10) {
                     ventrePleinRolls = 0;
                     obeseEndTime = Date.now() + 60000;
+                    discoveredEffects.add('obese');
                     showCraftMessage(`🍔 Obese! Roll speed ×0.8 for 60s`, "error");
                     updateActiveEffects();
                 } else {
                     const actualAdded = ventrePleinRolls - before;
                     if (actualAdded > 0) {
+                        discoveredEffects.add('fullBelly');
                         showCraftMessage(`🍔 Full Belly! +${actualAdded} roll${actualAdded > 1 ? 's' : ''} (${ventrePleinRolls} remaining)`, "success");
                     }
                 }
@@ -2216,6 +2229,7 @@ function rollItem() {
             if (Math.floor(Math.random() * 4) === 0) {
                 bleedingEndTime = Date.now() + 60000; // 60 seconds
                 startBleeding();
+                discoveredEffects.add('bleeding');
                 showCraftMessage(`🩸 Bleeding! Losing tokens for 60s`, "error");
                 updateActiveEffects();
             }
@@ -3007,6 +3021,8 @@ function _buildSaveData() {
         rollSpeedUpgradeLevel:rollSpeedUpgradeLevel,
         xpUpgradeLevel:       xpUpgradeLevel,
         discoveredTags:       [...discoveredTags],
+        discoveredEffects:     [...discoveredEffects],
+        discoveredSpecialTags: [...discoveredSpecialTags],
         sugarRushRolls:       sugarRushRolls,
         bleedingEndTime:      bleedingEndTime,
         artifactInventory:    artifactInventory,
@@ -3127,6 +3143,8 @@ function _applyCloudSave(save) {
             }
         }
     }
+    discoveredEffects     = save.discoveredEffects     ? new Set(save.discoveredEffects)     : new Set();
+    discoveredSpecialTags = save.discoveredSpecialTags ? new Set(save.discoveredSpecialTags) : new Set();
 
     // Active effects (re-arm timeouts)
     if (save.activeEffects && typeof save.activeEffects === 'object') {
@@ -3890,7 +3908,9 @@ if (resetBtn) {
             artifactInventory = {};
             equippedArtifacts = [];
             collection = {};
-            discoveredTags = new Set();
+            discoveredTags        = new Set();
+            discoveredEffects     = new Set();
+            discoveredSpecialTags = new Set();
             rolls = 0;
             tokens = 10;
             diamonds = 0;
@@ -4744,7 +4764,15 @@ function renderIndexSpecialTags() {
     const sweetItems   = items.filter(i => Array.isArray(i.tags) && i.tags.includes('sweet'));
     const caloricItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('caloric'));
 
+    if (discoveredSpecialTags.size === 0) {
+        list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Roll cards to discover special tags!</div>';
+        return;
+    }
+
     // ── Sweet card ──
+    if (!discoveredSpecialTags.has('sweet')) {
+        // Not yet discovered — skip this section
+    } else {
     const card = document.createElement('div');
     card.style.cssText = 'background:rgba(255,105,180,0.08);border:1.5px solid rgba(255,105,180,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
 
@@ -4801,7 +4829,12 @@ function renderIndexSpecialTags() {
     `;
     list.appendChild(card);
 
+    } // end sweet section
+
     // ── Caloric card ──
+    if (!discoveredSpecialTags.has('caloric')) {
+        // Not yet discovered
+    } else {
     const caloricCard = document.createElement('div');
     caloricCard.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
     caloricCard.innerHTML = `
@@ -4857,7 +4890,12 @@ function renderIndexSpecialTags() {
     `;
     list.appendChild(caloricCard);
 
+    } // end caloric section
+
     // ── Sharp card ──
+    if (!discoveredSpecialTags.has('sharp')) {
+        // Not yet discovered
+    } else {
     const sharpItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('Sharp'));
     const sharpCard = document.createElement('div');
     sharpCard.style.cssText = 'background:rgba(231,76,60,0.08);border:1.5px solid rgba(231,76,60,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
@@ -4914,7 +4952,12 @@ function renderIndexSpecialTags() {
     `;
     list.appendChild(sharpCard);
 
+    } // end sharp section
+
     // ── AI card ──
+    if (!discoveredSpecialTags.has('ai')) {
+        // Not yet discovered
+    } else {
     const aiItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('ai'));
     const aiCard = document.createElement('div');
     aiCard.style.cssText = 'background:rgba(155,89,182,0.08);border:1.5px solid rgba(155,89,182,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
@@ -4949,6 +4992,7 @@ function renderIndexSpecialTags() {
         </div>
     `;
     list.appendChild(aiCard);
+    } // end ai section
 }
 
 function renderIndexEffects() {
@@ -4956,8 +5000,16 @@ function renderIndexEffects() {
     if (!list) return;
     list.innerHTML = '';
 
+    if (discoveredEffects.size === 0) {
+        list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Trigger effects in-game to discover them here!</div>';
+        return;
+    }
+
     // Sugar Rush
     const sweetItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('sweet'));
+    if (!discoveredEffects.has('sugarRush')) {
+        // not discovered
+    } else {
     const card = document.createElement('div');
     card.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
 
@@ -5015,8 +5067,13 @@ function renderIndexEffects() {
     `;
     list.appendChild(card);
 
-    // ── Ventre Plein ──
+    } // end sugarRush section
+
+    // ── Full Belly ──
     const caloricItems2 = items.filter(i => Array.isArray(i.tags) && i.tags.includes('caloric'));
+    if (!discoveredEffects.has('fullBelly')) {
+        // not discovered
+    } else {
     const vpCard = document.createElement('div');
     vpCard.style.cssText = 'background:rgba(230,126,34,0.08);border:1.5px solid rgba(230,126,34,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
 
@@ -5074,7 +5131,12 @@ function renderIndexEffects() {
     `;
     list.appendChild(vpCard);
 
+    } // end fullBelly section
+
     // ── Obese ──
+    if (!discoveredEffects.has('obese')) {
+        // not discovered
+    } else {
     const obeseCard = document.createElement('div');
     obeseCard.style.cssText = 'background:rgba(192,57,43,0.08);border:1.5px solid rgba(192,57,43,0.35);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
 
@@ -5122,7 +5184,12 @@ function renderIndexEffects() {
     `;
     list.appendChild(obeseCard);
 
+    } // end obese section
+
     // ── Bleeding ──
+    if (!discoveredEffects.has('bleeding')) {
+        // not discovered
+    } else {
     const sharpItems2 = items.filter(i => Array.isArray(i.tags) && i.tags.includes('Sharp'));
     const bleedingCard = document.createElement('div');
     bleedingCard.style.cssText = 'background:rgba(136,0,0,0.08);border:1.5px solid rgba(136,0,0,0.35);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
@@ -5180,6 +5247,7 @@ function renderIndexEffects() {
         </div>
     `;
     list.appendChild(bleedingCard);
+    } // end bleeding section
 }
 
 // ===== INDEX: UNLOCKS =====
@@ -5270,7 +5338,7 @@ function updateArtifactsUI() {
         `;
         if (equipped) {
             const def = artifactDefinitions.find(a => a.name === equipped.name);
-            slot.innerHTML = `<img src="${def ? def.image : ''}" style="width:40px;height:40px;object-fit:contain;" onerror="this.style.display='none'">
+            slot.innerHTML = `<img src="${def ? def.image : ''}" style="width:44px;height:44px;object-fit:contain;border-radius:8px;" onerror="this.style.display='none'">
                 <div style="font-size:0.55em;color:#f39c12;text-align:center;line-height:1.1;">${equipped.name}</div>`;
             slot.title = 'Click to unequip ' + equipped.name;
             slot.onclick = () => { unequipArtifact(i); };
@@ -5299,7 +5367,7 @@ function updateArtifactsUI() {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(243,156,18,0.08);border:1px solid rgba(243,156,18,0.25);border-radius:10px;padding:0.6em 0.9em;';
         row.innerHTML = `
-            <img src="${def ? def.image : ''}" style="width:38px;height:38px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+            <img src="${def ? def.image : ''}" style="width:44px;height:44px;object-fit:contain;border-radius:8px;flex-shrink:0;" onerror="this.style.display='none'">
             <div style="flex:1;">
                 <div style="font-weight:bold;color:#f39c12;">${name}</div>
                 <div style="font-size:0.78em;color:#7f8c8d;">×${qty} in inventory</div>
@@ -5330,7 +5398,7 @@ function renderIndexArtifacts() {
         card.style.cssText = 'background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.3);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
         card.innerHTML = `
             <div style="display:flex;align-items:center;gap:0.9em;">
-                <img src="${def.image}" style="width:54px;height:54px;object-fit:contain;border-radius:10px;background:rgba(243,156,18,0.12);padding:4px;flex-shrink:0;" onerror="this.style.display='none'">
+                <img src="${def.image}" style="width:56px;height:56px;object-fit:contain;border-radius:10px;background:rgba(243,156,18,0.12);padding:6px;flex-shrink:0;" onerror="this.style.display='none'">
                 <div style="flex:1;">
                     <div style="font-weight:bold;font-size:1.1em;color:#f39c12;">${def.name}</div>
                     <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.1em;">
