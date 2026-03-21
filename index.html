@@ -72,7 +72,7 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.1.0</div>
+    <div class="update-text">Update 1.0.3</div>
     <!-- Logged-in user display (clickable) -->
     <button id="username-display" onclick="openUserMenu()" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(78,205,196,0.2)'" onmouseout="this.style.background='rgba(78,205,196,0.1)'"></button>
     <!-- Mini save button under username -->
@@ -244,9 +244,9 @@
     <button id="shop-btn" class="settings-btn" title="Shop" style="right: 175px;">
         Shop
     </button>
-    <!-- Bouton Unlocks -->
-    <button id="unlocks-btn" class="settings-btn" title="Unlocks" style="right: 260px;">
-        Unlocks
+    <!-- Bouton Rewards -->
+    <button id="rewards-btn" class="settings-btn" title="Rewards" style="right: 260px;position:relative;">
+        🎁<span id="rewards-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#f39c12;color:#fff;border-radius:50%;width:16px;height:16px;font-size:0.6em;font-weight:bold;align-items:center;justify-content:center;"></span>
     </button>
 
     <!-- Menu de paramètres (modal cachée au départ) -->
@@ -390,8 +390,25 @@
         </div>
         <div style="flex:1;overflow-y:auto;padding:1.2em;display:flex;flex-direction:column;gap:1.2em;">
 
-            <!-- Card selector -->
+            <!-- Item type selector -->
             <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What to sell</div>
+                <div style="display:flex;gap:0.5em;">
+                    <button id="sell-type-card" class="sell-price-src-btn active" onclick="setSellItemType('card')">🎴 Card</button>
+                    <button id="sell-type-xp"   class="sell-price-src-btn"        onclick="setSellItemType('xp')">⭐ XP</button>
+                </div>
+            </div>
+
+            <!-- XP amount (hidden by default) -->
+            <div id="sell-xp-section" style="display:none;">
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">XP to sell</div>
+                <div id="sell-xp-owned" style="font-size:0.85em;color:#4ecdc4;margin-bottom:0.5em;"></div>
+                <input id="sell-xp-input" type="number" min="1" placeholder="Amount of XP…"
+                    style="width:100%;box-sizing:border-box;padding:0.65em 1em;border-radius:10px;border:1.5px solid rgba(78,205,196,0.35);background:rgba(255,255,255,0.06);color:#fff;font-size:1em;outline:none;">
+            </div>
+
+            <!-- Card selector -->
+            <div id="sell-card-section">
                 <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Card to sell</div>
                 <div id="sell-card-search-wrap" style="position:relative;">
                     <input id="sell-card-search" type="text" placeholder="Search your cards…"
@@ -407,6 +424,7 @@
                     <button onclick="clearSellCard()" style="margin-left:auto;background:none;border:none;color:#7f8c8d;font-size:1.2em;cursor:pointer;">✕</button>
                 </div>
             </div>
+            </div><!-- end sell-card-section -->
 
             <!-- Amount selector -->
             <div>
@@ -434,8 +452,9 @@
                 </div>
                 <!-- Price source -->
                 <div style="display:flex;gap:0.5em;margin-bottom:0.7em;flex-wrap:wrap;">
-                    <button id="sell-price-src-press" class="sell-price-src-btn active" onclick="setSellPriceSrc('press')">💎 Press value</button>
-                    <button id="sell-price-src-custom" class="sell-price-src-btn"       onclick="setSellPriceSrc('custom')">Custom</button>
+                    <button id="sell-price-src-press"  class="sell-price-src-btn active" onclick="setSellPriceSrc('press')">💎 Press value</button>
+                    <button id="sell-price-src-custom" class="sell-price-src-btn"        onclick="setSellPriceSrc('custom')">Custom</button>
+                    <button id="sell-price-src-free"   class="sell-price-src-btn"        onclick="setSellPriceSrc('free')">🆓 Free</button>
                 </div>
                 <input id="sell-price-input" type="number" min="1" placeholder="Enter price in 💎…"
                     style="display:none;width:100%;box-sizing:border-box;padding:0.6em 1em;border-radius:8px;border:1.5px solid rgba(162,155,254,0.3);background:rgba(255,255,255,0.06);color:#fff;font-size:1em;outline:none;">
@@ -467,6 +486,10 @@
                 <button onclick="refreshMarket()" style="background:rgba(155,89,182,0.15);border:1px solid rgba(155,89,182,0.3);border-radius:8px;color:#9b59b6;padding:0.4em 0.9em;cursor:pointer;font-size:0.9em;">↻ Refresh</button>
             </div>
         </div>
+        <!-- Luck display -->
+        <div style="padding:0.45em 1.2em;background:rgba(0,0,0,0.2);border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.82em;color:#7f8c8d;display:flex;align-items:center;gap:0.4em;flex-shrink:0;">
+            🍀 Your luck: <span id="market-luck-value" style="color:#3498db;font-weight:bold;"></span>
+        </div>
         <!-- Tab bar: All listings | My listings -->
         <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
             <button id="market-tab-all" onclick="setMarketTab('all')" style="flex:1;padding:0.7em;background:none;border:none;color:#9b59b6;font-weight:bold;cursor:pointer;border-bottom:2px solid #9b59b6;font-size:0.95em;">All Listings</button>
@@ -474,6 +497,23 @@
         </div>
         <div id="market-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.7em;">
             <div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>
+        </div>
+    </div>
+
+    <!-- REWARDS PANEL -->
+    <div id="rewards-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3900;background:#1a1a2e;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(243,156,18,0.35);flex-shrink:0;">
+            <button onclick="closeRewardsPanel()" style="background:none;border:none;color:#f39c12;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#f39c12;font-size:1.3em;">🎁 Rewards</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:1.5em;display:flex;flex-direction:column;gap:1.2em;align-items:center;justify-content:center;">
+            <div style="background:rgba(243,156,18,0.1);border:2px solid rgba(243,156,18,0.3);border-radius:20px;padding:2em;text-align:center;max-width:320px;width:100%;">
+                <div style="font-size:2.5em;margin-bottom:0.3em;">💎</div>
+                <div style="font-size:0.9em;color:#7f8c8d;margin-bottom:0.6em;">Diamonds earned from sales</div>
+                <div id="rewards-amount" style="font-size:2.8em;font-weight:bold;color:#f39c12;margin-bottom:1em;">0</div>
+                <button id="claim-rewards-btn" onclick="claimRewards()" style="width:100%;padding:0.9em;border:none;border-radius:12px;background:linear-gradient(90deg,#f39c12,#e67e22);color:#fff;font-size:1.1em;font-weight:bold;cursor:pointer;">Claim 💎</button>
+            </div>
+            <div id="rewards-msg" style="display:none;font-size:0.9em;padding:0.7em 1.2em;border-radius:10px;text-align:center;max-width:320px;width:100%;"></div>
         </div>
     </div>
 
@@ -727,12 +767,16 @@
             catch(e) { console.warn('Cloud save failed:', e); }
         };
 
-        import { postListing, fetchListings, deleteListing, updateUsername } from './firebase.js';
-        // Expose market + user functions for rng.js (non-module script)
-        window._fbPostListing   = postListing;
-        window._fbFetchListings = fetchListings;
-        window._fbDeleteListing = deleteListing;
-        window._fbUpdateUsername = updateUsername;
+        import { postListing, fetchListings, deleteListing, updateUsername,
+                 addPendingReward, claimRewards as fbClaim, getPendingRewards } from './firebase.js';
+        // Expose market + user + rewards functions for rng.js (non-module script)
+        window._fbPostListing       = postListing;
+        window._fbFetchListings     = fetchListings;
+        window._fbDeleteListing     = deleteListing;
+        window._fbUpdateUsername    = updateUsername;
+        window._fbAddPendingReward  = addPendingReward;
+        window._fbClaimRewards      = fbClaim;
+        window._fbGetPendingRewards = getPendingRewards;
 
         watchAuth(
             (user, cloudData) => {

@@ -3218,6 +3218,7 @@ window._onAuthReady = function(save) {
     startRealTimeEffectsUpdate();
     startTokenRecharge();
     updateTokensDisplay();
+    if (typeof startRewardsPoll === 'function') startRewardsPoll();
 };
 
 // ── Username stored in window._username for quick access ──
@@ -4403,7 +4404,7 @@ function closeShopMenu() {
 }
 
 document.getElementById('shop-btn').onclick = openShopMenu;
-document.getElementById('unlocks-btn').onclick = () => openIndexSection('unlocks');
+document.getElementById('rewards-btn').onclick = openRewardsPanel;
 document.getElementById('close-shop').onclick = closeShopMenu;
 document.getElementById('shop-modal').onclick = function(e) {
     if (e.target === this) closeShopMenu();
@@ -5715,6 +5716,9 @@ function closeSellMenu() {
 function openMarketMenu() {
     document.getElementById('market-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    updateLuck();
+    const luckEl = document.getElementById('market-luck-value');
+    if (luckEl) luckEl.textContent = '\u00D7' + luck.toFixed(2);
     refreshMarket();
 }
 function closeMarketMenu() {
@@ -5729,6 +5733,15 @@ function _resetSellForm() {
     _sellQty = 1;
     _sellPriceMode = 'total';
     _sellPriceSrc = 'press';
+    if (typeof _sellItemType !== 'undefined') _sellItemType = 'card';
+    const _tc = document.getElementById('sell-type-card'), _tx = document.getElementById('sell-type-xp');
+    if (_tc) _tc.classList.add('active');
+    if (_tx) _tx.classList.remove('active');
+    const _cs = document.getElementById('sell-card-section'), _xs = document.getElementById('sell-xp-section');
+    if (_cs) _cs.style.display = '';
+    if (_xs) _xs.style.display = 'none';
+    const _pp = document.getElementById('sell-price-src-press');
+    if (_pp) _pp.style.display = '';
 
     const search = document.getElementById('sell-card-search');
     if (search) search.value = '';
@@ -5880,6 +5893,9 @@ function clearSellCard() {
         if (e.target.id === 'sell-price-input') {
             _updateSellSummary();
         }
+        if (e.target.id === 'sell-xp-input') {
+            _updateSellSummary();
+        }
     });
 })();
 
@@ -5894,29 +5910,57 @@ function setSellPriceSrc(src) {
     _sellPriceSrc = src;
     document.getElementById('sell-price-src-press').classList.toggle('active',  src === 'press');
     document.getElementById('sell-price-src-custom').classList.toggle('active', src === 'custom');
+    const freeBtn = document.getElementById('sell-price-src-free');
+    if (freeBtn) freeBtn.classList.toggle('active', src === 'free');
     const priceInput = document.getElementById('sell-price-input');
     priceInput.style.display = src === 'custom' ? 'block' : 'none';
     if (src === 'custom') priceInput.focus();
     _updateSellSummary();
 }
 
-function _computeSellPrice() {
-    if (!_sellSelectedCard) return null;
-    const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+let _sellItemType = 'card'; // 'card' | 'xp'
 
-    if (_sellPriceSrc === 'press') {
-        const priceEach  = pressVal || 1;
+function _computeSellPrice() {
+    const isXp = _sellItemType === 'xp';
+    if (!isXp && !_sellSelectedCard) return null;
+
+    if (_sellPriceSrc === 'free') return { priceEach: 0, priceTotal: 0 };
+
+    if (_sellPriceSrc === 'press' && !isXp) {
+        const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+        const priceEach = Math.max(1, pressVal);
         return { priceEach, priceTotal: priceEach * _sellQty };
     }
     const raw = parseFloat(document.getElementById('sell-price-input').value);
-    if (!raw || raw < 1) return null;
-    if (_sellPriceMode === 'each') {
-        const priceEach = Math.ceil(raw);
-        return { priceEach, priceTotal: priceEach * _sellQty };
+    if (isNaN(raw) || raw < 0) return null;
+    const v = Math.max(0, Math.ceil(raw));
+    if (_sellPriceMode === 'each') return { priceEach: v, priceTotal: v * _sellQty };
+    return { priceEach: _sellQty > 0 ? Math.ceil(v / _sellQty) : v, priceTotal: v };
+}
+
+function setSellItemType(type) {
+    _sellItemType = type;
+    const typeCard = document.getElementById('sell-type-card');
+    const typeXp   = document.getElementById('sell-type-xp');
+    if (typeCard) typeCard.classList.toggle('active', type === 'card');
+    if (typeXp)   typeXp.classList.toggle('active',   type === 'xp');
+    const cardSec = document.getElementById('sell-card-section');
+    const xpSec   = document.getElementById('sell-xp-section');
+    if (cardSec) cardSec.style.display = type === 'card' ? '' : 'none';
+    if (xpSec)   xpSec.style.display   = type === 'xp'   ? '' : 'none';
+    if (type === 'xp') {
+        _sellSelectedCard = null;
+        const ownedEl = document.getElementById('sell-xp-owned');
+        if (ownedEl) ownedEl.textContent = 'You have: ' + xp + ' XP';
+        const pressSrcBtn = document.getElementById('sell-price-src-press');
+        if (pressSrcBtn) pressSrcBtn.style.display = 'none';
+        setSellPriceSrc('custom');
     } else {
-        const priceTotal = Math.ceil(raw);
-        return { priceEach: Math.ceil(priceTotal / _sellQty), priceTotal };
+        const pressSrcBtn = document.getElementById('sell-price-src-press');
+        if (pressSrcBtn) pressSrcBtn.style.display = '';
+        setSellPriceSrc('press');
     }
+    _updateSellSummary();
 }
 
 function _updateSellSummary() {
@@ -5926,38 +5970,44 @@ function _updateSellSummary() {
     const postBtn     = document.getElementById('sell-post-btn');
     if (!summary || !summaryText || !preview || !postBtn) return;
 
-    if (!_sellSelectedCard) {
+    const isXp = _sellItemType === 'xp';
+
+    if (!isXp && !_sellSelectedCard) {
         summary.style.display = 'none';
         preview.textContent = '';
         return;
     }
 
-    const maxOwned = collection[_sellSelectedCard.name] || 0;
-    const qty = Math.min(_sellQty, maxOwned);
-    if (qty < 1) {
-        summary.style.display = 'none';
-        preview.textContent = "You don\u2019t own enough of this card.";
-        return;
+    let qty;
+    if (isXp) {
+        const xpAmt = parseInt(document.getElementById('sell-xp-input')?.value) || 0;
+        qty = Math.min(xpAmt, xp);
+        if (qty < 1) { summary.style.display = 'none'; preview.textContent = 'Enter a valid XP amount (you have ' + xp + ' XP).'; return; }
+    } else {
+        qty = Math.min(_sellQty, collection[_sellSelectedCard.name] || 0);
+        if (qty < 1) { summary.style.display = 'none'; preview.textContent = "You don\u2019t own enough."; return; }
     }
 
     const price = _computeSellPrice();
-    if (!price) {
-        summary.style.display = 'none';
-        preview.textContent = 'Enter a valid price.';
-        return;
-    }
+    if (!price) { summary.style.display = 'none'; preview.textContent = 'Enter a valid price.'; return; }
 
     const { priceTotal, priceEach } = price;
-    const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+    const isFree = priceTotal === 0;
+    const priceLabel = isFree ? '<span style="color:#2ecc71;">\uD83C\uDD93 Free</span>' : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b>';
 
-    preview.innerHTML = '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceEach + '</b> per card'
-        + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b> total'
-        + (pressVal ? ' <span style="color:#7f8c8d;font-size:0.85em;">(press value: \uD83D\uDC8E' + pressVal + ')</span>' : '');
-
-    summaryText.innerHTML =
-        'Selling <b style="color:#e67e22;">\u00D7' + qty + '</b> <b>' + _sellSelectedCard.name + '</b><br>'
-        + 'Total: <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b>'
-        + (qty > 1 ? ' <span style="color:#7f8c8d;">' + priceEach + ' each</span>' : '');
+    if (isXp) {
+        preview.innerHTML = priceLabel;
+        summaryText.innerHTML = 'Selling <b style="color:#4ecdc4;">' + qty + ' XP</b><br>Price: ' + priceLabel;
+    } else {
+        const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+        preview.innerHTML = isFree
+            ? priceLabel
+            : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceEach + '</b> each'
+              + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b> total'
+              + (pressVal ? ' <span style="color:#7f8c8d;font-size:0.85em;">(press: \uD83D\uDC8E' + pressVal + ')</span>' : '');
+        summaryText.innerHTML = 'Selling <b style="color:#e67e22;">\u00D7' + qty + '</b> <b>' + _sellSelectedCard.name + '</b><br>Price: ' + priceLabel
+            + (qty > 1 && !isFree ? ' <span style="color:#7f8c8d;">(' + priceEach + ' each)</span>' : '');
+    }
 
     summary.style.display = 'flex';
     postBtn.disabled = false;
@@ -5978,28 +6028,44 @@ async function postListing() {
     btn.disabled = true;
     btn.textContent = 'Posting\u2026';
 
+    const isXpPost = _sellItemType === 'xp';
+    let postQty = qty;
+    if (isXpPost) {
+        postQty = Math.min(parseInt(document.getElementById('sell-xp-input')?.value) || 0, xp);
+        if (postQty < 1) { _showSellMsg('Not enough XP!', 'error'); btn.disabled = false; btn.textContent = 'Post Listing'; return; }
+    }
+
     try {
-        collection[_sellSelectedCard.name] -= qty;
-        if ((collection[_sellSelectedCard.name] || 0) <= 0) delete collection[_sellSelectedCard.name];
-        updateCollection(); updateInventoryStats(); saveCollection();
+        if (isXpPost) {
+            xp = Math.max(0, xp - postQty);
+            updateLevelXpDisplay();
+        } else {
+            collection[_sellSelectedCard.name] -= postQty;
+            if ((collection[_sellSelectedCard.name] || 0) <= 0) delete collection[_sellSelectedCard.name];
+            updateCollection(); updateInventoryStats();
+        }
+        saveCollection();
 
         const fbPost = window._fbPostListing;
         if (!fbPost) throw new Error('Firebase not ready');
         await fbPost({
-            sellerUid:  window._currentUser.uid,
-            sellerName: window._cloudUserData?.username || 'Unknown',
-            cardName:   _sellSelectedCard.baseName,
-            cardType:   _sellSelectedCard.type,
-            amount:     qty,
-            priceTotal: price.priceTotal,
+            sellerUid:    window._currentUser.uid,
+            sellerName:   window._cloudUserData?.username || 'Unknown',
+            cardName:     isXpPost ? 'XP' : _sellSelectedCard.baseName,
+            cardType:     isXpPost ? '' : _sellSelectedCard.type,
+            amount:       postQty,
+            priceTotal:   price.priceTotal,
+            itemCategory: isXpPost ? 'xp' : 'card',
         });
 
-        _showSellMsg('Listed \u00D7' + qty + ' ' + _sellSelectedCard.name + ' for \uD83D\uDC8E' + price.priceTotal, 'success');
+        const label = isXpPost ? postQty + ' XP' : ('\u00D7' + postQty + ' ' + _sellSelectedCard.name);
+        const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + price.priceTotal;
+        _showSellMsg('Listed ' + label + ' for ' + priceLabel, 'success');
         _resetSellForm();
         btn.textContent = 'Post Listing';
     } catch(e) {
-        collection[_sellSelectedCard.name] = (collection[_sellSelectedCard.name] || 0) + qty;
-        updateCollection();
+        if (isXpPost) { xp += postQty; updateLevelXpDisplay(); }
+        else { collection[_sellSelectedCard.name] = (collection[_sellSelectedCard.name] || 0) + postQty; updateCollection(); }
         _showSellMsg('Failed: ' + (e.message || e), 'error');
         btn.disabled = false;
         btn.textContent = 'Post Listing';
@@ -6060,10 +6126,14 @@ function _renderMarketListings() {
 
     list.innerHTML = '';
     toShow.forEach(listing => {
-        const isOwn    = listing.sellerUid === myUid;
-        const item     = items.find(i => i.name === listing.cardName);
-        const fullName = listing.cardType ? listing.cardName + ' (' + listing.cardType + ')' : listing.cardName;
-        const canAfford = diamonds >= listing.priceTotal;
+        const isOwn     = listing.sellerUid === myUid;
+        const isXpLi    = listing.itemCategory === 'xp';
+        const isFree    = listing.priceTotal === 0;
+        const item      = !isXpLi ? items.find(i => i.name === listing.cardName) : null;
+        const fullName  = isXpLi
+            ? listing.amount + ' XP'
+            : (listing.cardType ? listing.cardName + ' (' + listing.cardType + ')' : listing.cardName);
+        const canAfford = isFree || diamonds >= listing.priceTotal;
 
         const card = document.createElement('div');
         card.className = 'market-listing' + (isOwn ? ' own' : '');
@@ -6073,6 +6143,7 @@ function _renderMarketListings() {
         img.src = item ? getCardImageSrc(item) : '';
         img.style.cssText = 'width:54px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;';
         img.onerror = function() { this.style.display = 'none'; };
+        if (isXpLi) { img.style.cssText = 'width:36px;height:36px;font-size:1.8em;display:flex;align-items:center;justify-content:center;flex-shrink:0;'; img.src=''; img.alt='⭐'; img.style.display='none'; }
 
         // Info block
         const info = document.createElement('div');
@@ -6084,8 +6155,9 @@ function _renderMarketListings() {
 
         const detailEl = document.createElement('div');
         detailEl.style.cssText = 'font-size:0.8em;color:#7f8c8d;margin-top:0.1em;';
-        detailEl.innerHTML = '\u00D7' + listing.amount + ' \u00B7 \uD83D\uDC8E ' + listing.priceTotal
-            + (listing.amount > 1 ? ' <span style="color:#555;">(' + listing.priceEach + ' each)</span>' : '');
+        const freeStr  = '<span style="color:#2ecc71;">\uD83C\uDD93 Free</span>';
+        const priceBit = isFree ? freeStr : ('\uD83D\uDC8E ' + listing.priceTotal + (listing.amount > 1 && !isXpLi ? ' <span style="color:#555;">(' + listing.priceEach + ' each)</span>' : ''));
+        detailEl.innerHTML = (isXpLi ? '\u2B50 ' : '\u00D7') + listing.amount + ' \u00B7 ' + priceBit;
 
         const sellerEl = document.createElement('div');
         sellerEl.style.cssText = 'font-size:0.75em;color:#555;margin-top:0.1em;';
@@ -6109,7 +6181,7 @@ function _renderMarketListings() {
             const cancelBtn = document.createElement('button');
             cancelBtn.className = 'market-cancel-btn';
             cancelBtn.textContent = 'Cancel';
-            cancelBtn.onclick = () => cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+            cancelBtn.onclick = () => cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.itemCategory || 'card');
 
             btnWrap.appendChild(modBtn);
             btnWrap.appendChild(cancelBtn);
@@ -6123,10 +6195,10 @@ function _renderMarketListings() {
         if (false) { // placeholder — isOwn handled above
         } else {
             btn.className = 'market-buy-btn';
-            btn.textContent = '\uD83D\uDC8E Buy';
+            btn.textContent = isFree ? '\uD83C\uDD93 Get' : '\uD83D\uDC8E Buy';
             btn.disabled = !canAfford;
             if (!canAfford) btn.title = 'Not enough diamonds (' + diamonds + ' / ' + listing.priceTotal + ')';
-            btn.onclick = () => buyListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.priceTotal, btn);
+            btn.onclick = () => buyListing(listing, btn);
         }
 
         card.appendChild(img);
@@ -6139,7 +6211,7 @@ function _renderMarketListings() {
 // ── Modify listing: cancel it then open sell menu pre-filled ──
 async function modifyListing(listing) {
     // Cancel the listing (refunds cards)
-    await cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+    await cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.itemCategory || 'card');
     // Close market, open sell menu
     closeMarketMenu();
     openSellMenu();
@@ -6155,8 +6227,11 @@ async function modifyListing(listing) {
     }, 100);
 }
 
-async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {
-    if (diamonds < priceTotal) { showCraftMessage('Not enough diamonds!', 'error'); return; }
+async function buyListing(listing, btn) {
+    const { id, cardName, cardType, amount, priceTotal, sellerUid, itemCategory } = listing;
+    const isFree   = priceTotal === 0;
+    const isXpItem = itemCategory === 'xp';
+    if (!isFree && diamonds < priceTotal) { showCraftMessage('Not enough diamonds!', 'error'); return; }
     if (btn) { btn.disabled = true; btn.textContent = '\u2026'; }
 
     try {
@@ -6164,32 +6239,135 @@ async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {
         if (!deleteListing) throw new Error('Firebase not ready');
         await deleteListing(id);
 
-        diamonds -= priceTotal;
-        const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
-        collection[key] = (collection[key] || 0) + amount;
-        updateDiamondsDisplay(); updateCollection(); updateInventoryStats(); saveCollection();
-        showCraftMessage('Bought \u00D7' + amount + ' ' + key + ' for \uD83D\uDC8E' + priceTotal + '!', 'success');
+        if (!isFree) {
+            diamonds -= priceTotal;
+            updateDiamondsDisplay();
+            // Send reward to seller
+            const addReward = window._fbAddPendingReward;
+            if (addReward && sellerUid) {
+                try { await addReward(sellerUid, priceTotal); } catch(_) {}
+            }
+        }
+
+        if (isXpItem) {
+            xp += amount;
+            updateLevelXpDisplay();
+        } else {
+            const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
+            collection[key] = (collection[key] || 0) + amount;
+            updateCollection(); updateInventoryStats();
+        }
+        saveCollection();
+
+        const what = isXpItem ? amount + ' XP' : ('\u00D7' + amount + ' ' + (cardType ? cardName + ' (' + cardType + ')' : cardName));
+        const cost = isFree ? 'for free' : 'for \uD83D\uDC8E' + priceTotal;
+        showCraftMessage('Bought ' + what + ' ' + cost + '!', 'success');
         _marketListings = _marketListings.filter(l => l.id !== id);
         _renderMarketListings();
     } catch(e) {
         showCraftMessage('Purchase failed: ' + (e.message || e), 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDC8E Buy'; }
+        if (btn) { btn.disabled = false; btn.textContent = isFree ? '\uD83C\uDD93 Get' : '\uD83D\uDC8E Buy'; }
     }
 }
 
-async function cancelListing(id, cardName, cardType, amount) {
+async function cancelListing(id, cardName, cardType, amount, itemCategory) {
     try {
         const deleteListing = window._fbDeleteListing;
         if (!deleteListing) throw new Error('Firebase not ready');
         await deleteListing(id);
 
-        const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
-        collection[key] = (collection[key] || 0) + amount;
-        updateCollection(); updateInventoryStats(); saveCollection();
-        showCraftMessage('Listing cancelled \u2014 cards refunded.', 'info');
+        if (itemCategory === 'xp') {
+            xp += amount;
+            updateLevelXpDisplay();
+        } else {
+            const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
+            collection[key] = (collection[key] || 0) + amount;
+            updateCollection(); updateInventoryStats();
+        }
+        saveCollection();
+        showCraftMessage('Listing cancelled \u2014 refunded.', 'info');
         _marketListings = _marketListings.filter(l => l.id !== id);
         _renderMarketListings();
     } catch(e) {
         showCraftMessage('Cancel failed: ' + (e.message || e), 'error');
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REWARDS PANEL
+// ═══════════════════════════════════════════════════════════════
+
+async function openRewardsPanel() {
+    document.getElementById('rewards-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    await refreshRewards();
+}
+
+function closeRewardsPanel() {
+    document.getElementById('rewards-panel').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+async function refreshRewards() {
+    const user = window._currentUser;
+    if (!user) return;
+    const get = window._fbGetPendingRewards;
+    if (!get) return;
+    try {
+        const amount = await get(user.uid);
+        const el = document.getElementById('rewards-amount');
+        if (el) el.textContent = amount;
+        const btn = document.getElementById('claim-rewards-btn');
+        if (btn) btn.disabled = amount <= 0;
+        _updateRewardsBadge(amount);
+    } catch(e) {}
+}
+
+function _updateRewardsBadge(amount) {
+    const badge = document.getElementById('rewards-badge');
+    if (!badge) return;
+    if (amount > 0) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = amount > 999 ? '!' : amount;
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+async function claimRewards() {
+    const user = window._currentUser;
+    if (!user) return;
+    const claim = window._fbClaimRewards;
+    if (!claim) return;
+    const btn = document.getElementById('claim-rewards-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Claiming\u2026'; }
+    try {
+        const gained = await claim(user.uid);
+        if (gained > 0) {
+            diamonds += gained;
+            updateDiamondsDisplay();
+            saveCollection();
+            showCraftMessage('Claimed \uD83D\uDC8E' + gained + ' from sales!', 'success');
+        }
+        const msg = document.getElementById('rewards-msg');
+        if (msg) {
+            msg.style.display = 'block';
+            msg.style.background = gained > 0 ? 'rgba(39,174,96,0.18)' : 'rgba(127,140,141,0.15)';
+            msg.style.color      = gained > 0 ? '#2ecc71' : '#7f8c8d';
+            msg.textContent = gained > 0 ? '+\uD83D\uDC8E' + gained + ' added to your balance!' : 'No rewards to claim.';
+            setTimeout(() => { if (msg) msg.style.display = 'none'; }, 3000);
+        }
+        const el = document.getElementById('rewards-amount');
+        if (el) el.textContent = '0';
+        if (btn) { btn.disabled = true; btn.textContent = 'Claim \uD83D\uDC8E'; }
+        _updateRewardsBadge(0);
+    } catch(e) {
+        showCraftMessage('Claim failed: ' + (e.message || e), 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Claim \uD83D\uDC8E'; }
+    }
+}
+
+function startRewardsPoll() {
+    refreshRewards();
+    setInterval(refreshRewards, 60 * 1000);
 }

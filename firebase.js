@@ -6,7 +6,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc,
-         collection as fsCollection, addDoc, getDocs, query, where, orderBy }
+         collection as fsCollection, addDoc, getDocs, query, where, orderBy, increment }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -105,16 +105,17 @@ export function watchAuth(onLoggedIn, onLoggedOut) {
 // ── Market ───────────────────────────────────────────────────────
 
 // Post a listing
-export async function postListing({ sellerUid, sellerName, cardName, cardType, amount, priceTotal }) {
+export async function postListing({ sellerUid, sellerName, cardName, cardType, amount, priceTotal, itemCategory }) {
     const ref = await addDoc(fsCollection(db, "market"), {
         sellerUid,
         sellerName,
         cardName,
-        cardType:   cardType || '',
-        amount:     Number(amount),
-        priceTotal: Number(priceTotal),
-        priceEach:  Math.ceil(Number(priceTotal) / Number(amount)),
-        createdAt:  Date.now(),
+        cardType:     cardType || '',
+        amount:       Number(amount),
+        priceTotal:   Number(priceTotal),
+        priceEach:    priceTotal > 0 ? Math.ceil(Number(priceTotal) / Number(amount)) : 0,
+        itemCategory: itemCategory || 'card',
+        createdAt:    Date.now(),
     });
     return ref.id;
 }
@@ -154,3 +155,28 @@ export async function updateUsername(uid, oldUsername, newUsername) {
 }
 
 export { auth, db };
+
+// ── Rewards ──────────────────────────────────────────────────────
+
+// Called when a buyer purchases — adds diamonds to seller's pending balance
+export async function addPendingReward(sellerUid, amount) {
+    if (!amount || amount <= 0) return;
+    await setDoc(doc(db, "users", sellerUid), { pendingDiamonds: increment(amount) }, { merge: true });
+}
+
+// Seller claims their pending diamonds
+export async function claimRewards(uid) {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return 0;
+    const pending = snap.data().pendingDiamonds || 0;
+    if (pending <= 0) return 0;
+    await setDoc(doc(db, "users", uid), { pendingDiamonds: 0 }, { merge: true });
+    return pending;
+}
+
+// Get pending reward amount without claiming
+export async function getPendingRewards(uid) {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return 0;
+    return snap.data().pendingDiamonds || 0;
+}
