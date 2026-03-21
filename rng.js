@@ -5716,9 +5716,6 @@ function closeSellMenu() {
 function openMarketMenu() {
     document.getElementById('market-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    updateLuck();
-    const luckEl = document.getElementById('market-luck-value');
-    if (luckEl) luckEl.textContent = '\u00D7' + luck.toFixed(2);
     refreshMarket();
 }
 function closeMarketMenu() {
@@ -5751,6 +5748,8 @@ function _resetSellForm() {
     if (selCard) selCard.style.display = 'none';
     const priceInput = document.getElementById('sell-price-input');
     if (priceInput) { priceInput.value = ''; priceInput.style.display = 'none'; }
+    const xpInput = document.getElementById('sell-xp-input');
+    if (xpInput) xpInput.value = '';
     const customQty = document.getElementById('sell-qty-custom');
     if (customQty) customQty.style.display = 'none';
 
@@ -5926,16 +5925,23 @@ function _computeSellPrice() {
 
     if (_sellPriceSrc === 'free') return { priceEach: 0, priceTotal: 0 };
 
+    // For card press-value mode
     if (_sellPriceSrc === 'press' && !isXp) {
         const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
         const priceEach = Math.max(1, pressVal);
         return { priceEach, priceTotal: priceEach * _sellQty };
     }
+
+    // Custom price — qty differs between card and XP
+    const effectiveQty = isXp
+        ? (parseInt(document.getElementById('sell-xp-input')?.value) || 0)
+        : _sellQty;
+
     const raw = parseFloat(document.getElementById('sell-price-input').value);
     if (isNaN(raw) || raw < 0) return null;
     const v = Math.max(0, Math.ceil(raw));
-    if (_sellPriceMode === 'each') return { priceEach: v, priceTotal: v * _sellQty };
-    return { priceEach: _sellQty > 0 ? Math.ceil(v / _sellQty) : v, priceTotal: v };
+    if (_sellPriceMode === 'each') return { priceEach: v, priceTotal: v * effectiveQty };
+    return { priceEach: effectiveQty > 0 ? Math.ceil(v / effectiveQty) : v, priceTotal: v };
 }
 
 function setSellItemType(type) {
@@ -6016,23 +6022,25 @@ function _updateSellSummary() {
 // ── Post listing ──
 
 async function postListing() {
-    if (!_sellSelectedCard) return;
     const price = _computeSellPrice();
     if (!price) return;
-
-    const maxOwned = collection[_sellSelectedCard.name] || 0;
-    const qty = Math.min(_sellQty, maxOwned);
-    if (qty < 1) { _showSellMsg('Not enough cards!', 'error'); return; }
 
     const btn = document.getElementById('sell-post-btn');
     btn.disabled = true;
     btn.textContent = 'Posting\u2026';
 
     const isXpPost = _sellItemType === 'xp';
-    let postQty = qty;
+
+    // Resolve quantity based on item type
+    let postQty;
     if (isXpPost) {
         postQty = Math.min(parseInt(document.getElementById('sell-xp-input')?.value) || 0, xp);
-        if (postQty < 1) { _showSellMsg('Not enough XP!', 'error'); btn.disabled = false; btn.textContent = 'Post Listing'; return; }
+        if (postQty < 1) { _showSellMsg('Not enough XP! (you have ' + xp + ')', 'error'); btn.disabled = false; btn.textContent = 'Post Listing'; return; }
+    } else {
+        if (!_sellSelectedCard) { _showSellMsg('Select a card first.', 'error'); btn.disabled = false; btn.textContent = 'Post Listing'; return; }
+        const maxOwned = collection[_sellSelectedCard.name] || 0;
+        postQty = Math.min(_sellQty, maxOwned);
+        if (postQty < 1) { _showSellMsg('Not enough cards!', 'error'); btn.disabled = false; btn.textContent = 'Post Listing'; return; }
     }
 
     try {
@@ -6138,12 +6146,16 @@ function _renderMarketListings() {
         const card = document.createElement('div');
         card.className = 'market-listing' + (isOwn ? ' own' : '');
 
-        // Image
+        // Image / icon
         const img = document.createElement('img');
         img.src = item ? getCardImageSrc(item) : '';
         img.style.cssText = 'width:54px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;';
         img.onerror = function() { this.style.display = 'none'; };
-        if (isXpLi) { img.style.cssText = 'width:36px;height:36px;font-size:1.8em;display:flex;align-items:center;justify-content:center;flex-shrink:0;'; img.src=''; img.alt='⭐'; img.style.display='none'; }
+
+        // XP listings use an emoji instead of a card image
+        if (isXpLi) {
+            img.style.display = 'none'; // hide the img, we'll add emoji below
+        }
 
         // Info block
         const info = document.createElement('div');
@@ -6163,8 +6175,31 @@ function _renderMarketListings() {
         sellerEl.style.cssText = 'font-size:0.75em;color:#555;margin-top:0.1em;';
         sellerEl.textContent = 'by ' + (listing.sellerName || 'Unknown');
 
+        // Per-card luck row (cards only)
+        let luckRowEl = null;
+        if (!isXpLi && item) {
+            luckRowEl = document.createElement('div');
+            luckRowEl.style.cssText = 'font-size:0.75em;margin-top:0.25em;display:flex;align-items:center;flex-wrap:wrap;gap:0.3em;';
+            const multMap = { '': 1, 'Gold': 10, 'Rainbow': 100, 'Shiny': 1000, 'Nuclear': 10000 };
+            const rarity = item.chance * (multMap[listing.cardType || ''] || 1);
+            updateLuck();
+            let chanceStr;
+            if (luck >= rarity) {
+                chanceStr = '100%';
+            } else {
+                const pct = luck / rarity * 100;
+                chanceStr = pct >= 1 ? pct.toFixed(1) + '%' : pct.toFixed(3) + '%';
+            }
+            const rarColor = rarity < 10 ? '#95a5a6' : rarity < 100 ? '#2ecc71' : rarity < 1000 ? '#3498db' : rarity < 10000 ? '#9b59b6' : rarity < 100000 ? '#f39c12' : '#e74c3c';
+            luckRowEl.innerHTML =
+                getRarityTag(rarity) +
+                '<span style="color:#555;">1 in ' + rarity.toLocaleString() + '</span>' +
+                '<span style="color:#3498db;">\uD83C\uDFB2 ' + chanceStr + ' chance</span>';
+        }
+
         info.appendChild(nameEl);
         info.appendChild(detailEl);
+        if (luckRowEl) info.appendChild(luckRowEl);
         info.appendChild(sellerEl);
 
         // Action button(s)
@@ -6186,6 +6221,12 @@ function _renderMarketListings() {
             btnWrap.appendChild(modBtn);
             btnWrap.appendChild(cancelBtn);
             card.appendChild(img);
+            if (isXpLi) {
+                const xpIcon = document.createElement('span');
+                xpIcon.style.cssText = 'font-size:2em;flex-shrink:0;line-height:1;';
+                xpIcon.textContent = '\u2B50';
+                card.insertBefore(xpIcon, card.firstChild);
+            }
             card.appendChild(info);
             card.appendChild(btnWrap);
             list.appendChild(card);
@@ -6202,6 +6243,12 @@ function _renderMarketListings() {
         }
 
         card.appendChild(img);
+        if (isXpLi) {
+            const xpIcon = document.createElement('span');
+            xpIcon.style.cssText = 'font-size:2em;flex-shrink:0;line-height:1;';
+            xpIcon.textContent = '\u2B50';
+            card.insertBefore(xpIcon, card.firstChild);
+        }
         card.appendChild(info);
         card.appendChild(btn);
         list.appendChild(card);
@@ -6210,20 +6257,28 @@ function _renderMarketListings() {
 
 // ── Modify listing: cancel it then open sell menu pre-filled ──
 async function modifyListing(listing) {
-    // Cancel the listing (refunds cards)
+    // Cancel the listing (refunds cards/xp)
     await cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.itemCategory || 'card');
     // Close market, open sell menu
     closeMarketMenu();
     openSellMenu();
-    // Pre-fill the card
-    const type = listing.cardType || '';
-    const fullName = type ? listing.cardName + ' (' + type + ')' : listing.cardName;
+
+    const isXpListing = listing.itemCategory === 'xp';
     setTimeout(() => {
-        _selectSellCard(listing.cardName, type, fullName);
-        // Pre-fill amount
-        _sellQty = listing.amount;
-        document.querySelectorAll('.sell-qty-btn').forEach(b => b.classList.remove('active'));
-        _updateSellSummary();
+        if (isXpListing) {
+            // Switch to XP mode and pre-fill amount
+            setSellItemType('xp');
+            const xpInput = document.getElementById('sell-xp-input');
+            if (xpInput) { xpInput.value = listing.amount; xpInput.dispatchEvent(new Event('input')); }
+        } else {
+            // Pre-fill card and amount
+            const type = listing.cardType || '';
+            const fullName = type ? listing.cardName + ' (' + type + ')' : listing.cardName;
+            _selectSellCard(listing.cardName, type, fullName);
+            _sellQty = listing.amount;
+            document.querySelectorAll('.sell-qty-btn').forEach(b => b.classList.remove('active'));
+            _updateSellSummary();
+        }
     }, 100);
 }
 
@@ -6328,6 +6383,8 @@ function _updateRewardsBadge(amount) {
     if (!badge) return;
     if (amount > 0) {
         badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.justifyContent = 'center';
         badge.textContent = amount > 999 ? '!' : amount;
     } else {
         badge.style.display = 'none';
