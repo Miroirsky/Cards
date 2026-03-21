@@ -5,7 +5,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc }
+import { getFirestore, doc, getDoc, setDoc, deleteDoc,
+         collection as fsCollection, addDoc, getDocs, query, where, orderBy }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -99,6 +100,40 @@ export function watchAuth(onLoggedIn, onLoggedOut) {
             onLoggedOut();
         }
     });
+}
+
+// ── Market ───────────────────────────────────────────────────────
+
+// Post a listing
+export async function postListing({ sellerUid, sellerName, cardName, cardType, amount, priceTotal }) {
+    const ref = await addDoc(fsCollection(db, "market"), {
+        sellerUid,
+        sellerName,
+        cardName,
+        cardType:   cardType || '',
+        amount:     Number(amount),
+        priceTotal: Number(priceTotal),
+        priceEach:  Math.ceil(Number(priceTotal) / Number(amount)),
+        createdAt:  Date.now(),
+    });
+    return ref.id;
+}
+
+// Fetch all active listings
+export async function fetchListings() {
+    const snap = await getDocs(query(fsCollection(db, "market"), orderBy("createdAt", "desc")));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Delete a listing (seller or buyer completing a purchase calls this)
+export async function deleteListing(listingId) {
+    await deleteDoc(doc(db, "market", listingId));
+}
+
+// Fetch only the current user's listings
+export async function fetchMyListings(uid) {
+    const snap = await getDocs(query(fsCollection(db, "market"), where("sellerUid", "==", uid)));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 export { auth, db };

@@ -5535,3 +5535,478 @@ function renderIndexTags() {
         list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em 1em;font-style:italic;">No rarity tags discovered yet!<br><span style="font-size:0.85em;opacity:0.7;">Keep rolling to find Gold, Rainbow, Shiny and Nuclear cards.</span></div>';
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// MARKET / SELL SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+let _sellSelectedCard = null;
+let _sellQty          = 1;
+let _sellPriceMode    = 'total';
+let _sellPriceSrc     = 'press';
+let _marketCurrentTab = 'all';
+let _marketListings   = [];
+
+// ── Helpers ──
+
+function _pressValue(baseName, type) {
+    const item = items.find(i => i.name === baseName);
+    if (!item) return 0;
+    let chance = item.chance;
+    if (type === 'Gold')    chance *= 10;
+    if (type === 'Rainbow') chance *= 100;
+    if (type === 'Shiny')   chance *= 1000;
+    if (type === 'Nuclear') chance *= 10000;
+    return Math.floor(Math.sqrt(chance));
+}
+
+// ── Open / close panels ──
+
+function openSellMenu() {
+    _resetSellForm();
+    document.getElementById('sell-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _initSellCardSearch();
+}
+function closeSellMenu() {
+    document.getElementById('sell-panel').style.display = 'none';
+    document.body.style.overflow = '';
+}
+function openMarketMenu() {
+    document.getElementById('market-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    refreshMarket();
+}
+function closeMarketMenu() {
+    document.getElementById('market-panel').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// ── Sell form reset ──
+
+function _resetSellForm() {
+    _sellSelectedCard = null;
+    _sellQty = 1;
+    _sellPriceMode = 'total';
+    _sellPriceSrc = 'press';
+
+    const search = document.getElementById('sell-card-search');
+    if (search) search.value = '';
+    const dd = document.getElementById('sell-card-dropdown');
+    if (dd) { dd.innerHTML = ''; dd.style.display = 'none'; }
+    const selCard = document.getElementById('sell-selected-card');
+    if (selCard) selCard.style.display = 'none';
+    const priceInput = document.getElementById('sell-price-input');
+    if (priceInput) { priceInput.value = ''; priceInput.style.display = 'none'; }
+    const customQty = document.getElementById('sell-qty-custom');
+    if (customQty) customQty.style.display = 'none';
+
+    document.querySelectorAll('.sell-qty-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.qty === '1'));
+    document.querySelectorAll('.sell-price-mode-btn').forEach(b =>
+        b.classList.toggle('active', b.id === 'sell-price-mode-total'));
+    document.querySelectorAll('.sell-price-src-btn').forEach(b =>
+        b.classList.toggle('active', b.id === 'sell-price-src-press'));
+
+    const summary = document.getElementById('sell-summary');
+    if (summary) summary.style.display = 'none';
+    const msg = document.getElementById('sell-msg');
+    if (msg) msg.style.display = 'none';
+    const preview = document.getElementById('sell-price-preview');
+    if (preview) preview.textContent = '';
+}
+
+// ── Card search ──
+
+function _initSellCardSearch() {
+    const input = document.getElementById('sell-card-search');
+    const dd    = document.getElementById('sell-card-dropdown');
+    if (!input || !dd) return;
+
+    input.oninput = () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) { dd.style.display = 'none'; return; }
+
+        const owned = _getSortedCardNames().filter(name =>
+            (collection[name] || 0) > 0 && name.toLowerCase().includes(q)
+        );
+        if (!owned.length) { dd.style.display = 'none'; return; }
+
+        dd.innerHTML = '';
+        owned.slice(0, 20).forEach(name => {
+            const type     = name.endsWith('(Nuclear)') ? 'Nuclear'
+                           : name.endsWith('(Shiny)')   ? 'Shiny'
+                           : name.endsWith('(Rainbow)') ? 'Rainbow'
+                           : name.endsWith('(Gold)')    ? 'Gold' : '';
+            const baseName = type ? name.replace(' (' + type + ')', '') : name;
+            const item     = items.find(i => i.name === baseName);
+            const qty      = collection[name] || 0;
+
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:0.7em;padding:0.55em 0.8em;cursor:pointer;';
+            row.onmouseenter = () => row.style.background = 'rgba(230,126,34,0.12)';
+            row.onmouseleave = () => row.style.background = '';
+
+            const img = document.createElement('img');
+            img.src = getCardImageSrc(item);
+            img.style.cssText = 'width:36px;height:24px;object-fit:cover;border-radius:4px;';
+
+            const label = document.createElement('span');
+            label.style.cssText = 'flex:1;color:#fff;font-size:0.95em;';
+            label.textContent = name;
+
+            const qtySpan = document.createElement('span');
+            qtySpan.style.cssText = 'color:#7f8c8d;font-size:0.82em;';
+            qtySpan.textContent = '×' + qty;
+
+            row.appendChild(img);
+            row.appendChild(label);
+            row.appendChild(qtySpan);
+            row.onclick = () => _selectSellCard(baseName, type, name);
+            dd.appendChild(row);
+        });
+        dd.style.display = 'block';
+    };
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function _closeDD(e) {
+            const wrap = document.getElementById('sell-card-search-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                dd.style.display = 'none';
+                document.removeEventListener('click', _closeDD);
+            }
+        });
+    }, 0);
+}
+
+function _selectSellCard(baseName, type, fullName) {
+    const item = items.find(i => i.name === baseName);
+    if (!item) return;
+    _sellSelectedCard = { name: fullName, baseName, type };
+    _sellQty = 1;
+
+    document.getElementById('sell-card-search').value = '';
+    document.getElementById('sell-card-dropdown').style.display = 'none';
+
+    const selDiv = document.getElementById('sell-selected-card');
+    selDiv.style.display = 'flex';
+    document.getElementById('sell-card-img').src  = getCardImageSrc(item);
+    document.getElementById('sell-card-name').textContent  = fullName;
+    document.getElementById('sell-card-owned').textContent = 'Owned: ×' + (collection[fullName] || 0);
+
+    document.querySelectorAll('.sell-qty-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.qty === '1'));
+    document.getElementById('sell-qty-custom').style.display = 'none';
+    _updateSellSummary();
+}
+
+function clearSellCard() {
+    _sellSelectedCard = null;
+    document.getElementById('sell-selected-card').style.display = 'none';
+    document.getElementById('sell-card-search').value = '';
+    _updateSellSummary();
+}
+
+// ── Qty buttons (wired once on load) ──
+
+(function initSellQtyBtns() {
+    // Use event delegation since buttons exist in the panel
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.sell-qty-btn');
+        if (!btn) return;
+        document.querySelectorAll('.sell-qty-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const customInput = document.getElementById('sell-qty-custom');
+        if (btn.dataset.qty === 'custom') {
+            customInput.style.display = 'block';
+            customInput.focus();
+            _sellQty = parseInt(customInput.value) || 1;
+        } else if (btn.dataset.qty === 'max') {
+            customInput.style.display = 'none';
+            _sellQty = _sellSelectedCard ? (collection[_sellSelectedCard.name] || 1) : 1;
+        } else {
+            customInput.style.display = 'none';
+            _sellQty = parseInt(btn.dataset.qty);
+        }
+        _updateSellSummary();
+    });
+
+    document.addEventListener('input', function(e) {
+        if (e.target.id === 'sell-qty-custom') {
+            _sellQty = Math.max(1, parseInt(e.target.value) || 1);
+            _updateSellSummary();
+        }
+        if (e.target.id === 'sell-price-input') {
+            _updateSellSummary();
+        }
+    });
+})();
+
+function setSellPriceMode(mode) {
+    _sellPriceMode = mode;
+    document.getElementById('sell-price-mode-total').classList.toggle('active', mode === 'total');
+    document.getElementById('sell-price-mode-each').classList.toggle('active',  mode === 'each');
+    _updateSellSummary();
+}
+
+function setSellPriceSrc(src) {
+    _sellPriceSrc = src;
+    document.getElementById('sell-price-src-press').classList.toggle('active',  src === 'press');
+    document.getElementById('sell-price-src-custom').classList.toggle('active', src === 'custom');
+    const priceInput = document.getElementById('sell-price-input');
+    priceInput.style.display = src === 'custom' ? 'block' : 'none';
+    if (src === 'custom') priceInput.focus();
+    _updateSellSummary();
+}
+
+function _computeSellPrice() {
+    if (!_sellSelectedCard) return null;
+    const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+
+    if (_sellPriceSrc === 'press') {
+        const priceEach  = pressVal || 1;
+        return { priceEach, priceTotal: priceEach * _sellQty };
+    }
+    const raw = parseFloat(document.getElementById('sell-price-input').value);
+    if (!raw || raw < 1) return null;
+    if (_sellPriceMode === 'each') {
+        const priceEach = Math.ceil(raw);
+        return { priceEach, priceTotal: priceEach * _sellQty };
+    } else {
+        const priceTotal = Math.ceil(raw);
+        return { priceEach: Math.ceil(priceTotal / _sellQty), priceTotal };
+    }
+}
+
+function _updateSellSummary() {
+    const summary     = document.getElementById('sell-summary');
+    const summaryText = document.getElementById('sell-summary-text');
+    const preview     = document.getElementById('sell-price-preview');
+    const postBtn     = document.getElementById('sell-post-btn');
+    if (!summary || !summaryText || !preview || !postBtn) return;
+
+    if (!_sellSelectedCard) {
+        summary.style.display = 'none';
+        preview.textContent = '';
+        return;
+    }
+
+    const maxOwned = collection[_sellSelectedCard.name] || 0;
+    const qty = Math.min(_sellQty, maxOwned);
+    if (qty < 1) {
+        summary.style.display = 'none';
+        preview.textContent = "You don\u2019t own enough of this card.";
+        return;
+    }
+
+    const price = _computeSellPrice();
+    if (!price) {
+        summary.style.display = 'none';
+        preview.textContent = 'Enter a valid price.';
+        return;
+    }
+
+    const { priceTotal, priceEach } = price;
+    const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
+
+    preview.innerHTML = '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceEach + '</b> per card'
+        + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b> total'
+        + (pressVal ? ' <span style="color:#7f8c8d;font-size:0.85em;">(press value: \uD83D\uDC8E' + pressVal + ')</span>' : '');
+
+    summaryText.innerHTML =
+        'Selling <b style="color:#e67e22;">\u00D7' + qty + '</b> <b>' + _sellSelectedCard.name + '</b><br>'
+        + 'Total: <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b>'
+        + (qty > 1 ? ' <span style="color:#7f8c8d;">' + priceEach + ' each</span>' : '');
+
+    summary.style.display = 'flex';
+    postBtn.disabled = false;
+}
+
+// ── Post listing ──
+
+async function postListing() {
+    if (!_sellSelectedCard) return;
+    const price = _computeSellPrice();
+    if (!price) return;
+
+    const maxOwned = collection[_sellSelectedCard.name] || 0;
+    const qty = Math.min(_sellQty, maxOwned);
+    if (qty < 1) { _showSellMsg('Not enough cards!', 'error'); return; }
+
+    const btn = document.getElementById('sell-post-btn');
+    btn.disabled = true;
+    btn.textContent = 'Posting\u2026';
+
+    try {
+        collection[_sellSelectedCard.name] -= qty;
+        if ((collection[_sellSelectedCard.name] || 0) <= 0) delete collection[_sellSelectedCard.name];
+        updateCollection(); updateInventoryStats(); saveCollection();
+
+        const { postListing: fbPost } = await import('./firebase.js');
+        await fbPost({
+            sellerUid:  window._currentUser.uid,
+            sellerName: window._cloudUserData?.username || 'Unknown',
+            cardName:   _sellSelectedCard.baseName,
+            cardType:   _sellSelectedCard.type,
+            amount:     qty,
+            priceTotal: price.priceTotal,
+        });
+
+        _showSellMsg('Listed \u00D7' + qty + ' ' + _sellSelectedCard.name + ' for \uD83D\uDC8E' + price.priceTotal, 'success');
+        _resetSellForm();
+        btn.textContent = 'Post Listing';
+    } catch(e) {
+        collection[_sellSelectedCard.name] = (collection[_sellSelectedCard.name] || 0) + qty;
+        updateCollection();
+        _showSellMsg('Failed: ' + (e.message || e), 'error');
+        btn.disabled = false;
+        btn.textContent = 'Post Listing';
+    }
+}
+
+function _showSellMsg(text, type) {
+    const el = document.getElementById('sell-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.style.display  = 'block';
+    el.style.background = type === 'error' ? 'rgba(231,76,60,0.18)' : 'rgba(39,174,96,0.18)';
+    el.style.color      = type === 'error' ? '#e74c3c'              : '#2ecc71';
+    el.style.border     = '1px solid ' + (type === 'error' ? 'rgba(231,76,60,0.4)' : 'rgba(39,174,96,0.4)');
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ── Market listing display ──
+
+function setMarketTab(tab) {
+    _marketCurrentTab = tab;
+    ['all','mine'].forEach(t => {
+        const el = document.getElementById('market-tab-' + t);
+        if (!el) return;
+        el.style.color = t === tab ? '#9b59b6' : '#7f8c8d';
+        el.style.borderBottomColor = t === tab ? '#9b59b6' : 'transparent';
+    });
+    _renderMarketListings();
+}
+
+async function refreshMarket() {
+    const list = document.getElementById('market-list');
+    if (list) list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
+    try {
+        const { fetchListings } = await import('./firebase.js');
+        _marketListings = await fetchListings();
+        _renderMarketListings();
+    } catch(e) {
+        if (list) list.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:2em;">Failed to load: ' + (e.message || e) + '</div>';
+    }
+}
+
+function _renderMarketListings() {
+    const list  = document.getElementById('market-list');
+    if (!list) return;
+    const myUid = window._currentUser?.uid;
+    const toShow = _marketCurrentTab === 'mine'
+        ? _marketListings.filter(l => l.sellerUid === myUid)
+        : _marketListings;
+
+    if (!toShow.length) {
+        list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
+            + (_marketCurrentTab === 'mine' ? 'No active listings.' : 'No listings yet. Be the first to sell!')
+            + '</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    toShow.forEach(listing => {
+        const isOwn    = listing.sellerUid === myUid;
+        const item     = items.find(i => i.name === listing.cardName);
+        const fullName = listing.cardType ? listing.cardName + ' (' + listing.cardType + ')' : listing.cardName;
+        const canAfford = diamonds >= listing.priceTotal;
+
+        const card = document.createElement('div');
+        card.className = 'market-listing' + (isOwn ? ' own' : '');
+
+        // Image
+        const img = document.createElement('img');
+        img.src = item ? getCardImageSrc(item) : '';
+        img.style.cssText = 'width:54px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+        img.onerror = function() { this.style.display = 'none'; };
+
+        // Info block
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'font-weight:bold;color:#fff;font-size:1em;';
+        nameEl.textContent = fullName;
+
+        const detailEl = document.createElement('div');
+        detailEl.style.cssText = 'font-size:0.8em;color:#7f8c8d;margin-top:0.1em;';
+        detailEl.innerHTML = '\u00D7' + listing.amount + ' \u00B7 \uD83D\uDC8E ' + listing.priceTotal
+            + (listing.amount > 1 ? ' <span style="color:#555;">(' + listing.priceEach + ' each)</span>' : '');
+
+        const sellerEl = document.createElement('div');
+        sellerEl.style.cssText = 'font-size:0.75em;color:#555;margin-top:0.1em;';
+        sellerEl.textContent = 'by ' + (listing.sellerName || 'Unknown');
+
+        info.appendChild(nameEl);
+        info.appendChild(detailEl);
+        info.appendChild(sellerEl);
+
+        // Action button
+        const btn = document.createElement('button');
+        if (isOwn) {
+            btn.className = 'market-cancel-btn';
+            btn.textContent = 'Cancel';
+            btn.onclick = () => cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+        } else {
+            btn.className = 'market-buy-btn';
+            btn.textContent = '\uD83D\uDC8E Buy';
+            btn.disabled = !canAfford;
+            if (!canAfford) btn.title = 'Not enough diamonds (' + diamonds + ' / ' + listing.priceTotal + ')';
+            btn.onclick = () => buyListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.priceTotal, btn);
+        }
+
+        card.appendChild(img);
+        card.appendChild(info);
+        card.appendChild(btn);
+        list.appendChild(card);
+    });
+}
+
+async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {
+    if (diamonds < priceTotal) { showCraftMessage('Not enough diamonds!', 'error'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = '\u2026'; }
+
+    try {
+        const { deleteListing } = await import('./firebase.js');
+        await deleteListing(id);
+
+        diamonds -= priceTotal;
+        const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
+        collection[key] = (collection[key] || 0) + amount;
+        updateDiamondsDisplay(); updateCollection(); updateInventoryStats(); saveCollection();
+        showCraftMessage('Bought \u00D7' + amount + ' ' + key + ' for \uD83D\uDC8E' + priceTotal + '!', 'success');
+        _marketListings = _marketListings.filter(l => l.id !== id);
+        _renderMarketListings();
+    } catch(e) {
+        showCraftMessage('Purchase failed: ' + (e.message || e), 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDC8E Buy'; }
+    }
+}
+
+async function cancelListing(id, cardName, cardType, amount) {
+    try {
+        const { deleteListing } = await import('./firebase.js');
+        await deleteListing(id);
+
+        const key = cardType ? cardName + ' (' + cardType + ')' : cardName;
+        collection[key] = (collection[key] || 0) + amount;
+        updateCollection(); updateInventoryStats(); saveCollection();
+        showCraftMessage('Listing cancelled \u2014 cards refunded.', 'info');
+        _marketListings = _marketListings.filter(l => l.id !== id);
+        _renderMarketListings();
+    } catch(e) {
+        showCraftMessage('Cancel failed: ' + (e.message || e), 'error');
+    }
+}

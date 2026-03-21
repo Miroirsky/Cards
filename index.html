@@ -5,6 +5,66 @@
     <meta charset="UTF-8">
     <title>Cards</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .sell-qty-btn, .sell-price-mode-btn, .sell-price-src-btn {
+            padding: 0.4em 0.9em;
+            border-radius: 8px;
+            border: 1.5px solid rgba(230,126,34,0.35);
+            background: rgba(230,126,34,0.07);
+            color: #bdc3c7;
+            font-size: 0.9em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sell-qty-btn.active, .sell-price-mode-btn.active, .sell-price-src-btn.active {
+            background: rgba(230,126,34,0.25);
+            border-color: #e67e22;
+            color: #e67e22;
+        }
+        .sell-qty-btn:hover:not(.active), .sell-price-mode-btn:hover:not(.active), .sell-price-src-btn:hover:not(.active) {
+            background: rgba(230,126,34,0.12);
+            color: #e8a86e;
+        }
+        .market-listing {
+            background: rgba(255,255,255,0.05);
+            border: 1.5px solid rgba(255,255,255,0.09);
+            border-radius: 14px;
+            padding: 0.9em 1em;
+            display: flex;
+            align-items: center;
+            gap: 0.9em;
+        }
+        .market-listing.own {
+            border-color: rgba(230,126,34,0.35);
+            background: rgba(230,126,34,0.06);
+        }
+        .market-buy-btn {
+            padding: 0.5em 1.1em;
+            border-radius: 9px;
+            border: none;
+            background: linear-gradient(90deg,#8e44ad,#6c3483);
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9em;
+            white-space: nowrap;
+            transition: opacity 0.15s;
+        }
+        .market-buy-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .market-cancel-btn {
+            padding: 0.5em 1.1em;
+            border-radius: 9px;
+            border: none;
+            background: rgba(231,76,60,0.2);
+            color: #e74c3c;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9em;
+            white-space: nowrap;
+            border: 1px solid rgba(231,76,60,0.35);
+        }
+    </style>
 </head>
 
 <body>
@@ -293,6 +353,128 @@
                     Inventory</div>
                 <div id="artifact-inventory"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- Sell Button (bottom-left) -->
+    <button id="sell-btn" onclick="openSellMenu()" title="Sell cards" style="
+        position:fixed;bottom:80px;left:16px;z-index:3000;
+        background:linear-gradient(135deg,#e67e22,#d35400);
+        border:none;border-radius:50px;
+        color:#fff;font-weight:bold;font-size:0.95em;
+        padding:0.6em 1.1em;cursor:pointer;
+        box-shadow:0 3px 14px rgba(230,126,34,0.45);
+        display:flex;align-items:center;gap:0.4em;
+        transition:transform 0.15s,box-shadow 0.15s;
+    " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(230,126,34,0.6)'"
+       onmouseout="this.style.transform='';this.style.boxShadow='0 3px 14px rgba(230,126,34,0.45)'">
+        🏷️ Sell
+    </button>
+
+    <!-- Market Button (bottom-left, above sell) -->
+    <button id="market-btn" onclick="openMarketMenu()" title="Market" style="
+        position:fixed;bottom:126px;left:16px;z-index:3000;
+        background:linear-gradient(135deg,#8e44ad,#6c3483);
+        border:none;border-radius:50px;
+        color:#fff;font-weight:bold;font-size:0.95em;
+        padding:0.6em 1.1em;cursor:pointer;
+        box-shadow:0 3px 14px rgba(142,68,173,0.45);
+        display:flex;align-items:center;gap:0.4em;
+        transition:transform 0.15s,box-shadow 0.15s;
+    " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(142,68,173,0.6)'"
+       onmouseout="this.style.transform='';this.style.boxShadow='0 3px 14px rgba(142,68,173,0.45)'">
+        🛒 Market
+    </button>
+
+    <!-- SELL PANEL (full-screen) -->
+    <div id="sell-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3900;background:#1a1a2e;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(230,126,34,0.35);flex-shrink:0;">
+            <button onclick="closeSellMenu()" style="background:none;border:none;color:#e67e22;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#e67e22;font-size:1.3em;">🏷️ Create Listing</h2>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:1.2em;display:flex;flex-direction:column;gap:1.2em;">
+
+            <!-- Card selector -->
+            <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Card to sell</div>
+                <div id="sell-card-search-wrap" style="position:relative;">
+                    <input id="sell-card-search" type="text" placeholder="Search your cards…"
+                        style="width:100%;box-sizing:border-box;padding:0.65em 1em;border-radius:10px;border:1.5px solid rgba(230,126,34,0.35);background:rgba(255,255,255,0.06);color:#fff;font-size:1em;outline:none;">
+                    <div id="sell-card-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1e1e32;border:1.5px solid rgba(230,126,34,0.3);border-radius:10px;max-height:220px;overflow-y:auto;z-index:10;"></div>
+                </div>
+                <div id="sell-selected-card" style="margin-top:0.7em;display:none;background:rgba(230,126,34,0.08);border:1.5px solid rgba(230,126,34,0.3);border-radius:12px;padding:0.8em;display:none;align-items:center;gap:0.8em;">
+                    <img id="sell-card-img" src="" style="width:56px;height:36px;object-fit:cover;border-radius:6px;">
+                    <div>
+                        <div id="sell-card-name" style="font-weight:bold;color:#e67e22;"></div>
+                        <div id="sell-card-owned" style="font-size:0.8em;color:#7f8c8d;"></div>
+                    </div>
+                    <button onclick="clearSellCard()" style="margin-left:auto;background:none;border:none;color:#7f8c8d;font-size:1.2em;cursor:pointer;">✕</button>
+                </div>
+            </div>
+
+            <!-- Amount selector -->
+            <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Amount</div>
+                <div style="display:flex;flex-wrap:wrap;gap:0.4em;margin-bottom:0.5em;" id="sell-qty-btns">
+                    <button class="sell-qty-btn active" data-qty="1">×1</button>
+                    <button class="sell-qty-btn" data-qty="5">×5</button>
+                    <button class="sell-qty-btn" data-qty="10">×10</button>
+                    <button class="sell-qty-btn" data-qty="50">×50</button>
+                    <button class="sell-qty-btn" data-qty="100">×100</button>
+                    <button class="sell-qty-btn" data-qty="custom">Custom</button>
+                    <button class="sell-qty-btn" data-qty="max">Max</button>
+                </div>
+                <input id="sell-qty-custom" type="number" min="1" placeholder="Enter amount…"
+                    style="display:none;width:100%;box-sizing:border-box;padding:0.6em 1em;border-radius:8px;border:1.5px solid rgba(230,126,34,0.3);background:rgba(255,255,255,0.06);color:#fff;font-size:1em;outline:none;">
+            </div>
+
+            <!-- Price selector -->
+            <div>
+                <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Price mode</div>
+                <!-- Expandable toggle -->
+                <div style="display:flex;gap:0.5em;margin-bottom:0.8em;">
+                    <button id="sell-price-mode-total" class="sell-price-mode-btn active" onclick="setSellPriceMode('total')">Total price</button>
+                    <button id="sell-price-mode-each"  class="sell-price-mode-btn"        onclick="setSellPriceMode('each')">Per card</button>
+                </div>
+                <!-- Price source -->
+                <div style="display:flex;gap:0.5em;margin-bottom:0.7em;flex-wrap:wrap;">
+                    <button id="sell-price-src-press" class="sell-price-src-btn active" onclick="setSellPriceSrc('press')">💎 Press value</button>
+                    <button id="sell-price-src-custom" class="sell-price-src-btn"       onclick="setSellPriceSrc('custom')">Custom</button>
+                </div>
+                <input id="sell-price-input" type="number" min="1" placeholder="Enter price in 💎…"
+                    style="display:none;width:100%;box-sizing:border-box;padding:0.6em 1em;border-radius:8px;border:1.5px solid rgba(162,155,254,0.3);background:rgba(255,255,255,0.06);color:#fff;font-size:1em;outline:none;">
+                <div id="sell-price-preview" style="margin-top:0.6em;font-size:0.9em;color:#a29bfe;min-height:1.4em;"></div>
+            </div>
+
+            <!-- Summary + Post button -->
+            <div id="sell-summary" style="background:rgba(255,255,255,0.04);border-radius:14px;padding:1em;display:none;flex-direction:column;gap:0.5em;">
+                <div id="sell-summary-text" style="font-size:0.9em;color:#bdc3c7;line-height:1.6;"></div>
+                <button id="sell-post-btn" onclick="postListing()" style="
+                    width:100%;padding:0.9em;border:none;border-radius:10px;
+                    background:linear-gradient(90deg,#e67e22,#d35400);
+                    color:#fff;font-size:1.1em;font-weight:bold;cursor:pointer;
+                    margin-top:0.3em;letter-spacing:0.5px;
+                    transition:opacity 0.2s;
+                ">Post Listing</button>
+            </div>
+            <div id="sell-msg" style="display:none;padding:0.7em 1em;border-radius:10px;font-size:0.9em;text-align:center;"></div>
+        </div>
+    </div>
+
+    <!-- MARKET PANEL (full-screen) -->
+    <div id="market-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3900;background:#1a1a2e;flex-direction:column;overflow:hidden;">
+        <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(142,68,173,0.35);flex-shrink:0;">
+            <button onclick="closeMarketMenu()" style="background:none;border:none;color:#9b59b6;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
+            <h2 style="margin:0;color:#9b59b6;font-size:1.3em;">🛒 Market</h2>
+            <button onclick="refreshMarket()" style="margin-left:auto;background:rgba(155,89,182,0.15);border:1px solid rgba(155,89,182,0.3);border-radius:8px;color:#9b59b6;padding:0.4em 0.9em;cursor:pointer;font-size:0.9em;">↻ Refresh</button>
+        </div>
+        <!-- Tab bar: All listings | My listings -->
+        <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
+            <button id="market-tab-all" onclick="setMarketTab('all')" style="flex:1;padding:0.7em;background:none;border:none;color:#9b59b6;font-weight:bold;cursor:pointer;border-bottom:2px solid #9b59b6;font-size:0.95em;">All Listings</button>
+            <button id="market-tab-mine" onclick="setMarketTab('mine')" style="flex:1;padding:0.7em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.95em;">My Listings</button>
+        </div>
+        <div id="market-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.7em;">
+            <div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>
         </div>
     </div>
 
