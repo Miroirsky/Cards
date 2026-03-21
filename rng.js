@@ -5843,7 +5843,8 @@ async function postListing() {
         if ((collection[_sellSelectedCard.name] || 0) <= 0) delete collection[_sellSelectedCard.name];
         updateCollection(); updateInventoryStats(); saveCollection();
 
-        const { postListing: fbPost } = await import('./firebase.js');
+        const fbPost = window._fbPostListing;
+        if (!fbPost) throw new Error('Firebase not ready');
         await fbPost({
             sellerUid:  window._currentUser.uid,
             sellerName: window._cloudUserData?.username || 'Unknown',
@@ -5893,7 +5894,8 @@ async function refreshMarket() {
     const list = document.getElementById('market-list');
     if (list) list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
     try {
-        const { fetchListings } = await import('./firebase.js');
+        const fetchListings = window._fbFetchListings;
+        if (!fetchListings) throw new Error('Firebase not ready');
         _marketListings = await fetchListings();
         _renderMarketListings();
     } catch(e) {
@@ -5979,7 +5981,8 @@ async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {
     if (btn) { btn.disabled = true; btn.textContent = '\u2026'; }
 
     try {
-        const { deleteListing } = await import('./firebase.js');
+        const deleteListing = window._fbDeleteListing;
+        if (!deleteListing) throw new Error('Firebase not ready');
         await deleteListing(id);
 
         diamonds -= priceTotal;
@@ -5997,7 +6000,8 @@ async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {
 
 async function cancelListing(id, cardName, cardType, amount) {
     try {
-        const { deleteListing } = await import('./firebase.js');
+        const deleteListing = window._fbDeleteListing;
+        if (!deleteListing) throw new Error('Firebase not ready');
         await deleteListing(id);
 
         const key = cardType ? cardName + ' (' + cardType + ')' : cardName;

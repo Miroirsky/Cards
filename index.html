@@ -72,7 +72,7 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 0.24.0</div>
+    <div class="update-text">Update 1.0.0</div>
     <!-- Logged-in user display -->
     <div id="username-display" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;"></div>
     <!-- Logout button -->
@@ -356,36 +356,6 @@
         </div>
     </div>
 
-    <!-- Sell Button (bottom-left) -->
-    <button id="sell-btn" onclick="openSellMenu()" title="Sell cards" style="
-        position:fixed;bottom:80px;left:16px;z-index:3000;
-        background:linear-gradient(135deg,#e67e22,#d35400);
-        border:none;border-radius:50px;
-        color:#fff;font-weight:bold;font-size:0.95em;
-        padding:0.6em 1.1em;cursor:pointer;
-        box-shadow:0 3px 14px rgba(230,126,34,0.45);
-        display:flex;align-items:center;gap:0.4em;
-        transition:transform 0.15s,box-shadow 0.15s;
-    " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(230,126,34,0.6)'"
-       onmouseout="this.style.transform='';this.style.boxShadow='0 3px 14px rgba(230,126,34,0.45)'">
-        🏷️ Sell
-    </button>
-
-    <!-- Market Button (bottom-left, above sell) -->
-    <button id="market-btn" onclick="openMarketMenu()" title="Market" style="
-        position:fixed;bottom:126px;left:16px;z-index:3000;
-        background:linear-gradient(135deg,#8e44ad,#6c3483);
-        border:none;border-radius:50px;
-        color:#fff;font-weight:bold;font-size:0.95em;
-        padding:0.6em 1.1em;cursor:pointer;
-        box-shadow:0 3px 14px rgba(142,68,173,0.45);
-        display:flex;align-items:center;gap:0.4em;
-        transition:transform 0.15s,box-shadow 0.15s;
-    " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(142,68,173,0.6)'"
-       onmouseout="this.style.transform='';this.style.boxShadow='0 3px 14px rgba(142,68,173,0.45)'">
-        🛒 Market
-    </button>
-
     <!-- SELL PANEL (full-screen) -->
     <div id="sell-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3900;background:#1a1a2e;flex-direction:column;overflow:hidden;">
         <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(230,126,34,0.35);flex-shrink:0;">
@@ -466,7 +436,10 @@
         <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(142,68,173,0.35);flex-shrink:0;">
             <button onclick="closeMarketMenu()" style="background:none;border:none;color:#9b59b6;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
             <h2 style="margin:0;color:#9b59b6;font-size:1.3em;">🛒 Market</h2>
-            <button onclick="refreshMarket()" style="margin-left:auto;background:rgba(155,89,182,0.15);border:1px solid rgba(155,89,182,0.3);border-radius:8px;color:#9b59b6;padding:0.4em 0.9em;cursor:pointer;font-size:0.9em;">↻ Refresh</button>
+            <div style="margin-left:auto;display:flex;gap:0.5em;">
+                <button onclick="closeMarketMenu();openSellMenu();" style="background:linear-gradient(90deg,#e67e22,#d35400);border:none;border-radius:8px;color:#fff;font-weight:bold;padding:0.4em 0.9em;cursor:pointer;font-size:0.9em;">🏷️ Sell</button>
+                <button onclick="refreshMarket()" style="background:rgba(155,89,182,0.15);border:1px solid rgba(155,89,182,0.3);border-radius:8px;color:#9b59b6;padding:0.4em 0.9em;cursor:pointer;font-size:0.9em;">↻ Refresh</button>
+            </div>
         </div>
         <!-- Tab bar: All listings | My listings -->
         <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
@@ -504,6 +477,10 @@
             style="display:none;">
             <span class="bottom-nav-icon">🧲</span>
             <span class="bottom-nav-label">Artifacts</span>
+        </button>
+        <button class="bottom-nav-btn" id="nav-market" onclick="openMarketMenu()">
+            <span class="bottom-nav-icon">🛒</span>
+            <span class="bottom-nav-label">Market</span>
         </button>
     </nav>
 
@@ -723,6 +700,12 @@
             try { await saveToCloud(user.uid, saveData); }
             catch(e) { console.warn('Cloud save failed:', e); }
         };
+
+        import { postListing, fetchListings, deleteListing } from './firebase.js';
+        // Expose market functions for rng.js (non-module script)
+        window._fbPostListing   = postListing;
+        window._fbFetchListings = fetchListings;
+        window._fbDeleteListing = deleteListing;
 
         watchAuth(
             (user, cloudData) => {
