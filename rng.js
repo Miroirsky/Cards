@@ -5684,6 +5684,7 @@ let _sellSelectedCard = null;
 let _sellQty          = 1;
 let _sellPriceMode    = 'total';
 let _sellPriceSrc     = 'press';
+let _sellItemType     = 'card'; // 'card' | 'xp'
 let _marketCurrentTab = 'all';
 let _marketListings   = [];
 
@@ -5915,8 +5916,6 @@ function setSellPriceSrc(src) {
     if (src === 'custom') priceInput.focus();
     _updateSellSummary();
 }
-
-let _sellItemType = 'card'; // 'card' | 'xp'
 
 function _computeSellPrice() {
     const isXp = _sellItemType === 'xp';
