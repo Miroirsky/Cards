@@ -72,9 +72,35 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.0.2</div>
-    <!-- Logged-in user display -->
-    <div id="username-display" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;"></div>
+    <div class="update-text">Update 1.0.3</div>
+    <!-- Logged-in user display (clickable) -->
+    <button id="username-display" onclick="openUserMenu()" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(78,205,196,0.2)'" onmouseout="this.style.background='rgba(78,205,196,0.1)'"></button>
+    <!-- Mini save button under username -->
+    <button id="mini-save-btn" onclick="manualSave('mini-save-btn')" title="Save" style="position:fixed;top:100px;left:20px;z-index:1000;background:rgba(39,174,96,0.15);border:1.5px solid rgba(39,174,96,0.3);border-radius:20px;color:#2ecc71;font-size:0.8em;font-weight:bold;padding:0.25em 0.7em;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(39,174,96,0.28)'" onmouseout="this.style.background='rgba(39,174,96,0.15)'">💾</button>
+
+    <!-- User menu modal -->
+    <div id="user-menu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:4500;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;" onclick="if(event.target===this)closeUserMenu()">
+        <div style="background:#1a2a3a;border:2px solid rgba(78,205,196,0.3);border-radius:20px;padding:2em 1.8em;width:100%;max-width:340px;display:flex;flex-direction:column;gap:1em;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <h3 style="margin:0;color:#4ecdc4;font-size:1.2em;">👤 Account</h3>
+                <button onclick="closeUserMenu()" style="background:none;border:none;color:#7f8c8d;font-size:1.4em;cursor:pointer;line-height:1;">×</button>
+            </div>
+            <div style="background:rgba(78,205,196,0.08);border-radius:12px;padding:0.8em 1em;font-size:0.95em;color:#fff;">
+                Logged in as <b id="user-menu-name" style="color:#4ecdc4;"></b>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.4em;">Change username</label>
+                <div style="display:flex;gap:0.5em;">
+                    <input id="user-rename-input" type="text" placeholder="New username…" maxlength="24"
+                        style="flex:1;padding:0.6em 0.9em;border-radius:8px;border:1.5px solid rgba(78,205,196,0.25);background:rgba(255,255,255,0.06);color:#fff;font-size:0.95em;outline:none;"
+                        onkeydown="if(event.key==='Enter')changeUsername(document.getElementById('user-rename-input').value)">
+                    <button onclick="changeUsername(document.getElementById('user-rename-input').value)"
+                        style="padding:0.6em 1em;border-radius:8px;border:none;background:linear-gradient(90deg,#4ecdc4,#2ecc71);color:#fff;font-weight:bold;cursor:pointer;">Save</button>
+                </div>
+            </div>
+            <button onclick="closeUserMenu()" style="background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.2);border-radius:10px;color:#7f8c8d;padding:0.6em;font-size:0.95em;cursor:pointer;">Close</button>
+        </div>
+    </div>
 
     <div id="last-connection"
         style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.2em;color:#3498db;background:rgba(255,255,255,0.97);padding:2em 2.5em;border-radius:25px;z-index:2001;text-align:center;box-shadow:0 8px 40px rgba(52,152,219,0.15);display:none;">
@@ -701,20 +727,20 @@
             catch(e) { console.warn('Cloud save failed:', e); }
         };
 
-        import { postListing, fetchListings, deleteListing } from './firebase.js';
-        // Expose market functions for rng.js (non-module script)
+        import { postListing, fetchListings, deleteListing, updateUsername } from './firebase.js';
+        // Expose market + user functions for rng.js (non-module script)
         window._fbPostListing   = postListing;
         window._fbFetchListings = fetchListings;
         window._fbDeleteListing = deleteListing;
+        window._fbUpdateUsername = updateUsername;
 
         watchAuth(
             (user, cloudData) => {
                 window._currentUser    = user;
                 window._cloudUserData  = cloudData;
 
-                // Show username in top-left
-                const el = document.getElementById('username-display');
-                if (el) el.textContent = '👤 ' + (cloudData?.username || '');
+                // Set username via rng.js helper
+                if (window._setUsername) window._setUsername(cloudData?.username || '');
 
                 // Signal rng.js that auth is ready and pass the cloud save
                 window._onAuthReady(cloudData?.save || null);

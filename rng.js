@@ -3049,31 +3049,59 @@ function saveCollection() {
     _saveDebounceTimer = setTimeout(() => { _pushCloudSave(); }, 2000);
 }
 
-// Manual save — called by the Save button, saves immediately
-async function manualSave() {
-    const btn = document.getElementById('manual-save-btn');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = '💾 Saving…';
+// Manual save — called by Save buttons, 1-minute cooldown
+let _lastManualSave = 0;
+async function manualSave(btnId) {
+    const id  = btnId || 'manual-save-btn';
+    const btn = document.getElementById(id);
+    const now = Date.now();
+    const cooldown = 60 * 1000; // 1 minute
+    const remaining = cooldown - (now - _lastManualSave);
+
+    if (remaining > 0) {
+        const secs = Math.ceil(remaining / 1000);
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ ' + secs + 's';
+            // Tick down
+            const iv = setInterval(() => {
+                const r2 = cooldown - (Date.now() - _lastManualSave);
+                if (r2 <= 0) { clearInterval(iv); _refreshSaveBtns(); }
+                else if (btn) btn.textContent = '⏳ ' + Math.ceil(r2/1000) + 's';
+            }, 1000);
+        }
+        return;
     }
+
+    _lastManualSave = now;
+    _refreshSaveBtns();
+    if (btn) { btn.disabled = true; btn.textContent = '💾 Saving…'; }
     try {
         await _pushCloudSave();
         if (btn) {
             btn.textContent = '✅ Saved!';
-            setTimeout(() => {
-                btn.textContent = '💾 Save';
-                btn.disabled = false;
-            }, 1500);
+            setTimeout(() => _refreshSaveBtns(), 1500);
         }
     } catch(e) {
         if (btn) {
             btn.textContent = '❌ Failed';
-            setTimeout(() => {
-                btn.textContent = '💾 Save';
-                btn.disabled = false;
-            }, 2000);
+            setTimeout(() => _refreshSaveBtns(), 2000);
         }
     }
+}
+
+function _refreshSaveBtns() {
+    const now = Date.now();
+    const cooldown = 60 * 1000;
+    const canSave = (now - _lastManualSave) >= cooldown;
+    ['manual-save-btn','mini-save-btn'].forEach(id => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.disabled = !canSave;
+        if (canSave) {
+            b.textContent = id === 'mini-save-btn' ? '💾' : '💾 Save';
+        }
+    });
 }
 
 // ── Push save to cloud on page close / tab hide ──
@@ -3191,6 +3219,50 @@ window._onAuthReady = function(save) {
     startTokenRecharge();
     updateTokensDisplay();
 };
+
+// ── Username stored in window._username for quick access ──
+window._username = '';
+
+function _setUsername(name) {
+    window._username = name || '';
+    const el = document.getElementById('username-display');
+    if (el) el.textContent = '👤 ' + window._username;
+}
+
+async function changeUsername(newName) {
+    newName = newName.trim();
+    if (!newName || newName.length < 2) { showCraftMessage('Username must be at least 2 characters.', 'error'); return; }
+    if (/\s/.test(newName)) { showCraftMessage('No spaces in username.', 'error'); return; }
+    const user = window._currentUser;
+    if (!user) return;
+
+    const updateUsername = window._fbUpdateUsername;
+    if (!updateUsername) { showCraftMessage('Firebase not ready', 'error'); return; }
+
+    try {
+        await updateUsername(user.uid, window._username, newName);
+        window._cloudUserData = { ...window._cloudUserData, username: newName };
+        _setUsername(newName);
+        showCraftMessage('Username changed to ' + newName + '!', 'success');
+        closeUserMenu();
+    } catch(e) {
+        showCraftMessage('Failed: ' + (e.message || e), 'error');
+    }
+}
+
+function openUserMenu() {
+    let menu = document.getElementById('user-menu');
+    if (!menu) return;
+    document.getElementById('user-menu-name').textContent = window._username;
+    document.getElementById('user-rename-input').value = '';
+    menu.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeUserMenu() {
+    const menu = document.getElementById('user-menu');
+    if (menu) { menu.style.display = 'none'; document.body.style.overflow = ''; }
+}
 
 // Kept for backward-compat (called in a few places but now a no-op)
 function loadCollection() {}
@@ -6023,12 +6095,32 @@ function _renderMarketListings() {
         info.appendChild(detailEl);
         info.appendChild(sellerEl);
 
-        // Action button
-        const btn = document.createElement('button');
+        // Action button(s)
         if (isOwn) {
-            btn.className = 'market-cancel-btn';
-            btn.textContent = 'Cancel';
-            btn.onclick = () => cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+            const btnWrap = document.createElement('div');
+            btnWrap.style.cssText = 'display:flex;flex-direction:column;gap:0.35em;';
+
+            const modBtn = document.createElement('button');
+            modBtn.className = 'market-cancel-btn';
+            modBtn.style.cssText += ';background:rgba(52,152,219,0.2);color:#3498db;border-color:rgba(52,152,219,0.35);';
+            modBtn.textContent = '✏️ Modify';
+            modBtn.onclick = () => modifyListing(listing);
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'market-cancel-btn';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+
+            btnWrap.appendChild(modBtn);
+            btnWrap.appendChild(cancelBtn);
+            card.appendChild(img);
+            card.appendChild(info);
+            card.appendChild(btnWrap);
+            list.appendChild(card);
+            return; // skip the generic append below
+        }
+        const btn = document.createElement('button');
+        if (false) { // placeholder — isOwn handled above
         } else {
             btn.className = 'market-buy-btn';
             btn.textContent = '\uD83D\uDC8E Buy';
@@ -6042,6 +6134,25 @@ function _renderMarketListings() {
         card.appendChild(btn);
         list.appendChild(card);
     });
+}
+
+// ── Modify listing: cancel it then open sell menu pre-filled ──
+async function modifyListing(listing) {
+    // Cancel the listing (refunds cards)
+    await cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount);
+    // Close market, open sell menu
+    closeMarketMenu();
+    openSellMenu();
+    // Pre-fill the card
+    const type = listing.cardType || '';
+    const fullName = type ? listing.cardName + ' (' + type + ')' : listing.cardName;
+    setTimeout(() => {
+        _selectSellCard(listing.cardName, type, fullName);
+        // Pre-fill amount
+        _sellQty = listing.amount;
+        document.querySelectorAll('.sell-qty-btn').forEach(b => b.classList.remove('active'));
+        _updateSellSummary();
+    }, 100);
 }
 
 async function buyListing(id, cardName, cardType, amount, priceTotal, btn) {

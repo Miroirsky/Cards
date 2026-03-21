@@ -136,4 +136,21 @@ export async function fetchMyListings(uid) {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+// ── Update username ──────────────────────────────────────────
+
+export async function updateUsername(uid, oldUsername, newUsername) {
+    // Check new name not taken
+    const snap = await getDoc(doc(db, "usernames", newUsername));
+    if (snap.exists()) throw new Error("Username already taken.");
+
+    // Write new mapping
+    await setDoc(doc(db, "usernames", newUsername), { uid });
+
+    // Update user document
+    await setDoc(doc(db, "users", uid), { username: newUsername }, { merge: true });
+
+    // Delete old mapping (best-effort)
+    try { await deleteDoc(doc(db, "usernames", oldUsername)); } catch(e) {}
+}
+
 export { auth, db };
