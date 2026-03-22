@@ -45,11 +45,11 @@ const items = [
     { name: "Slime", chance: 500000, rollable: true, tags: ["ai"] },
     { name: "Ghost", chance: 750000, rollable: true, tags: ["ai"] },
     { name: "Skeleton", chance: 1000000, rollable: true, tags: ["ai"] },
-    { name: "Lava", chance: 1500000, rollable: true, tags: ["ai"] },
+    { name: "Magma", chance: 1500000, rollable: true, tags: ["ai"] },
     { name: "Monkey", chance: 2500000, rollable: true, tags: ["ai"] },
     { name: "Uranus", chance: 3500000, rollable: true, tags: ["ai"] },
     { name: "Fire", chance: 5000000, rollable: true, tags: ["ai"] },
-    { name: "Uranus", chance: 6250000, rollable: true, tags: ["ai"] },
+    { name: "Neptune", chance: 6250000, rollable: true, tags: ["ai"] },
     { name: "Water", chance: 7500000, rollable: true, tags: ["ai"] },
     { name: "Rubiks Cube", chance: 8500000, rollable: true, tags: ["ai"] },
     { name: "Empty Glass", chance: 10000000, rollable: true, tags: ["ai"] },
@@ -158,13 +158,13 @@ const cardsGroupes = [
     // ── Food & Sweets ──
     { name: "Food",      content: ["Sugar", "Sugar Cube", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
     // ── Space & Celestial ──
-    { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus"],                                           color: "rgb(20, 30, 80)" },
+    { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus", "Neptune"],                                color: "rgb(20, 30, 80)" },
     // ── Weapons ──
     { name: "Weapons",   content: ["Sword", "Gun"],                                                                     color: "rgb(60, 60, 60)" },
     // ── Energy & Elements ──
-    { name: "Energy",    content: ["Electricity", "Thunder", "Fire", "Lava", "Time"],                                           color: "rgb(230, 200, 30)" },
+    { name: "Energy",    content: ["Electricity", "Thunder", "Fire", "Lava", "Magma", "Time"],                          color: "rgb(230, 200, 30)" },
     // ── Elements ──
-    { name: "Elements",  content: ["Water", "Lava", "Ice Spikes", "Sand", "Rock", "Coal", "Salt", "Iron"],              color: "rgb(70, 120, 180)" },
+    { name: "Elements",  content: ["Water", "Lava", "Magma", "Ice Spikes", "Sand", "Rock", "Coal", "Salt", "Iron"],     color: "rgb(70, 120, 180)" },
     // ── Body & Anatomy ──
     { name: "Body",      content: ["Bones", "Hearth", "Pierced Hearth"],                                                color: "rgb(200, 40, 80)" },
     // ── Creatures & Monsters ──
@@ -6091,19 +6091,6 @@ async function postListing() {
             itemCategory: isXpPost ? 'xp' : 'card',
         });
 
-        // Update RAP — only for non-free listings (free listings don't reflect market value)
-        if (price.priceTotal > 0 && price.priceEach > 0) {
-            const rapKey = isXpPost
-                ? 'xp'
-                : (_sellSelectedCard.type
-                    ? 'card:' + _sellSelectedCard.baseName + ':' + _sellSelectedCard.type
-                    : 'card:' + _sellSelectedCard.baseName);
-            const updateRap = window._fbUpdateRap;
-            if (updateRap) {
-                try { await updateRap(rapKey, price.priceEach); } catch(_) {}
-            }
-        }
-
         const label = isXpPost ? postQty + ' XP' : ('\u00D7' + postQty + ' ' + _sellSelectedCard.name);
         const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + _fmtPrice(price.priceTotal);
         _showSellMsg('Listed ' + label + ' for ' + priceLabel, 'success');
@@ -6131,15 +6118,21 @@ function _showSellMsg(text, type) {
 
 // ── Market listing display ──
 
+let _rapCache = {}; // { itemKey: rapValue } — refreshed on market open
+
 function setMarketTab(tab) {
     _marketCurrentTab = tab;
-    ['all','mine'].forEach(t => {
+    ['all','mine','rap'].forEach(t => {
         const el = document.getElementById('market-tab-' + t);
         if (!el) return;
         el.style.color = t === tab ? '#9b59b6' : '#7f8c8d';
         el.style.borderBottomColor = t === tab ? '#9b59b6' : 'transparent';
     });
-    _renderMarketListings();
+    if (tab === 'rap') {
+        _renderRapTable();
+    } else {
+        _renderMarketListings();
+    }
 }
 
 async function refreshMarket() {
@@ -6147,9 +6140,17 @@ async function refreshMarket() {
     if (list) list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
     try {
         const fetchListings = window._fbFetchListings;
+        const getAllRap     = window._fbGetAllRap;
         if (!fetchListings) throw new Error('Firebase not ready');
-        _marketListings = await fetchListings();
-        _renderMarketListings();
+        // Load listings and RAP in parallel
+        const [listings, rapData] = await Promise.all([
+            fetchListings(),
+            getAllRap ? getAllRap() : Promise.resolve({})
+        ]);
+        _marketListings = listings;
+        _rapCache = rapData || {};
+        if (_marketCurrentTab === 'rap') _renderRapTable();
+        else _renderMarketListings();
     } catch(e) {
         if (list) list.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:2em;">Failed to load: ' + (e.message || e) + '</div>';
     }
@@ -6235,8 +6236,35 @@ function _renderMarketListings() {
                 '<span style="color:#3498db;">\uD83C\uDFB2 ' + chanceStr + ' chance</span>';
         }
 
+        // RAP row — show for all listings that have a RAP
+        const rapKey = isXpLi
+            ? 'xp'
+            : (listing.cardType
+                ? 'card:' + listing.cardName + ':' + listing.cardType
+                : 'card:' + listing.cardName);
+        const rapVal = _rapCache[rapKey];
+        let rapEl = null;
+        if (rapVal != null) {
+            rapEl = document.createElement('div');
+            rapEl.style.cssText = 'font-size:0.75em;margin-top:0.2em;color:#7f8c8d;';
+            // Compare listing price per unit vs RAP
+            const perUnit = isFree ? 0 : (listing.priceEach || listing.priceTotal);
+            let cmpStr = '';
+            if (!isFree && perUnit > 0) {
+                const diff = perUnit - rapVal;
+                const pct  = rapVal > 0 ? (diff / rapVal * 100) : 0;
+                if (Math.abs(pct) >= 0.5) {
+                    cmpStr = diff > 0
+                        ? ' <span style="color:#e74c3c;">\u25b2 +' + _fmtPrice(Math.abs(diff)) + ' (' + pct.toFixed(1) + '% above)</span>'
+                        : ' <span style="color:#2ecc71;">\u25bc \u2212' + _fmtPrice(Math.abs(diff)) + ' (' + Math.abs(pct).toFixed(1) + '% below)</span>';
+                }
+            }
+            rapEl.innerHTML = 'RAP \uD83D\uDC8E' + _fmtPrice(rapVal) + cmpStr;
+        }
+
         info.appendChild(nameEl);
         info.appendChild(detailEl);
+        if (rapEl) info.appendChild(rapEl);
         if (luckRowEl) info.appendChild(luckRowEl);
         info.appendChild(sellerEl);
 
@@ -6271,14 +6299,11 @@ function _renderMarketListings() {
             return; // skip the generic append below
         }
         const btn = document.createElement('button');
-        if (false) { // placeholder — isOwn handled above
-        } else {
-            btn.className = 'market-buy-btn';
-            btn.textContent = isFree ? '\uD83C\uDD93 Get' : '\uD83D\uDC8E Buy';
-            btn.disabled = !canAfford;
-            if (!canAfford) btn.title = 'Not enough diamonds (' + diamonds + ' / ' + listing.priceTotal + ')';
-            btn.onclick = () => buyListing(listing, btn);
-        }
+        btn.className = 'market-buy-btn';
+        btn.textContent = isFree ? '\uD83C\uDD93 Get' : '\uD83D\uDC8E Buy';
+        btn.disabled = !canAfford;
+        if (!canAfford) btn.title = 'Not enough diamonds (' + diamonds + ' / ' + listing.priceTotal + ')';
+        btn.onclick = () => buyListing(listing, btn);
 
         card.appendChild(img);
         if (isXpLi) {
@@ -6290,6 +6315,84 @@ function _renderMarketListings() {
         card.appendChild(info);
         card.appendChild(btn);
         list.appendChild(card);
+    });
+}
+
+// ── RAP table ──
+
+function _renderRapTable() {
+    const list = document.getElementById('market-list');
+    if (!list) return;
+
+    const rap = _rapCache;
+    const keys = Object.keys(rap);
+
+    if (!keys.length) {
+        list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">No RAP data yet. Prices are recorded when items are purchased.</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+
+    // Sort: xp first, then cards by name
+    keys.sort((a, b) => {
+        if (a === 'xp') return -1;
+        if (b === 'xp') return 1;
+        return a.localeCompare(b);
+    });
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:0.75em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;padding:0 0.3em 0.5em;display:flex;justify-content:space-between;';
+    header.innerHTML = '<span>Item</span><span>RAP (💎 per unit)</span>';
+    list.appendChild(header);
+
+    keys.forEach(key => {
+        const rapVal = rap[key];
+        if (rapVal == null) return;
+
+        // Parse key
+        let label = '', imgEl = null;
+        if (key === 'xp') {
+            label = 'XP';
+            const span = document.createElement('span');
+            span.style.cssText = 'font-size:1.6em;line-height:1;flex-shrink:0;';
+            span.textContent = '⭐';
+            imgEl = span;
+        } else {
+            // card:Name or card:Name:Type
+            const parts = key.split(':');
+            const baseName = parts[1] || key;
+            const cardType = parts[2] || '';
+            label = cardType ? baseName + ' (' + cardType + ')' : baseName;
+            const item = items.find(i => i.name === baseName);
+            if (item) {
+                const img = document.createElement('img');
+                img.src = getCardImageSrc(item);
+                img.style.cssText = 'width:48px;height:32px;object-fit:cover;border-radius:5px;flex-shrink:0;';
+                img.onerror = function() { this.style.display='none'; };
+                imgEl = img;
+            }
+        }
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:0.65em 0.9em;';
+
+        if (imgEl) row.appendChild(imgEl);
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = '<div style="font-weight:bold;color:#fff;font-size:0.95em;">' + label + '</div>'
+            + '<div style="font-size:0.75em;color:#7f8c8d;margin-top:0.1em;">' + key + '</div>';
+        row.appendChild(info);
+
+        const rapNum = document.createElement('div');
+        rapNum.style.cssText = 'text-align:right;flex-shrink:0;';
+        rapNum.innerHTML = '<div style="font-weight:bold;color:#a29bfe;font-size:1.05em;">\uD83D\uDC8E ' + _fmtPrice(rapVal) + '</div>'
+            + '<div style="font-size:0.72em;color:#555;">per unit</div>';
+        row.appendChild(rapNum);
+
+        list.appendChild(row);
     });
 }
 
@@ -6340,6 +6443,18 @@ async function buyListing(listing, btn) {
             if (addReward && sellerUid) {
                 try { await addReward(sellerUid, priceTotal); }
                 catch(rewardErr) { console.warn('Reward failed:', rewardErr.message || rewardErr); }
+            }
+            // Update RAP — fires on actual purchase, not on listing
+            const updateRap = window._fbUpdateRap;
+            if (updateRap) {
+                const rapKey = isXpItem
+                    ? 'xp'
+                    : (cardType ? 'card:' + cardName + ':' + cardType : 'card:' + cardName);
+                const pricePerUnit = amount > 0 ? parseFloat((priceTotal / amount).toFixed(2)) : priceTotal;
+                try {
+                    const newRap = await updateRap(rapKey, pricePerUnit);
+                    if (newRap != null) _rapCache[rapKey] = newRap;
+                } catch(_) {}
             }
         }
 
