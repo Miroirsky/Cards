@@ -6,7 +6,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc,
-         collection as fsCollection, addDoc, getDocs, query, where, orderBy }
+         collection as fsCollection, addDoc, getDocs, query, where, orderBy, limit }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -193,7 +193,20 @@ export async function getAllRap() {
     return result;
 }
 
-// ── Rewards  (rewards/{uid}/pending/{autoId}) ─────────────────────
+// ── Leaderboard ───────────────────────────────────────────────────
+// Fetches top 10 players by diamonds from their saved game state.
+export async function getLeaderboard() {
+    const snap = await getDocs(
+        query(fsCollection(db, "users"), orderBy("save.diamonds", "desc"), limit(10))
+    );
+    return snap.docs.map((d, i) => ({
+        rank:     i + 1,
+        uid:      d.id,
+        username: d.data().username || 'Unknown',
+        diamonds: d.data().save?.diamonds || 0,
+        level:    d.data().save?.level    || 1,
+    }));
+}
 // Each document: { type: 'diamonds'|'card'|'item', amount, from, createdAt }
 // This subcollection structure allows any reward type in the future.
 
