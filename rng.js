@@ -5938,6 +5938,12 @@ function setSellPriceSrc(src) {
     _updateSellSummary();
 }
 
+function _fmtPrice(v) {
+    if (v == null) return '0';
+    // Show up to 2 decimal places, strip trailing zeros
+    return parseFloat(v.toFixed(2)).toString();
+}
+
 function _computeSellPrice() {
     const isXp = _sellItemType === 'xp';
     if (!isXp && !_sellSelectedCard) return null;
@@ -5958,9 +5964,9 @@ function _computeSellPrice() {
 
     const raw = parseFloat(document.getElementById('sell-price-input').value);
     if (isNaN(raw) || raw < 0) return null;
-    const v = Math.max(0, Math.ceil(raw));
-    if (_sellPriceMode === 'each') return { priceEach: v, priceTotal: v * effectiveQty };
-    return { priceEach: effectiveQty > 0 ? Math.ceil(v / effectiveQty) : v, priceTotal: v };
+    const v = Math.max(0, parseFloat(raw.toFixed(2)));
+    if (_sellPriceMode === 'each') return { priceEach: v, priceTotal: parseFloat((v * effectiveQty).toFixed(2)) };
+    return { priceEach: effectiveQty > 0 ? parseFloat((v / effectiveQty).toFixed(2)) : v, priceTotal: v };
 }
 
 function setSellItemType(type) {
@@ -6018,7 +6024,7 @@ function _updateSellSummary() {
 
     const { priceTotal, priceEach } = price;
     const isFree = priceTotal === 0;
-    const priceLabel = isFree ? '<span style="color:#2ecc71;">\uD83C\uDD93 Free</span>' : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b>';
+    const priceLabel = isFree ? '<span style="color:#2ecc71;">\uD83C\uDD93 Free</span>' : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + _fmtPrice(priceTotal) + '</b>';
 
     if (isXp) {
         preview.innerHTML = priceLabel;
@@ -6027,11 +6033,11 @@ function _updateSellSummary() {
         const pressVal = _pressValue(_sellSelectedCard.baseName, _sellSelectedCard.type);
         preview.innerHTML = isFree
             ? priceLabel
-            : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + priceEach + '</b> each'
-              + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E ' + priceTotal + '</b> total'
+            : '<b style="color:#a29bfe;">\uD83D\uDC8E ' + _fmtPrice(priceEach) + '</b> each'
+              + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E ' + _fmtPrice(priceTotal) + '</b> total'
               + (pressVal ? ' <span style="color:#7f8c8d;font-size:0.85em;">(press: \uD83D\uDC8E' + pressVal + ')</span>' : '');
         summaryText.innerHTML = 'Selling <b style="color:#e67e22;">\u00D7' + qty + '</b> <b>' + _sellSelectedCard.name + '</b><br>Price: ' + priceLabel
-            + (qty > 1 && !isFree ? ' <span style="color:#7f8c8d;">(' + priceEach + ' each)</span>' : '');
+            + (qty > 1 && !isFree ? ' <span style="color:#7f8c8d;">(' + _fmtPrice(priceEach) + ' each)</span>' : '');
     }
 
     summary.style.display = 'flex';
@@ -6099,7 +6105,7 @@ async function postListing() {
         }
 
         const label = isXpPost ? postQty + ' XP' : ('\u00D7' + postQty + ' ' + _sellSelectedCard.name);
-        const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + price.priceTotal;
+        const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + _fmtPrice(price.priceTotal);
         _showSellMsg('Listed ' + label + ' for ' + priceLabel, 'success');
         _resetSellForm();
         btn.textContent = 'Post Listing';
@@ -6200,7 +6206,7 @@ function _renderMarketListings() {
         const detailEl = document.createElement('div');
         detailEl.style.cssText = 'font-size:0.8em;color:#7f8c8d;margin-top:0.1em;';
         const freeStr  = '<span style="color:#2ecc71;">\uD83C\uDD93 Free</span>';
-        const priceBit = isFree ? freeStr : ('\uD83D\uDC8E ' + listing.priceTotal + (listing.amount > 1 && !isXpLi ? ' <span style="color:#555;">(' + listing.priceEach + ' each)</span>' : ''));
+        const priceBit = isFree ? freeStr : ('\uD83D\uDC8E ' + _fmtPrice(listing.priceTotal) + (listing.amount > 1 && !isXpLi ? ' <span style="color:#555;">(' + _fmtPrice(listing.priceEach) + ' each)</span>' : ''));
         detailEl.innerHTML = (isXpLi ? '\u2B50 ' : '\u00D7') + listing.amount + ' \u00B7 ' + priceBit;
 
         const sellerEl = document.createElement('div');
@@ -6327,7 +6333,7 @@ async function buyListing(listing, btn) {
         await deleteListing(id);
 
         if (!isFree) {
-            diamonds -= priceTotal;
+            diamonds = parseFloat((diamonds - priceTotal).toFixed(2));
             updateDiamondsDisplay();
             // Send reward to seller
             const addReward = window._fbAddPendingReward;
@@ -6348,7 +6354,7 @@ async function buyListing(listing, btn) {
         saveCollection();
 
         const what = isXpItem ? amount + ' XP' : ('\u00D7' + amount + ' ' + (cardType ? cardName + ' (' + cardType + ')' : cardName));
-        const cost = isFree ? 'for free' : 'for \uD83D\uDC8E' + priceTotal;
+        const cost = isFree ? 'for free' : 'for \uD83D\uDC8E' + _fmtPrice(priceTotal);
         showCraftMessage('Bought ' + what + ' ' + cost + '!', 'success');
         _marketListings = _marketListings.filter(l => l.id !== id);
         _renderMarketListings();

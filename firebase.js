@@ -113,7 +113,7 @@ export async function postListing({ sellerUid, sellerName, cardName, cardType, a
         cardType:     cardType || '',
         amount:       Number(amount),
         priceTotal:   Number(priceTotal),
-        priceEach:    priceTotal > 0 ? Math.ceil(Number(priceTotal) / Number(amount)) : 0,
+        priceEach:    priceTotal > 0 ? Number(priceTotal) / Number(amount) : 0,
         itemCategory: itemCategory || 'card',
         createdAt:    Date.now(),
     });
