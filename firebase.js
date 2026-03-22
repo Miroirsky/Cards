@@ -156,6 +156,43 @@ export async function updateUsername(uid, oldUsername, newUsername) {
 
 export { auth, db };
 
+// ── RAP  (rap/{itemKey}) ──────────────────────────────────────────
+// Stores the Recent Average Price for each tradeable item.
+// itemKey examples: "xp", "card:Grass", "card:Grass:Gold"
+// Document shape: { itemKey, rap, updatedAt }
+// Formula: RAP = RAP + (salePrice - RAP) / 100
+
+// Update RAP when a listing is posted (price per unit)
+export async function updateRap(itemKey, priceEach) {
+    if (!itemKey || priceEach == null || priceEach < 0) return;
+    const ref = doc(db, "rap", itemKey);
+    const snap = await getDoc(ref);
+    let newRap;
+    if (!snap.exists() || snap.data().rap == null) {
+        newRap = priceEach;
+    } else {
+        const currentRap = snap.data().rap;
+        newRap = currentRap + (priceEach - currentRap) / 100;
+    }
+    await setDoc(ref, { itemKey, rap: newRap, updatedAt: Date.now() });
+    return newRap;
+}
+
+// Fetch RAP for a single item
+export async function getRap(itemKey) {
+    const snap = await getDoc(doc(db, "rap", itemKey));
+    if (!snap.exists()) return null;
+    return snap.data().rap ?? null;
+}
+
+// Fetch all RAP entries
+export async function getAllRap() {
+    const snap = await getDocs(fsCollection(db, "rap"));
+    const result = {};
+    snap.forEach(d => { result[d.data().itemKey] = d.data().rap; });
+    return result;
+}
+
 // ── Rewards  (rewards/{uid}/pending/{autoId}) ─────────────────────
 // Each document: { type: 'diamonds'|'card'|'item', amount, from, createdAt }
 // This subcollection structure allows any reward type in the future.

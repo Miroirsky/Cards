@@ -6085,6 +6085,19 @@ async function postListing() {
             itemCategory: isXpPost ? 'xp' : 'card',
         });
 
+        // Update RAP — only for non-free listings (free listings don't reflect market value)
+        if (price.priceTotal > 0 && price.priceEach > 0) {
+            const rapKey = isXpPost
+                ? 'xp'
+                : (_sellSelectedCard.type
+                    ? 'card:' + _sellSelectedCard.baseName + ':' + _sellSelectedCard.type
+                    : 'card:' + _sellSelectedCard.baseName);
+            const updateRap = window._fbUpdateRap;
+            if (updateRap) {
+                try { await updateRap(rapKey, price.priceEach); } catch(_) {}
+            }
+        }
+
         const label = isXpPost ? postQty + ' XP' : ('\u00D7' + postQty + ' ' + _sellSelectedCard.name);
         const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + price.priceTotal;
         _showSellMsg('Listed ' + label + ' for ' + priceLabel, 'success');
