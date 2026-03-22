@@ -5747,6 +5747,8 @@ function closeSellMenu() {
 function openMarketMenu() {
     document.getElementById('market-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    const s = document.getElementById('market-search');
+    if (s) s.value = '';
     refreshMarket();
 }
 function closeMarketMenu() {
@@ -6170,13 +6172,26 @@ function _renderMarketListings() {
     const list  = document.getElementById('market-list');
     if (!list) return;
     const myUid = window._currentUser?.uid;
-    const toShow = _marketCurrentTab === 'mine'
+    const q = (document.getElementById('market-search')?.value || '').toLowerCase().trim();
+
+    let toShow = _marketCurrentTab === 'mine'
         ? _marketListings.filter(l => l.sellerUid === myUid)
         : _marketListings;
 
+    // Apply search filter
+    if (q) {
+        toShow = toShow.filter(l => {
+            const name   = (l.cardName || '').toLowerCase();
+            const type   = (l.cardType || '').toLowerCase();
+            const seller = (l.sellerName || '').toLowerCase();
+            return name.includes(q) || type.includes(q) || seller.includes(q);
+        });
+    }
+
     if (!toShow.length) {
         list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
-            + (_marketCurrentTab === 'mine' ? 'No active listings.' : 'No listings yet. Be the first to sell!')
+            + (q ? 'No listings match "' + q + '".'
+                : _marketCurrentTab === 'mine' ? 'No active listings.' : 'No listings yet. Be the first to sell!')
             + '</div>';
         return;
     }
@@ -6693,6 +6708,8 @@ let _orderSelectedCard = null; // { baseName, type, fullName }
 function openOrdersPanel() {
     document.getElementById('orders-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    const s = document.getElementById('orders-search');
+    if (s) s.value = '';
     refreshOrders();
 }
 function closeOrdersPanel() {
@@ -6746,13 +6763,26 @@ function _renderOrdersList() {
     const listEl = document.getElementById('orders-list');
     if (!listEl) return;
     const myUid  = window._currentUser?.uid;
-    const toShow = _ordersCurrentTab === 'mine'
+    const q = (document.getElementById('orders-search')?.value || '').toLowerCase().trim();
+
+    let toShow = _ordersCurrentTab === 'mine'
         ? _ordersAll.filter(o => o.buyerUid === myUid)
         : _ordersAll;
 
+    // Apply search filter
+    if (q) {
+        toShow = toShow.filter(o => {
+            const name  = (o.cardName || '').toLowerCase();
+            const type  = (o.cardType || '').toLowerCase();
+            const buyer = (o.buyerName || '').toLowerCase();
+            return name.includes(q) || type.includes(q) || buyer.includes(q);
+        });
+    }
+
     if (!toShow.length) {
         listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
-            + (_ordersCurrentTab === 'mine' ? 'You have no open orders.' : 'No orders yet. Be the first!')
+            + (q ? 'No orders match "' + q + '".'
+                : _ordersCurrentTab === 'mine' ? 'You have no open orders.' : 'No orders yet. Be the first!')
             + '</div>';
         return;
     }

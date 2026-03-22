@@ -72,7 +72,7 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.5.0</div>
+    <div class="update-text">Update 1.5.1</div>
     <!-- Logged-in user display (clickable) -->
     <button id="username-display" onclick="openUserMenu()" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(78,205,196,0.2)'" onmouseout="this.style.background='rgba(78,205,196,0.1)'"></button>
     <!-- Mini save button under username -->
@@ -514,6 +514,12 @@
             <button id="market-tab-mine" onclick="setMarketTab('mine')" style="flex:1;padding:0.7em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.95em;">Mine</button>
             <button id="market-tab-rap"  onclick="setMarketTab('rap')"  style="flex:1;padding:0.7em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.95em;">📈 RAP</button>
         </div>
+        <!-- Search bar -->
+        <div id="market-search-wrap" style="padding:0.6em 0.8em;background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
+            <input id="market-search" type="text" placeholder="🔍 Search item, seller…"
+                style="width:100%;box-sizing:border-box;padding:0.55em 0.9em;border-radius:8px;border:1.5px solid rgba(142,68,173,0.3);background:rgba(255,255,255,0.06);color:#fff;font-size:0.92em;outline:none;"
+                oninput="_renderMarketListings()">
+        </div>
         <div id="market-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.7em;">
             <div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>
         </div>
@@ -549,6 +555,12 @@
         <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
             <button id="orders-tab-all"  onclick="setOrdersTab('all')"  style="flex:1;padding:0.65em;background:none;border:none;color:#4ecdc4;font-weight:bold;cursor:pointer;border-bottom:2px solid #4ecdc4;font-size:0.92em;">All Orders</button>
             <button id="orders-tab-mine" onclick="setOrdersTab('mine')" style="flex:1;padding:0.65em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.92em;">My Orders</button>
+        </div>
+        <!-- Search bar -->
+        <div style="padding:0.6em 0.8em;background:rgba(0,0,0,0.15);border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
+            <input id="orders-search" type="text" placeholder="🔍 Search item, buyer…"
+                style="width:100%;box-sizing:border-box;padding:0.55em 0.9em;border-radius:8px;border:1.5px solid rgba(78,205,196,0.3);background:rgba(255,255,255,0.06);color:#fff;font-size:0.92em;outline:none;"
+                oninput="_renderOrdersList()">
         </div>
         <div id="orders-list" style="flex:1;overflow-y:auto;padding:0.8em 1em;display:flex;flex-direction:column;gap:0.7em;">
             <div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>
