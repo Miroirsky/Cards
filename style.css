@@ -31,6 +31,16 @@ body {
     transform: translateY(0);
 }
 
+#bottom-nav.nav-always {
+    transform: translateY(0) !important;
+    transition: none;
+}
+
+/* When always-show is on, add padding to body so content isn't hidden behind nav */
+body.nav-always-on {
+    padding-bottom: 64px;
+}
+
 /* Invisible trigger zone at bottom of screen */
 #bottom-nav-trigger {
     position: fixed;
