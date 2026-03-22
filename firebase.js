@@ -201,13 +201,14 @@ function _pendingCol(uid) {
     return fsCollection(db, "rewards", uid, "pending");
 }
 
-// Add a diamond reward for a seller when a buyer purchases
-export async function addPendingReward(sellerUid, amount) {
-    if (!sellerUid || !amount || amount <= 0) return;
-    await addDoc(_pendingCol(sellerUid), {
+// Add a reward for a user (seller payment, level-up, etc.)
+export async function addPendingReward(uid, amount, from, label) {
+    if (!uid || !amount || amount <= 0) return;
+    await addDoc(_pendingCol(uid), {
         type:      'diamonds',
         amount:    Number(amount),
-        from:      'market_sale',
+        from:      from || 'unknown',
+        label:     label || '',
         createdAt: Date.now(),
     });
 }
@@ -215,7 +216,6 @@ export async function addPendingReward(sellerUid, amount) {
 // Fetch all pending reward docs without claiming
 export async function getPendingRewards(uid) {
     const snap = await getDocs(_pendingCol(uid));
-    // Return structured summary: { diamonds, docs: [{id, type, amount, from}] }
     let diamonds = 0;
     const docs = [];
     snap.forEach(d => {
@@ -223,14 +223,20 @@ export async function getPendingRewards(uid) {
         if (data.type === 'diamonds') diamonds += (data.amount || 0);
         docs.push({ id: d.id, ...data });
     });
+    // Sort newest first
+    docs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return { diamonds, docs };
 }
 
-// Claim all pending rewards — deletes every pending doc and returns totals
+// Claim a single reward doc by id
+export async function claimOneReward(uid, docId) {
+    await deleteDoc(doc(db, "rewards", uid, "pending", docId));
+}
+
+// Claim all pending rewards at once
 export async function claimRewards(uid) {
     const snap = await getDocs(_pendingCol(uid));
     if (snap.empty) return { diamonds: 0 };
-
     let diamonds = 0;
     const deletes = [];
     snap.forEach(d => {

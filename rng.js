@@ -2415,7 +2415,7 @@ function _buildCardLi(name) {
                 else if (type === 'Shiny') chanceForDiamond *= 1000;
                 else if (type === 'Rainbow') chanceForDiamond *= 100;
                 else if (type === 'Gold') chanceForDiamond *= 10;
-                const gain = Math.floor(Math.sqrt(chanceForDiamond));
+                const gain = Math.floor(Math.pow(chanceForDiamond, 0.25));
                 const cardKey = type ? `${baseName} (${type})` : baseName;
                 const curOwned = collection[cardKey] || 0;
 
@@ -3535,7 +3535,7 @@ function getPressEntries(mode) {
             const resultName = lowerType ? `${baseName} (${lowerType})` : baseName;
             entries.push({ name, baseName, type, owned, effectiveOwned, resultName, chanceDisplay, rarityRank });
         } else if (mode === 'diamond') {
-            const diamondsGain = Math.floor(Math.sqrt(chanceDisplay));
+            const diamondsGain = Math.floor(Math.pow(chanceDisplay, 0.25));
             if (diamondsGain <= 0 || effectiveOwned <= 0) continue;
             entries.push({ name, baseName, type, owned, effectiveOwned, diamondsGain, chanceDisplay, rarityRank });
         }
@@ -3953,9 +3953,19 @@ function gainXp(amount) {
     }
     updateLevelXpDisplay();
     if (leveledUp) {
-        // Optionally, show a level up notification
-        // alert(`Level up! You are now level ${level}`);
         updateUnlockables();
+        showCraftMessage('\u2b06\ufe0f Level ' + level + '!', 'success');
+        // Send level-up diamond reward
+        const user = window._currentUser;
+        const addReward = window._fbAddPendingReward;
+        if (user && addReward) {
+            const diamondReward = level * 10;
+            try {
+                addReward(user.uid, diamondReward, 'level_up', 'Level ' + level + ' reached!');
+            } catch(_) {}
+        }
+        // Refresh badge
+        if (typeof refreshRewards === 'function') refreshRewards();
     }
 }
 
@@ -4581,7 +4591,7 @@ function renderIndexCards(filter, tab) {
 
         const rarityColor = getRarityColor(item.chance);
         const rarityName = getRarityName(item.chance);
-        const diamondVal = Math.floor(Math.sqrt(item.chance));
+        const diamondVal = Math.floor(Math.pow(item.chance, 0.25));
 
         const row = document.createElement('div');
         row.style.cssText = `background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:0.75em 1em;display:flex;align-items:center;gap:0.9em;cursor:pointer;transition:background 0.15s;`;
@@ -4669,7 +4679,7 @@ function openIndexCardDetail(itemName) {
 
     const rarityName = getRarityName(item.chance);
     const rarityColor = getRarityColor(item.chance);
-    const diamondVal = Math.floor(Math.sqrt(item.chance));
+    const diamondVal = Math.floor(Math.pow(item.chance, 0.25));
 
     // Groups
     const groups = cardsGroupes.filter(g => g.content.includes(item.name));
@@ -4722,7 +4732,7 @@ function openIndexCardDetail(itemName) {
                 return `<div style="background:rgba(255,255,255,0.07);border-radius:8px;padding:0.35em 0.8em;font-size:0.85em;">
                     <span style="color:${v.color};font-weight:bold;">${v.label}</span>
                     <span style="color:#7f8c8d;margin-left:0.3em;">×${owned}</span>
-                    <span style="color:#9b59b6;margin-left:0.3em;font-size:0.8em;">💎${Math.floor(Math.sqrt(item.chance * v.mult))}</span>
+                    <span style="color:#9b59b6;margin-left:0.3em;font-size:0.8em;">💎${Math.floor(Math.pow(item.chance * v.mult, 0.25))}</span>
                 </div>`;
             }).join('')}
         </div>
@@ -4800,7 +4810,7 @@ function openIndexGroupDetail(groupName) {
         const discovered = totalOwned > 0;
         const rarityColor = getRarityColor(item.chance);
         const rarityName = getRarityName(item.chance);
-        const diamondVal = Math.floor(Math.sqrt(item.chance));
+        const diamondVal = Math.floor(Math.pow(item.chance, 0.25));
 
         const row = document.createElement('div');
         row.style.cssText = `background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:0.75em 1em;display:flex;align-items:center;gap:0.9em;${discovered ? 'cursor:pointer;' : 'opacity:0.45;'}transition:background 0.15s;`;
@@ -5676,7 +5686,7 @@ function renderIndexTags() {
                     ${ownedCards.map(k => {
                         const baseName = k.replace(` ${tagKey}`, '');
                         const item = items.find(i => i.name === baseName);
-                        const dv = item ? Math.floor(Math.sqrt(item.chance * tag.mult)) : 0;
+                        const dv = item ? Math.floor(Math.pow(item.chance * tag.mult, 0.25)) : 0;
                         const qty = collection[k] || 0;
                         return `<div onclick="openIndexCardDetail('${baseName.replace(/'/g,"\\'")}');closeIndexTags();" style="background:rgba(255,255,255,0.07);border-radius:8px;padding:0.3em 0.7em;font-size:0.78em;cursor:pointer;display:flex;align-items:center;gap:0.4em;">
                             <img src="${getCardImageSrc(item)}" style="width:18px;height:18px;object-fit:cover;border-radius:3px;">
@@ -5719,7 +5729,7 @@ function _pressValue(baseName, type) {
     if (type === 'Rainbow') chance *= 100;
     if (type === 'Shiny')   chance *= 1000;
     if (type === 'Nuclear') chance *= 10000;
-    return Math.floor(Math.sqrt(chance));
+    return Math.floor(Math.pow(chance, 0.25));
 }
 
 // ── Open / close panels ──
@@ -6441,7 +6451,10 @@ async function buyListing(listing, btn) {
             // Send reward to seller
             const addReward = window._fbAddPendingReward;
             if (addReward && sellerUid) {
-                try { await addReward(sellerUid, priceTotal); }
+                const itemLabel = isXpItem
+                    ? 'Sold ' + amount + ' XP'
+                    : 'Sold ' + (amount > 1 ? amount + '\u00D7 ' : '') + (cardType ? cardName + ' (' + cardType + ')' : cardName);
+                try { await addReward(sellerUid, priceTotal, 'market_sale', itemLabel); }
                 catch(rewardErr) { console.warn('Reward failed:', rewardErr.message || rewardErr); }
             }
             // Update RAP — fires on actual purchase, not on listing
@@ -6528,20 +6541,77 @@ async function refreshRewards() {
 
     try {
         const result = await get(user.uid);
-        const amount = result.diamonds || 0;
-        const el = document.getElementById('rewards-amount');
-        if (el) el.textContent = amount;
-        const btn = document.getElementById('claim-rewards-btn');
-        if (btn) {
-            btn.disabled = amount <= 0;
-            btn.style.opacity = amount <= 0 ? '0.5' : '1';
-        }
-        _updateRewardsBadge(amount);
+        _renderRewardsList(result.docs || []);
+        const totalDiamonds = result.diamonds || 0;
+        _updateRewardsBadge(totalDiamonds);
     } catch(e) {
         showCraftMessage('Failed to load rewards: ' + (e.message || e), 'error');
     } finally {
         if (refreshBtn) { refreshBtn.textContent = '↻ Refresh'; refreshBtn.disabled = false; }
     }
+}
+
+function _rewardLabel(doc) {
+    switch(doc.from) {
+        case 'market_sale': return '🏷️ Sale';
+        case 'level_up':    return '\u2b06\ufe0f ' + (doc.label || 'Level up');
+        default:            return '🎁 ' + (doc.from || 'Reward');
+    }
+}
+
+function _renderRewardsList(docs) {
+    const list = document.getElementById('rewards-list');
+    const empty = document.getElementById('rewards-empty');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (!docs.length) {
+        if (empty) empty.style.display = 'block';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    docs.forEach(doc => {
+        if (doc.type !== 'diamonds') return; // future types handled later
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.2);border-radius:12px;padding:0.7em 0.9em;';
+
+        const icon = document.createElement('div');
+        icon.style.cssText = 'font-size:1.6em;flex-shrink:0;';
+        icon.textContent = '💎';
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = '<div style="font-weight:bold;color:#f39c12;font-size:0.95em;">' + _rewardLabel(doc) + '</div>'
+            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">' + _fmtPrice(doc.amount) + ' 💎</div>';
+
+        const btn = document.createElement('button');
+        btn.style.cssText = 'padding:0.5em 1em;border:none;border-radius:8px;background:linear-gradient(90deg,#f39c12,#e67e22);color:#fff;font-weight:bold;cursor:pointer;font-size:0.88em;white-space:nowrap;flex-shrink:0;';
+        btn.textContent = 'Claim';
+        btn.onclick = async () => {
+            btn.disabled = true;
+            btn.textContent = '…';
+            const claimOne = window._fbClaimOneReward;
+            if (!claimOne) return;
+            try {
+                await claimOne(window._currentUser.uid, doc.id);
+                diamonds += doc.amount;
+                updateDiamondsDisplay();
+                saveCollection();
+                showCraftMessage('+\uD83D\uDC8E' + _fmtPrice(doc.amount) + ' claimed!', 'success');
+                await refreshRewards();
+            } catch(e) {
+                showCraftMessage('Claim failed: ' + (e.message || e), 'error');
+                btn.disabled = false;
+                btn.textContent = 'Claim';
+            }
+        };
+
+        row.appendChild(icon);
+        row.appendChild(info);
+        row.appendChild(btn);
+        list.appendChild(row);
+    });
 }
 
 function _updateRewardsBadge(amount) {
@@ -6557,37 +6627,28 @@ function _updateRewardsBadge(amount) {
     }
 }
 
-async function claimRewards() {
+// claimRewards (all-at-once) kept for badge/total but UI now uses per-item
+async function claimAllRewards() {
     const user = window._currentUser;
     if (!user) return;
-    const claim = window._fbClaimRewards;
-    if (!claim) return;
-    const btn = document.getElementById('claim-rewards-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Claiming\u2026'; }
+    const get = window._fbGetPendingRewards;
+    const claimOne = window._fbClaimOneReward;
+    if (!get || !claimOne) return;
     try {
-        const result = await claim(user.uid);
+        const result = await get(user.uid);
+        const docs = result.docs || [];
+        if (!docs.length) return;
+        await Promise.all(docs.map(d => claimOne(user.uid, d.id)));
         const gained = result.diamonds || 0;
         if (gained > 0) {
             diamonds += gained;
             updateDiamondsDisplay();
             saveCollection();
-            showCraftMessage('Claimed \uD83D\uDC8E' + gained + ' from sales!', 'success');
+            showCraftMessage('Claimed \uD83D\uDC8E' + _fmtPrice(gained) + '!', 'success');
         }
-        const msg = document.getElementById('rewards-msg');
-        if (msg) {
-            msg.style.display = 'block';
-            msg.style.background = gained > 0 ? 'rgba(39,174,96,0.18)' : 'rgba(127,140,141,0.15)';
-            msg.style.color      = gained > 0 ? '#2ecc71' : '#7f8c8d';
-            msg.textContent = gained > 0 ? '+\uD83D\uDC8E' + gained + ' added to your balance!' : 'No rewards to claim.';
-            setTimeout(() => { if (msg) msg.style.display = 'none'; }, 3000);
-        }
-        const el = document.getElementById('rewards-amount');
-        if (el) el.textContent = '0';
-        if (btn) { btn.disabled = true; btn.textContent = 'Claim \uD83D\uDC8E'; }
-        _updateRewardsBadge(0);
+        await refreshRewards();
     } catch(e) {
-        showCraftMessage('Claim failed: ' + (e.message || e), 'error');
-        if (btn) { btn.disabled = false; btn.textContent = 'Claim \uD83D\uDC8E'; }
+        showCraftMessage('Claim all failed: ' + (e.message || e), 'error');
     }
 }
 
