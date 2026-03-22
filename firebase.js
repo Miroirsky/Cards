@@ -260,3 +260,126 @@ export async function claimRewards(uid) {
     await Promise.all(deletes);
     return { diamonds };
 }
+
+// ── Orders  (orders/{orderId}) ────────────────────────────────────
+// Buyers post orders requesting items. Sellers fill them to earn diamonds.
+// Document shape:
+// { buyerUid, buyerName, cardName, cardType, itemCategory,
+//   amountWanted, amountFilled, rewardEach, lockedDiamonds,
+//   status: 'open'|'complete'|'cancelled', createdAt }
+
+// Post a new order. Diamonds are locked upfront.
+export async function postOrder({ buyerUid, buyerName, cardName, cardType, itemCategory, amountWanted, rewardEach }) {
+    const lockedDiamonds = parseFloat((Number(amountWanted) * Number(rewardEach)).toFixed(2));
+    const ref = await addDoc(fsCollection(db, "orders"), {
+        buyerUid,
+        buyerName:     buyerName || 'Unknown',
+        cardName:      cardName || '',
+        cardType:      cardType || '',
+        itemCategory:  itemCategory || 'card',
+        amountWanted:  Number(amountWanted),
+        amountFilled:  0,
+        rewardEach:    Number(rewardEach),
+        lockedDiamonds,
+        status:        'open',
+        createdAt:     Date.now(),
+    });
+    return ref.id;
+}
+
+// Fetch all open orders
+export async function fetchOrders() {
+    const snap = await getDocs(
+        query(fsCollection(db, "orders"), where("status", "==", "open"), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Fetch orders created by a specific user (all statuses)
+export async function fetchMyOrders(uid) {
+    const snap = await getDocs(
+        query(fsCollection(db, "orders"), where("buyerUid", "==", uid), orderBy("createdAt", "desc"))
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Fill an order (filler gives items, earns diamonds, buyer gets item reward)
+export async function fillOrder(orderId, { fillerUid, fillerName, amount }) {
+    const ref  = doc(db, "orders", orderId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error("Order not found.");
+
+    const order = snap.data();
+    if (order.status !== 'open') throw new Error("Order is no longer open.");
+
+    const remaining = order.amountWanted - order.amountFilled;
+    const fill      = Math.min(Number(amount), remaining);
+    if (fill <= 0) throw new Error("Nothing to fill.");
+
+    const newFilled = order.amountFilled + fill;
+    const newStatus = newFilled >= order.amountWanted ? 'complete' : 'open';
+    const earned    = parseFloat((fill * order.rewardEach).toFixed(2));
+
+    // Update order
+    await setDoc(ref, { amountFilled: newFilled, status: newStatus }, { merge: true });
+
+    // Log fulfillment
+    await addDoc(fsCollection(db, "orders", orderId, "fulfillments"), {
+        fillerUid, fillerName: fillerName || 'Unknown', amount: fill, createdAt: Date.now(),
+    });
+
+    // Pay the filler immediately via rewards
+    const fillLabel = order.itemCategory === 'xp'
+        ? 'Filled order: ' + fill + ' XP'
+        : 'Filled order: ' + fill + '\u00D7 ' + (order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName);
+    await addDoc(fsCollection(db, "rewards", fillerUid, "pending"), {
+        type: 'diamonds', amount: earned, from: 'order_fill', label: fillLabel, createdAt: Date.now(),
+    });
+
+    // Send items to buyer via rewards
+    const itemLabel = order.itemCategory === 'xp'
+        ? fill + ' XP from order'
+        : fill + '\u00D7 ' + (order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName) + ' from order';
+    if (order.itemCategory === 'xp') {
+        await addDoc(fsCollection(db, "rewards", order.buyerUid, "pending"), {
+            type: 'xp', amount: fill, from: 'order_received', label: itemLabel, createdAt: Date.now(),
+        });
+    } else {
+        await addDoc(fsCollection(db, "rewards", order.buyerUid, "pending"), {
+            type:      'card',
+            cardName:  order.cardName,
+            cardType:  order.cardType || '',
+            amount:    fill,
+            from:      'order_received',
+            label:     itemLabel,
+            createdAt: Date.now(),
+        });
+    }
+
+    return { fill, earned, newStatus };
+}
+
+// Cancel an open order — refund remaining locked diamonds to buyer
+export async function cancelOrder(orderId, buyerUid) {
+    const ref  = doc(db, "orders", orderId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error("Order not found.");
+
+    const order = snap.data();
+    if (order.buyerUid !== buyerUid) throw new Error("Not your order.");
+    if (order.status !== 'open') throw new Error("Order is not open.");
+
+    await setDoc(ref, { status: 'cancelled' }, { merge: true });
+
+    const unfilled = order.amountWanted - order.amountFilled;
+    const refund   = parseFloat((unfilled * order.rewardEach).toFixed(2));
+    if (refund > 0) {
+        await addDoc(fsCollection(db, "rewards", buyerUid, "pending"), {
+            type: 'diamonds', amount: refund, from: 'order_cancelled',
+            label: 'Cancelled order refund (' + unfilled + ' unfilled)',
+            createdAt: Date.now(),
+        });
+    }
+
+    return { refund };
+}

@@ -6553,14 +6553,17 @@ async function refreshRewards() {
 
 function _rewardLabel(doc) {
     switch(doc.from) {
-        case 'market_sale': return '🏷️ Sale';
-        case 'level_up':    return '\u2b06\ufe0f ' + (doc.label || 'Level up');
-        default:            return '🎁 ' + (doc.from || 'Reward');
+        case 'market_sale':      return '\uD83C\uDFF7\uFE0F Sale';
+        case 'level_up':         return '\u2b06\ufe0f ' + (doc.label || 'Level up');
+        case 'order_fill':       return '\uD83D\uDCE6 ' + (doc.label || 'Order filled');
+        case 'order_received':   return '\uD83D\uDCE5 ' + (doc.label || 'Order received');
+        case 'order_cancelled':  return '\u274C ' + (doc.label || 'Order cancelled');
+        default:                 return '\uD83C\uDF81 ' + (doc.from || 'Reward');
     }
 }
 
 function _renderRewardsList(docs) {
-    const list = document.getElementById('rewards-list');
+    const list  = document.getElementById('rewards-list');
     const empty = document.getElementById('rewards-empty');
     if (!list) return;
     list.innerHTML = '';
@@ -6572,38 +6575,56 @@ function _renderRewardsList(docs) {
     if (empty) empty.style.display = 'none';
 
     docs.forEach(doc => {
-        if (doc.type !== 'diamonds') return; // future types handled later
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(243,156,18,0.08);border:1.5px solid rgba(243,156,18,0.2);border-radius:12px;padding:0.7em 0.9em;';
 
+        // Icon based on type
         const icon = document.createElement('div');
         icon.style.cssText = 'font-size:1.6em;flex-shrink:0;';
-        icon.textContent = '💎';
+        if (doc.type === 'card') icon.textContent = '\uD83C\uDFA4';
+        else if (doc.type === 'xp') icon.textContent = '\u2B50';
+        else icon.textContent = '\uD83D\uDC8E';
 
         const info = document.createElement('div');
         info.style.cssText = 'flex:1;min-width:0;';
+
+        let amountStr = '';
+        if (doc.type === 'diamonds') amountStr = _fmtPrice(doc.amount) + ' \uD83D\uDC8E';
+        else if (doc.type === 'xp')  amountStr = doc.amount + ' XP';
+        else if (doc.type === 'card') {
+            const cardKey = doc.cardType ? doc.cardName + ' (' + doc.cardType + ')' : doc.cardName;
+            amountStr = doc.amount + '\u00D7 ' + cardKey;
+        }
+
         info.innerHTML = '<div style="font-weight:bold;color:#f39c12;font-size:0.95em;">' + _rewardLabel(doc) + '</div>'
-            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">' + _fmtPrice(doc.amount) + ' 💎</div>';
+            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">' + amountStr + '</div>';
 
         const btn = document.createElement('button');
         btn.style.cssText = 'padding:0.5em 1em;border:none;border-radius:8px;background:linear-gradient(90deg,#f39c12,#e67e22);color:#fff;font-weight:bold;cursor:pointer;font-size:0.88em;white-space:nowrap;flex-shrink:0;';
         btn.textContent = 'Claim';
         btn.onclick = async () => {
-            btn.disabled = true;
-            btn.textContent = '…';
+            btn.disabled = true; btn.textContent = '\u2026';
             const claimOne = window._fbClaimOneReward;
             if (!claimOne) return;
             try {
                 await claimOne(window._currentUser.uid, doc.id);
-                diamonds += doc.amount;
-                updateDiamondsDisplay();
+                // Apply reward locally
+                if (doc.type === 'diamonds') {
+                    diamonds += doc.amount;
+                    updateDiamondsDisplay();
+                } else if (doc.type === 'xp') {
+                    gainXp(doc.amount);
+                } else if (doc.type === 'card') {
+                    const cardKey = doc.cardType ? doc.cardName + ' (' + doc.cardType + ')' : doc.cardName;
+                    collection[cardKey] = (collection[cardKey] || 0) + doc.amount;
+                    updateCollection(); updateInventoryStats();
+                }
                 saveCollection();
-                showCraftMessage('+\uD83D\uDC8E' + _fmtPrice(doc.amount) + ' claimed!', 'success');
+                showCraftMessage('+' + amountStr + ' claimed!', 'success');
                 await refreshRewards();
             } catch(e) {
                 showCraftMessage('Claim failed: ' + (e.message || e), 'error');
-                btn.disabled = false;
-                btn.textContent = 'Claim';
+                btn.disabled = false; btn.textContent = 'Claim';
             }
         };
 
@@ -6656,3 +6677,533 @@ function startRewardsPoll() {
     refreshRewards();
     setInterval(refreshRewards, 60 * 1000);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ORDERS SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+let _ordersCurrentTab = 'all';
+let _ordersAll        = [];
+let _currentFillOrder = null;
+let _orderItemType    = 'card';
+let _orderSelectedCard = null; // { baseName, type, fullName }
+
+// ── Open / close ──────────────────────────────────────────────
+
+function openOrdersPanel() {
+    document.getElementById('orders-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    refreshOrders();
+}
+function closeOrdersPanel() {
+    document.getElementById('orders-panel').style.display = 'none';
+    document.body.style.overflow = '';
+}
+function openCreateOrderPanel() {
+    _resetCreateOrderForm();
+    document.getElementById('create-order-panel').style.display = 'flex';
+    _initOrderCardSearch();
+}
+function closeCreateOrderPanel() {
+    document.getElementById('create-order-panel').style.display = 'none';
+}
+function closeFillOrderPanel() {
+    document.getElementById('fill-order-panel').style.display = 'none';
+    _currentFillOrder = null;
+}
+
+// ── Tabs ──────────────────────────────────────────────────────
+
+function setOrdersTab(tab) {
+    _ordersCurrentTab = tab;
+    ['all','mine'].forEach(t => {
+        const el = document.getElementById('orders-tab-' + t);
+        if (!el) return;
+        el.style.color = t === tab ? '#4ecdc4' : '#7f8c8d';
+        el.style.borderBottomColor = t === tab ? '#4ecdc4' : 'transparent';
+    });
+    _renderOrdersList();
+}
+
+// ── Refresh ───────────────────────────────────────────────────
+
+async function refreshOrders() {
+    const listEl = document.getElementById('orders-list');
+    if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
+    try {
+        const fn = window._fbFetchOrders;
+        if (!fn) throw new Error('Firebase not ready');
+        _ordersAll = await fn();
+        _renderOrdersList();
+    } catch(e) {
+        if (listEl) listEl.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
+    }
+}
+
+// ── Render list ───────────────────────────────────────────────
+
+function _renderOrdersList() {
+    const listEl = document.getElementById('orders-list');
+    if (!listEl) return;
+    const myUid  = window._currentUser?.uid;
+    const toShow = _ordersCurrentTab === 'mine'
+        ? _ordersAll.filter(o => o.buyerUid === myUid)
+        : _ordersAll;
+
+    if (!toShow.length) {
+        listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
+            + (_ordersCurrentTab === 'mine' ? 'You have no open orders.' : 'No orders yet. Be the first!')
+            + '</div>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    const isXpOrder = o => o.itemCategory === 'xp';
+    toShow.forEach(order => {
+        const isOwn      = order.buyerUid === myUid;
+        const isXp       = isXpOrder(order);
+        const item       = !isXp ? items.find(i => i.name === order.cardName) : null;
+        const remaining  = order.amountWanted - order.amountFilled;
+        const pct        = Math.round((order.amountFilled / order.amountWanted) * 100);
+        const totalReward = parseFloat((remaining * order.rewardEach).toFixed(2));
+
+        // Card to display
+        const fullName = isXp
+            ? 'XP'
+            : (order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName);
+
+        const card = document.createElement('div');
+        card.style.cssText = 'background:rgba(255,255,255,0.05);border:1.5px solid rgba(78,205,196,0.2);border-radius:14px;padding:0.9em 1em;display:flex;flex-direction:column;gap:0.55em;';
+        if (isOwn) card.style.borderColor = 'rgba(78,205,196,0.5)';
+
+        // Header row
+        const headerRow = document.createElement('div');
+        headerRow.style.cssText = 'display:flex;align-items:center;gap:0.8em;';
+
+        if (isXp) {
+            const icon = document.createElement('span');
+            icon.style.cssText = 'font-size:1.8em;flex-shrink:0;line-height:1;';
+            icon.textContent = '\u2B50';
+            headerRow.appendChild(icon);
+        } else if (item) {
+            const img = document.createElement('img');
+            img.src = getCardImageSrc(item);
+            img.style.cssText = 'width:54px;height:36px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+            img.onerror = function(){ this.style.display='none'; };
+            headerRow.appendChild(img);
+        }
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        info.innerHTML = '<div style="font-weight:bold;color:#fff;font-size:1em;">' + fullName + '</div>'
+            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">'
+            + 'Wants <b style="color:#4ecdc4;">' + order.amountWanted + '</b>'
+            + ' \u00B7 <b style="color:#a29bfe;">\uD83D\uDC8E' + _fmtPrice(order.rewardEach) + '</b> each'
+            + ' \u00B7 by ' + (order.buyerName || 'Unknown')
+            + '</div>';
+
+        // Luck row for card orders
+        if (!isXp && item) {
+            const multMap = { '': 1, 'Gold': 10, 'Rainbow': 100, 'Shiny': 1000, 'Nuclear': 10000 };
+            const rarity = item.chance * (multMap[order.cardType || ''] || 1);
+            const luckRow = document.createElement('div');
+            luckRow.style.cssText = 'font-size:0.75em;margin-top:0.2em;';
+            luckRow.innerHTML = getRarityTag(rarity) + ' <span style="color:#555;">1 in ' + rarity.toLocaleString() + '</span>';
+            info.appendChild(luckRow);
+        }
+
+        headerRow.appendChild(info);
+
+        // Progress bar
+        const progWrap = document.createElement('div');
+        progWrap.style.cssText = 'background:rgba(255,255,255,0.07);border-radius:999px;height:6px;overflow:hidden;margin:0.1em 0;';
+        const progBar = document.createElement('div');
+        progBar.style.cssText = 'height:100%;border-radius:999px;background:linear-gradient(90deg,#4ecdc4,#2ecc71);width:' + pct + '%;transition:width 0.4s;';
+        progWrap.appendChild(progBar);
+
+        const fillRow = document.createElement('div');
+        fillRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;font-size:0.8em;color:#7f8c8d;';
+        fillRow.innerHTML = '<span>' + order.amountFilled + ' / ' + order.amountWanted + ' filled (' + pct + '%)</span>'
+            + '<span style="color:#a29bfe;">\uD83D\uDC8E' + _fmtPrice(totalReward) + ' remaining</span>';
+
+        // Buttons
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:0.5em;margin-top:0.3em;';
+
+        if (isOwn) {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(231,76,60,0.4);background:rgba(231,76,60,0.12);color:#e74c3c;font-weight:bold;cursor:pointer;font-size:0.88em;';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => _cancelOrder(order);
+            btnRow.appendChild(cancelBtn);
+        } else {
+            const fillBtn = document.createElement('button');
+            fillBtn.style.cssText = 'flex:1;padding:0.5em 1em;border-radius:8px;border:none;background:linear-gradient(90deg,#27ae60,#2ecc71);color:#fff;font-weight:bold;cursor:pointer;font-size:0.9em;';
+            fillBtn.textContent = '\uD83D\uDCE6 Fill';
+            fillBtn.onclick = () => _openFillOrder(order);
+            btnRow.appendChild(fillBtn);
+        }
+
+        card.appendChild(headerRow);
+        card.appendChild(progWrap);
+        card.appendChild(fillRow);
+        card.appendChild(btnRow);
+        listEl.appendChild(card);
+    });
+}
+
+// ── Cancel order ──────────────────────────────────────────────
+
+async function _cancelOrder(order) {
+    const fn = window._fbCancelOrder;
+    if (!fn) return;
+    try {
+        const result = await fn(order.id, window._currentUser.uid);
+        if (result.refund > 0) {
+            showCraftMessage('Order cancelled \u2014 \uD83D\uDC8E' + _fmtPrice(result.refund) + ' refund queued in Rewards', 'info');
+            if (typeof refreshRewards === 'function') refreshRewards();
+        } else {
+            showCraftMessage('Order cancelled.', 'info');
+        }
+        await refreshOrders();
+    } catch(e) {
+        showCraftMessage('Cancel failed: ' + (e.message || e), 'error');
+    }
+}
+
+// ── Fill order ────────────────────────────────────────────────
+
+function _openFillOrder(order) {
+    _currentFillOrder = order;
+    const isXp = order.itemCategory === 'xp';
+
+    const infoEl = document.getElementById('fill-order-info');
+    const hintEl = document.getElementById('fill-owned-hint');
+    const amtInput = document.getElementById('fill-amount-input');
+    const summaryEl = document.getElementById('fill-summary');
+    const msgEl = document.getElementById('fill-msg');
+
+    // Info block
+    const fullName = isXp
+        ? 'XP'
+        : (order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName);
+    const remaining = order.amountWanted - order.amountFilled;
+    infoEl.innerHTML = '<div style="font-weight:bold;color:#2ecc71;font-size:1.05em;">' + fullName + '</div>'
+        + '<div style="font-size:0.85em;color:#bdc3c7;margin-top:0.3em;">'
+        + 'Needs <b style="color:#4ecdc4;">' + remaining + '</b> more'
+        + ' \u00B7 earn <b style="color:#a29bfe;">\uD83D\uDC8E' + _fmtPrice(order.rewardEach) + '</b> each'
+        + '</div>';
+
+    // Owned hint
+    if (isXp) {
+        hintEl.textContent = 'You have: ' + xp + ' XP';
+    } else {
+        const key = order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName;
+        const owned = collection[key] || 0;
+        hintEl.innerHTML = 'You own: <b style="color:#4ecdc4;">' + owned + '</b> ' + fullName
+            + (owned <= 0 ? ' <span style="color:#e74c3c;">(none!)</span>' : '');
+    }
+
+    amtInput.value = '';
+    summaryEl.style.display = 'none';
+    if (msgEl) msgEl.style.display = 'none';
+
+    // Live summary on input
+    amtInput.oninput = () => {
+        const amt = parseInt(amtInput.value) || 0;
+        if (amt <= 0) { summaryEl.style.display = 'none'; return; }
+        const actualFill = Math.min(amt, remaining);
+        const earn = parseFloat((actualFill * order.rewardEach).toFixed(2));
+        summaryEl.style.display = 'block';
+        summaryEl.innerHTML = 'Give <b style="color:#4ecdc4;">' + actualFill + '</b> ' + fullName
+            + ' → earn <b style="color:#a29bfe;">\uD83D\uDC8E' + _fmtPrice(earn) + '</b>';
+        if (amt > remaining) {
+            summaryEl.innerHTML += ' <span style="color:#f39c12;">(capped at ' + remaining + ')</span>';
+        }
+    };
+
+    document.getElementById('fill-order-panel').style.display = 'flex';
+}
+
+async function submitFillOrder() {
+    const order = _currentFillOrder;
+    if (!order) return;
+    const isXp = order.itemCategory === 'xp';
+    const amtInput = document.getElementById('fill-amount-input');
+    const btn = document.getElementById('fill-submit-btn');
+    const msgEl = document.getElementById('fill-msg');
+
+    const requestedAmt = parseInt(amtInput.value) || 0;
+    if (requestedAmt <= 0) {
+        _showFillMsg('Enter a valid amount.', 'error'); return;
+    }
+
+    const remaining = order.amountWanted - order.amountFilled;
+    const fillAmt = Math.min(requestedAmt, remaining);
+
+    // Check stock
+    if (isXp) {
+        if (xp < fillAmt) { _showFillMsg('Not enough XP (you have ' + xp + ').', 'error'); return; }
+    } else {
+        const key = order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName;
+        const owned = collection[key] || 0;
+        if (owned < fillAmt) { _showFillMsg('Not enough ' + order.cardName + ' (you have ' + owned + ').', 'error'); return; }
+    }
+
+    btn.disabled = true; btn.textContent = 'Filling\u2026';
+
+    // Deduct locally
+    if (isXp) {
+        xp = Math.max(0, xp - fillAmt);
+        updateLevelXpDisplay();
+    } else {
+        const key = order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName;
+        collection[key] -= fillAmt;
+        if ((collection[key] || 0) <= 0) delete collection[key];
+        updateCollection(); updateInventoryStats();
+    }
+    saveCollection();
+
+    try {
+        const fn = window._fbFillOrder;
+        if (!fn) throw new Error('Firebase not ready');
+        const result = await fn(order.id, {
+            fillerUid:  window._currentUser.uid,
+            fillerName: window._cloudUserData?.username || 'Unknown',
+            amount:     fillAmt,
+        });
+
+        _showFillMsg('Filled! \uD83D\uDC8E' + _fmtPrice(result.earned) + ' added to Rewards', 'success');
+        if (typeof refreshRewards === 'function') refreshRewards();
+        btn.textContent = 'Fill Order';
+        btn.disabled = false;
+        amtInput.value = '';
+        // Update local order cache
+        const idx = _ordersAll.findIndex(o => o.id === order.id);
+        if (idx >= 0) {
+            _ordersAll[idx].amountFilled = order.amountFilled + fillAmt;
+            _ordersAll[idx].status = result.newStatus;
+            if (result.newStatus !== 'open') _ordersAll.splice(idx, 1);
+        }
+        setTimeout(() => {
+            closeFillOrderPanel();
+            _renderOrdersList();
+        }, 1500);
+    } catch(e) {
+        // Refund locally on error
+        if (isXp) { xp += fillAmt; updateLevelXpDisplay(); }
+        else {
+            const key = order.cardType ? order.cardName + ' (' + order.cardType + ')' : order.cardName;
+            collection[key] = (collection[key] || 0) + fillAmt;
+            updateCollection();
+        }
+        saveCollection();
+        _showFillMsg('Failed: ' + (e.message || e), 'error');
+        btn.disabled = false; btn.textContent = 'Fill Order';
+    }
+}
+
+function _showFillMsg(text, type) {
+    const el = document.getElementById('fill-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.background = type === 'error' ? 'rgba(231,76,60,0.18)' : 'rgba(39,174,96,0.18)';
+    el.style.color      = type === 'error' ? '#e74c3c'              : '#2ecc71';
+    el.style.border     = '1px solid ' + (type === 'error' ? 'rgba(231,76,60,0.4)' : 'rgba(39,174,96,0.4)');
+}
+
+// ── Create order form ─────────────────────────────────────────
+
+function setOrderItemType(type) {
+    _orderItemType = type;
+    document.getElementById('order-type-card').classList.toggle('active', type === 'card');
+    document.getElementById('order-type-xp').classList.toggle('active',   type === 'xp');
+    document.getElementById('order-card-section').style.display = type === 'card' ? '' : 'none';
+    _orderSelectedCard = null;
+    document.getElementById('order-selected-card').style.display = 'none';
+    document.getElementById('order-card-search').value = '';
+    _updateOrderSummary();
+}
+
+function clearOrderCard() {
+    _orderSelectedCard = null;
+    document.getElementById('order-selected-card').style.display = 'none';
+    document.getElementById('order-card-search').value = '';
+    _updateOrderSummary();
+}
+
+function _initOrderCardSearch() {
+    const input = document.getElementById('order-card-search');
+    const dd    = document.getElementById('order-card-dropdown');
+    if (!input || !dd) return;
+    input.oninput = () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) { dd.style.display = 'none'; return; }
+        const matches = items.filter(i => i.rollable && i.name.toLowerCase().includes(q));
+        if (!matches.length) { dd.style.display = 'none'; return; }
+        dd.innerHTML = '';
+        matches.slice(0, 20).forEach(item => {
+            // Show all variants
+            const variants = ['', 'Gold', 'Rainbow', 'Shiny', 'Nuclear'];
+            variants.forEach(vtype => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:0.7em;padding:0.5em 0.8em;cursor:pointer;';
+                row.onmouseenter = () => row.style.background = 'rgba(78,205,196,0.12)';
+                row.onmouseleave = () => row.style.background = '';
+                const img = document.createElement('img');
+                img.src = getCardImageSrc(item);
+                img.style.cssText = 'width:36px;height:24px;object-fit:cover;border-radius:4px;';
+                const label = document.createElement('span');
+                label.style.cssText = 'color:#fff;font-size:0.95em;';
+                label.textContent = vtype ? item.name + ' (' + vtype + ')' : item.name;
+                const rarity = document.createElement('span');
+                rarity.style.cssText = 'margin-left:auto;font-size:0.75em;color:#7f8c8d;';
+                const chance = item.chance * ({ '': 1, 'Gold': 10, 'Rainbow': 100, 'Shiny': 1000, 'Nuclear': 10000 }[vtype] || 1);
+                rarity.textContent = '1 in ' + chance.toLocaleString();
+                row.appendChild(img); row.appendChild(label); row.appendChild(rarity);
+                row.onclick = () => {
+                    _orderSelectedCard = { baseName: item.name, type: vtype, fullName: vtype ? item.name + ' (' + vtype + ')' : item.name };
+                    document.getElementById('order-card-img').src = getCardImageSrc(item);
+                    document.getElementById('order-card-name').textContent = _orderSelectedCard.fullName;
+                    document.getElementById('order-selected-card').style.display = 'flex';
+                    input.value = '';
+                    dd.style.display = 'none';
+                    _updateOrderSummary();
+                };
+                dd.appendChild(row);
+            });
+        });
+        dd.style.display = 'block';
+    };
+    setTimeout(() => {
+        document.addEventListener('click', function _closeDD(e) {
+            const wrap = document.getElementById('order-card-search-wrap');
+            if (wrap && !wrap.contains(e.target)) { dd.style.display = 'none'; document.removeEventListener('click', _closeDD); }
+        });
+    }, 0);
+}
+
+function _updateOrderSummary() {
+    const summary = document.getElementById('order-summary');
+    const summaryText = document.getElementById('order-summary-text');
+    const warning = document.getElementById('order-balance-warning');
+    const postBtn = document.getElementById('order-post-btn');
+    if (!summary) return;
+
+    const isXp  = _orderItemType === 'xp';
+    const amt   = parseInt(document.getElementById('order-amount-input')?.value) || 0;
+    const rward = parseFloat(document.getElementById('order-reward-input')?.value) || 0;
+
+    if (amt <= 0 || rward < 0 || (!isXp && !_orderSelectedCard)) {
+        summary.style.display = 'none'; return;
+    }
+
+    const total = parseFloat((amt * rward).toFixed(2));
+    const canAfford = diamonds >= total;
+    const itemName = isXp ? amt + ' XP' : amt + '\u00D7 ' + _orderSelectedCard.fullName;
+
+    summaryText.innerHTML = 'Order <b style="color:#4ecdc4;">' + itemName + '</b>'
+        + ' for <b style="color:#a29bfe;">\uD83D\uDC8E' + _fmtPrice(rward) + '</b> each'
+        + '<br>Total locked: <b style="color:#f39c12;">\uD83D\uDC8E' + _fmtPrice(total) + '</b>';
+
+    if (warning) {
+        if (!canAfford) {
+            warning.style.display = 'block';
+            warning.textContent = 'Not enough diamonds (you have \uD83D\uDC8E' + _fmtPrice(diamonds) + ')';
+        } else {
+            warning.style.display = 'none';
+        }
+    }
+    if (postBtn) postBtn.disabled = !canAfford;
+    summary.style.display = 'flex';
+}
+
+function _resetCreateOrderForm() {
+    _orderItemType = 'card';
+    _orderSelectedCard = null;
+    const tc = document.getElementById('order-type-card'), tx = document.getElementById('order-type-xp');
+    if (tc) tc.classList.add('active');
+    if (tx) tx.classList.remove('active');
+    const cs = document.getElementById('order-card-section');
+    if (cs) cs.style.display = '';
+    const selCard = document.getElementById('order-selected-card');
+    if (selCard) selCard.style.display = 'none';
+    const amtInput = document.getElementById('order-amount-input');
+    if (amtInput) amtInput.value = '';
+    const rwdInput = document.getElementById('order-reward-input');
+    if (rwdInput) rwdInput.value = '';
+    const summary = document.getElementById('order-summary');
+    if (summary) summary.style.display = 'none';
+    const msgEl = document.getElementById('order-msg');
+    if (msgEl) msgEl.style.display = 'none';
+    const search = document.getElementById('order-card-search');
+    if (search) search.value = '';
+}
+
+async function submitOrder() {
+    const isXp = _orderItemType === 'xp';
+    const amt   = parseInt(document.getElementById('order-amount-input')?.value) || 0;
+    const rward = parseFloat(document.getElementById('order-reward-input')?.value) || 0;
+
+    if (amt <= 0 || rward < 0) { _showOrderMsg('Enter valid amount and reward.', 'error'); return; }
+    if (!isXp && !_orderSelectedCard) { _showOrderMsg('Select a card.', 'error'); return; }
+
+    const total = parseFloat((amt * rward).toFixed(2));
+    if (diamonds < total) { _showOrderMsg('Not enough diamonds!', 'error'); return; }
+
+    const btn = document.getElementById('order-post-btn');
+    btn.disabled = true; btn.textContent = 'Posting\u2026';
+
+    // Lock diamonds upfront
+    diamonds = parseFloat((diamonds - total).toFixed(2));
+    updateDiamondsDisplay();
+    saveCollection();
+
+    try {
+        const fn = window._fbPostOrder;
+        if (!fn) throw new Error('Firebase not ready');
+        await fn({
+            buyerUid:     window._currentUser.uid,
+            buyerName:    window._cloudUserData?.username || 'Unknown',
+            cardName:     isXp ? 'XP' : _orderSelectedCard.baseName,
+            cardType:     isXp ? '' : _orderSelectedCard.type,
+            itemCategory: isXp ? 'xp' : 'card',
+            amountWanted: amt,
+            rewardEach:   rward,
+        });
+        _showOrderMsg('Order posted!', 'success');
+        _resetCreateOrderForm();
+        btn.textContent = 'Post Order';
+        setTimeout(() => {
+            closeCreateOrderPanel();
+            refreshOrders();
+        }, 1200);
+    } catch(e) {
+        // Refund on failure
+        diamonds = parseFloat((diamonds + total).toFixed(2));
+        updateDiamondsDisplay();
+        saveCollection();
+        _showOrderMsg('Failed: ' + (e.message || e), 'error');
+        btn.disabled = false; btn.textContent = 'Post Order';
+    }
+}
+
+function _showOrderMsg(text, type) {
+    const el = document.getElementById('order-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.background = type === 'error' ? 'rgba(231,76,60,0.18)' : 'rgba(39,174,96,0.18)';
+    el.style.color      = type === 'error' ? '#e74c3c' : '#2ecc71';
+    el.style.border     = '1px solid ' + (type === 'error' ? 'rgba(231,76,60,0.4)' : 'rgba(39,174,96,0.4)');
+}
+
+// ── Wire create-order form live updates ───────────────────────
+(function() {
+    document.addEventListener('input', e => {
+        if (e.target.id === 'order-amount-input' || e.target.id === 'order-reward-input') {
+            _updateOrderSummary();
+        }
+    });
+})();
