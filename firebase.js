@@ -5,8 +5,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
-         collection as fsCollection, addDoc, getDocs, query, where, orderBy, increment }
+import { getFirestore, doc, getDoc, setDoc, deleteDoc,
+         collection as fsCollection, addDoc, getDocs, query, where, orderBy }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -156,30 +156,51 @@ export async function updateUsername(uid, oldUsername, newUsername) {
 
 export { auth, db };
 
-// ── Rewards ──────────────────────────────────────────────────────
+// ── Rewards  (rewards/{uid}/pending/{autoId}) ─────────────────────
+// Each document: { type: 'diamonds'|'card'|'item', amount, from, createdAt }
+// This subcollection structure allows any reward type in the future.
 
-// Called when a buyer purchases — adds diamonds to seller's pending balance
+function _pendingCol(uid) {
+    return fsCollection(db, "rewards", uid, "pending");
+}
+
+// Add a diamond reward for a seller when a buyer purchases
 export async function addPendingReward(sellerUid, amount) {
-    if (!amount || amount <= 0) return;
-    // Use updateDoc (not setDoc+merge) so the Firestore 'allow update' rule applies
-    await updateDoc(doc(db, "users", sellerUid), {
-        pendingDiamonds: increment(amount)
+    if (!sellerUid || !amount || amount <= 0) return;
+    await addDoc(_pendingCol(sellerUid), {
+        type:      'diamonds',
+        amount:    Number(amount),
+        from:      'market_sale',
+        createdAt: Date.now(),
     });
 }
 
-// Seller claims their pending diamonds
-export async function claimRewards(uid) {
-    const snap = await getDoc(doc(db, "users", uid));
-    if (!snap.exists()) return 0;
-    const pending = snap.data().pendingDiamonds || 0;
-    if (pending <= 0) return 0;
-    await setDoc(doc(db, "users", uid), { pendingDiamonds: 0 }, { merge: true });
-    return pending;
+// Fetch all pending reward docs without claiming
+export async function getPendingRewards(uid) {
+    const snap = await getDocs(_pendingCol(uid));
+    // Return structured summary: { diamonds, docs: [{id, type, amount, from}] }
+    let diamonds = 0;
+    const docs = [];
+    snap.forEach(d => {
+        const data = d.data();
+        if (data.type === 'diamonds') diamonds += (data.amount || 0);
+        docs.push({ id: d.id, ...data });
+    });
+    return { diamonds, docs };
 }
 
-// Get pending reward amount without claiming
-export async function getPendingRewards(uid) {
-    const snap = await getDoc(doc(db, "users", uid));
-    if (!snap.exists()) return 0;
-    return snap.data().pendingDiamonds || 0;
+// Claim all pending rewards — deletes every pending doc and returns totals
+export async function claimRewards(uid) {
+    const snap = await getDocs(_pendingCol(uid));
+    if (snap.empty) return { diamonds: 0 };
+
+    let diamonds = 0;
+    const deletes = [];
+    snap.forEach(d => {
+        const data = d.data();
+        if (data.type === 'diamonds') diamonds += (data.amount || 0);
+        deletes.push(deleteDoc(doc(db, "rewards", uid, "pending", d.id)));
+    });
+    await Promise.all(deletes);
+    return { diamonds };
 }

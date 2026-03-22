@@ -3041,12 +3041,28 @@ function _buildSaveData() {
 // Expose for firebase.js usage
 window._buildSaveData = _buildSaveData;
 
-// saveCollection: triggers a cloud push (debounced to avoid hammering)
-let _saveDebounceTimer = null;
+// ── Save system ──────────────────────────────────────────────────
+// saveCollection() just marks state as dirty (in-memory).
+// Actual cloud pushes happen:
+//   • Every 10 minutes via _autoSaveInterval
+//   • On beforeunload / visibilitychange (tab hide)
+//   • On manual logout (_doLogout in index.html)
+//   • Via manualSave() button (1-min cooldown)
+
+let _isDirty = false;
+let _autoSaveIntervalId = null;
+const AUTO_SAVE_MS = 10 * 60 * 1000; // 10 minutes
+
 function saveCollection() {
-    // Debounce: collapse rapid successive calls into one write 2s later
-    clearTimeout(_saveDebounceTimer);
-    _saveDebounceTimer = setTimeout(() => { _pushCloudSave(); }, 2000);
+    // Just mark dirty — no cloud write here
+    _isDirty = true;
+}
+
+function _startAutoSave() {
+    if (_autoSaveIntervalId) return;
+    _autoSaveIntervalId = setInterval(async () => {
+        if (_isDirty) await _pushCloudSave();
+    }, AUTO_SAVE_MS);
 }
 
 // Manual save — called by Save buttons, 1-minute cooldown
@@ -3104,16 +3120,20 @@ function _refreshSaveBtns() {
     });
 }
 
-// ── Push save to cloud on page close / tab hide ──
+// ── Push save to cloud ──
 async function _pushCloudSave() {
     if (window._cloudSave) {
-        try { await window._cloudSave(_buildSaveData()); } catch(e) {}
+        try {
+            await window._cloudSave(_buildSaveData());
+            _isDirty = false;
+        } catch(e) {}
     }
 }
 
-window.addEventListener('beforeunload',  () => { _pushCloudSave(); });
+// Save on tab hide / page close
+window.addEventListener('beforeunload', () => { if (_isDirty) _pushCloudSave(); });
 window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') _pushCloudSave();
+    if (document.visibilityState === 'hidden' && _isDirty) _pushCloudSave();
 });
 
 // ── Apply a cloud save snapshot to all game variables ──
@@ -3219,6 +3239,7 @@ window._onAuthReady = function(save) {
     startTokenRecharge();
     updateTokensDisplay();
     if (typeof startRewardsPoll === 'function') startRewardsPoll();
+    _startAutoSave();
 };
 
 // ── Username stored in window._username for quick access ──
@@ -6372,7 +6393,8 @@ async function refreshRewards() {
     if (refreshBtn) { refreshBtn.textContent = '↻ …'; refreshBtn.disabled = true; }
 
     try {
-        const amount = await get(user.uid);
+        const result = await get(user.uid);
+        const amount = result.diamonds || 0;
         const el = document.getElementById('rewards-amount');
         if (el) el.textContent = amount;
         const btn = document.getElementById('claim-rewards-btn');
@@ -6409,7 +6431,8 @@ async function claimRewards() {
     const btn = document.getElementById('claim-rewards-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Claiming\u2026'; }
     try {
-        const gained = await claim(user.uid);
+        const result = await claim(user.uid);
+        const gained = result.diamonds || 0;
         if (gained > 0) {
             diamonds += gained;
             updateDiamondsDisplay();
