@@ -11,7 +11,7 @@ const items = [
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
-	{ name: "Star", chance: 99, rollable: true },
+	{ name: "Star", chance: 9999, rollable: true },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true, tags: ["Sharp"] },
     { name: "Apple", chance: 200, rollable: true },
