@@ -10,9 +10,7 @@ const items = [
     { name: "Sword", chance: 25, rollable: true, tags: ["Sharp"] },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
-	{ name: "Ball", chance: 65, rollable: true },
     { name: "Bones", chance: 75, rollable: true },
-	{ name: "Star", chance: 9999, rollable: true },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true, tags: ["Sharp"] },
     { name: "Apple", chance: 200, rollable: true },
@@ -22,8 +20,8 @@ const items = [
     { name: "Lava", chance: 625, rollable: true, tags: ["ai"] },
     { name: "Evil", chance: 666, rollable: true },
     { name: "Sky", chance: 750, rollable: true },
-    { name: "Moon", chance: 999, rollable: true },
-    { name: "Sun", chance: 999, rollable: true },
+    { name: "Moon", chance: 999, rollable: true, tags: ["ai"] },
+    { name: "Sun", chance: 999, rollable: true, tags: ["ai"] },
     { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
     { name: "Spikes", chance: 2000, rollable: false, tags: ["ai", "Sharp"] },
@@ -3054,10 +3052,48 @@ window._buildSaveData = _buildSaveData;
 let _isDirty = false;
 let _autoSaveIntervalId = null;
 const AUTO_SAVE_MS = 10 * 60 * 1000; // 10 minutes
+const LOCAL_SAVE_KEY = 'cards-local-save';
+const SAVE_LOCATION_KEY = 'cards-save-location';
+let _saveLocation = localStorage.getItem(SAVE_LOCATION_KEY) || 'server';
+
+function _setSaveLocation(location) {
+    const next = location === 'server' ? 'server' : 'local';
+    _saveLocation = next;
+    localStorage.setItem(SAVE_LOCATION_KEY, next);
+    if (typeof window._setConnectionStatus === 'function') {
+        window._setConnectionStatus(next === 'server');
+    }
+}
+
+function _saveLocalSnapshot() {
+    try {
+        localStorage.setItem(LOCAL_SAVE_KEY, JSON.stringify(_buildSaveData()));
+        _setSaveLocation('local');
+    } catch (_) {}
+}
+
+function _loadLocalSnapshot() {
+    try {
+        const raw = localStorage.getItem(LOCAL_SAVE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (_) {
+        return null;
+    }
+}
+
+function _isServerLikelyAvailable() {
+    return !!(window._cloudSave && window._currentUser && navigator.onLine);
+}
+
+function _checkSaveLocation() {
+    _setSaveLocation(_isServerLikelyAvailable() ? 'server' : 'local');
+}
 
 function saveCollection() {
     // Just mark dirty — no cloud write here
     _isDirty = true;
+    if (_saveLocation === 'local') _saveLocalSnapshot();
 }
 
 function _startAutoSave() {
@@ -3124,11 +3160,19 @@ function _refreshSaveBtns() {
 
 // ── Push save to cloud ──
 async function _pushCloudSave() {
-    if (window._cloudSave) {
+    _checkSaveLocation();
+    if (_saveLocation === 'local') {
+        _saveLocalSnapshot();
+        return;
+    }
+    if (window._cloudSave && window._currentUser) {
         try {
             await window._cloudSave(_buildSaveData());
             _isDirty = false;
-        } catch(e) {}
+            _setSaveLocation('server');
+        } catch(e) {
+            _saveLocalSnapshot();
+        }
     }
 }
 
@@ -3225,7 +3269,11 @@ function _applyCloudSave(save) {
 // ── _onAuthReady: called by Firebase module once auth resolves ──
 // save = cloud save object or null (new account)
 window._onAuthReady = function(save) {
-    _applyCloudSave(save);
+    _checkSaveLocation();
+    const localSave = _loadLocalSnapshot();
+    const shouldPreferLocal = (_saveLocation === 'local') && !!localSave;
+    _applyCloudSave(shouldPreferLocal ? localSave : save);
+    if (shouldPreferLocal) _isDirty = true;
 
     updateCollection();
     updateInventoryStats();
@@ -3243,6 +3291,9 @@ window._onAuthReady = function(save) {
     if (typeof startRewardsPoll === 'function') startRewardsPoll();
     _startAutoSave();
 };
+
+window.addEventListener('online', _checkSaveLocation);
+window.addEventListener('offline', _checkSaveLocation);
 
 // ── Username stored in window._username for quick access ──
 window._username = '';
@@ -3964,10 +4015,9 @@ function gainXp(amount) {
             const diamondReward = level * 10;
             try {
                 addReward(user.uid, diamondReward, 'level_up', 'Level ' + level + ' reached!');
+                _addRewardsBadgeDelta(diamondReward);
             } catch(_) {}
         }
-        // Refresh badge
-        if (typeof refreshRewards === 'function') refreshRewards();
     }
 }
 
@@ -6132,7 +6182,11 @@ function _showSellMsg(text, type) {
 
 // ── Market listing display ──
 
-let _rapCache = {}; // { itemKey: rapValue } — refreshed on market open
+let _rapCache = {}; // { itemKey: rapValue }
+let _rapCacheAt = 0;
+let _marketListingsCacheAt = 0;
+const RAP_CACHE_TTL_MS = 10 * 60 * 1000;
+const MARKET_LISTINGS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function setMarketTab(tab) {
     _marketCurrentTab = tab;
@@ -6156,13 +6210,21 @@ async function refreshMarket() {
         const fetchListings = window._fbFetchListings;
         const getAllRap     = window._fbGetAllRap;
         if (!fetchListings) throw new Error('Firebase not ready');
-        // Load listings and RAP in parallel
+        const now = Date.now();
+        const listingsFresh = _marketListings.length > 0 && (now - _marketListingsCacheAt) < MARKET_LISTINGS_CACHE_TTL_MS;
+        const rapFresh = Object.keys(_rapCache).length > 0 && (now - _rapCacheAt) < RAP_CACHE_TTL_MS;
         const [listings, rapData] = await Promise.all([
-            fetchListings(),
-            getAllRap ? getAllRap() : Promise.resolve({})
+            listingsFresh ? Promise.resolve(_marketListings) : fetchListings(),
+            rapFresh ? Promise.resolve(_rapCache) : (getAllRap ? getAllRap() : Promise.resolve({}))
         ]);
-        _marketListings = listings;
-        _rapCache = rapData || {};
+        if (!listingsFresh) {
+            _marketListings = listings || [];
+            _marketListingsCacheAt = now;
+        }
+        if (!rapFresh) {
+            _rapCache = rapData || {};
+            _rapCacheAt = now;
+        }
         if (_marketCurrentTab === 'rap') _renderRapTable();
         else _renderMarketListings();
     } catch(e) {
@@ -6539,7 +6601,7 @@ async function cancelListing(id, cardName, cardType, amount, itemCategory) {
 async function openRewardsPanel() {
     document.getElementById('rewards-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    await refreshRewards();
+    await refreshRewards(true);
 }
 
 function closeRewardsPanel() {
@@ -6547,7 +6609,19 @@ function closeRewardsPanel() {
     document.body.style.overflow = '';
 }
 
-async function refreshRewards() {
+let _rewardsDocsCache = [];
+let _rewardsDiamondsCache = 0;
+let _rewardsCacheAt = 0;
+const REWARDS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function _addRewardsBadgeDelta(amount) {
+    const delta = Number(amount) || 0;
+    if (delta <= 0) return;
+    _rewardsDiamondsCache = Math.max(0, parseFloat((_rewardsDiamondsCache + delta).toFixed(2)));
+    _updateRewardsBadge(_rewardsDiamondsCache);
+}
+
+async function refreshRewards(force = false) {
     const user = window._currentUser;
     if (!user) return;
     const get = window._fbGetPendingRewards;
@@ -6557,10 +6631,18 @@ async function refreshRewards() {
     if (refreshBtn) { refreshBtn.textContent = '↻ …'; refreshBtn.disabled = true; }
 
     try {
+        const now = Date.now();
+        if (!force && (now - _rewardsCacheAt) < REWARDS_CACHE_TTL_MS) {
+            _renderRewardsList(_rewardsDocsCache);
+            _updateRewardsBadge(_rewardsDiamondsCache);
+            return;
+        }
         const result = await get(user.uid);
-        _renderRewardsList(result.docs || []);
-        const totalDiamonds = result.diamonds || 0;
-        _updateRewardsBadge(totalDiamonds);
+        _rewardsDocsCache = result.docs || [];
+        _rewardsDiamondsCache = result.diamonds || 0;
+        _rewardsCacheAt = now;
+        _renderRewardsList(_rewardsDocsCache);
+        _updateRewardsBadge(_rewardsDiamondsCache);
     } catch(e) {
         showCraftMessage('Failed to load rewards: ' + (e.message || e), 'error');
     } finally {
@@ -6638,7 +6720,13 @@ function _renderRewardsList(docs) {
                 }
                 saveCollection();
                 showCraftMessage('+' + amountStr + ' claimed!', 'success');
-                await refreshRewards();
+                _rewardsDocsCache = _rewardsDocsCache.filter(r => r.id !== doc.id);
+                if (doc.type === 'diamonds') {
+                    _rewardsDiamondsCache = Math.max(0, parseFloat((_rewardsDiamondsCache - (doc.amount || 0)).toFixed(2)));
+                }
+                _rewardsCacheAt = Date.now();
+                _renderRewardsList(_rewardsDocsCache);
+                _updateRewardsBadge(_rewardsDiamondsCache);
             } catch(e) {
                 showCraftMessage('Claim failed: ' + (e.message || e), 'error');
                 btn.disabled = false; btn.textContent = 'Claim';
@@ -6684,15 +6772,19 @@ async function claimAllRewards() {
             saveCollection();
             showCraftMessage('Claimed \uD83D\uDC8E' + _fmtPrice(gained) + '!', 'success');
         }
-        await refreshRewards();
+        _rewardsDocsCache = [];
+        _rewardsDiamondsCache = 0;
+        _rewardsCacheAt = Date.now();
+        _renderRewardsList(_rewardsDocsCache);
+        _updateRewardsBadge(_rewardsDiamondsCache);
     } catch(e) {
         showCraftMessage('Claim all failed: ' + (e.message || e), 'error');
     }
 }
 
 function startRewardsPoll() {
-    refreshRewards();
-    setInterval(refreshRewards, 60 * 1000);
+    refreshRewards(true);
+    setInterval(() => refreshRewards(true), 10 * 60 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6704,6 +6796,8 @@ let _ordersAll        = [];
 let _currentFillOrder = null;
 let _orderItemType    = 'card';
 let _orderSelectedCard = null; // { baseName, type, fullName }
+let _ordersCacheAt = 0;
+const ORDERS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 // ── Open / close ──────────────────────────────────────────────
 
@@ -6752,7 +6846,12 @@ async function refreshOrders() {
     try {
         const fn = window._fbFetchOrders;
         if (!fn) throw new Error('Firebase not ready');
-        _ordersAll = await fn();
+        const now = Date.now();
+        const isFresh = _ordersAll.length > 0 && (now - _ordersCacheAt) < ORDERS_CACHE_TTL_MS;
+        if (!isFresh) {
+            _ordersAll = await fn();
+            _ordersCacheAt = now;
+        }
         _renderOrdersList();
     } catch(e) {
         if (listEl) listEl.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
@@ -6893,7 +6992,7 @@ async function _cancelOrder(order) {
         const result = await fn(order.id, window._currentUser.uid);
         if (result.refund > 0) {
             showCraftMessage('Order cancelled \u2014 \uD83D\uDC8E' + _fmtPrice(result.refund) + ' refund queued in Rewards', 'info');
-            if (typeof refreshRewards === 'function') refreshRewards();
+            _addRewardsBadgeDelta(result.refund);
         } else {
             showCraftMessage('Order cancelled.', 'info');
         }
@@ -7006,7 +7105,7 @@ async function submitFillOrder() {
         });
 
         _showFillMsg('Filled! \uD83D\uDC8E' + _fmtPrice(result.earned) + ' added to Rewards', 'success');
-        if (typeof refreshRewards === 'function') refreshRewards();
+        _addRewardsBadgeDelta(result.earned);
         btn.textContent = 'Fill Order';
         btn.disabled = false;
         amtInput.value = '';

@@ -72,7 +72,8 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.5.2</div>
+    <div class="update-text">Update 1.6.0</div>
+    <div id="connection-indicator" style="position:fixed;top:24px;left:20px;font-size:0.72em;font-weight:bold;color:#2ecc71;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.35);padding:0.2em 0.7em;border-radius:999px;z-index:1000;">● Online</div>
     <!-- Logged-in user display (clickable) -->
     <button id="username-display" onclick="openUserMenu()" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(78,205,196,0.2)'" onmouseout="this.style.background='rgba(78,205,196,0.1)'"></button>
     <!-- Mini save button under username -->
@@ -914,8 +915,13 @@
         window._cloudSave = async function(saveData) {
             const user = window._currentUser;
             if (!user) return;
-            try { await saveToCloud(user.uid, saveData); }
-            catch(e) { console.warn('Cloud save failed:', e); }
+            try {
+                await saveToCloud(user.uid, saveData);
+                return true;
+            } catch(e) {
+                console.warn('Cloud save failed:', e);
+                throw e;
+            }
         };
 
         import { postListing, fetchListings, deleteListing, updateUsername,
@@ -961,13 +967,34 @@
         window._doLogout = async function() {
             // Save first
             if (window._currentUser && window._buildSaveData) {
-                await window._cloudSave(window._buildSaveData());
+                try {
+                    await window._cloudSave(window._buildSaveData());
+                } catch (_) {}
             }
             await logout();
             window.location.replace('./login.html');
         };
     </script>
     <script>
+        window._setConnectionStatus = function(isOnline) {
+            const el = document.getElementById('connection-indicator');
+            if (!el) return;
+            if (isOnline) {
+                el.textContent = '● Online';
+                el.style.color = '#2ecc71';
+                el.style.background = 'rgba(46,204,113,0.12)';
+                el.style.borderColor = 'rgba(46,204,113,0.35)';
+            } else {
+                el.textContent = '● Offline';
+                el.style.color = '#e74c3c';
+                el.style.background = 'rgba(231,76,60,0.12)';
+                el.style.borderColor = 'rgba(231,76,60,0.35)';
+            }
+        };
+        window._setConnectionStatus(navigator.onLine);
+        window.addEventListener('online', () => window._setConnectionStatus(true));
+        window.addEventListener('offline', () => window._setConnectionStatus(false));
+
         function navigateTo(section) {
             // Update active button
             document.querySelectorAll('.bottom-nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -1103,6 +1130,9 @@
             _syncAlwaysNavBtn();
         };
         // ── Leaderboard ──
+        let _leaderboardCacheRows = [];
+        let _leaderboardCacheAt = 0;
+        const LEADERBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
         function openLeaderboardPanel() {
             document.getElementById('leaderboard-panel').style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -1119,7 +1149,14 @@
             const fn = window._fbGetLeaderboard;
             if (!fn) { list.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Not available</div>'; return; }
             try {
-                const rows = await fn();
+                const now = Date.now();
+                const rows = (_leaderboardCacheRows.length > 0 && (now - _leaderboardCacheAt) < LEADERBOARD_CACHE_TTL_MS)
+                    ? _leaderboardCacheRows
+                    : await fn();
+                if (rows !== _leaderboardCacheRows) {
+                    _leaderboardCacheRows = rows || [];
+                    _leaderboardCacheAt = now;
+                }
                 list.innerHTML = '';
                 if (!rows.length) {
                     list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">No data yet.</div>';
