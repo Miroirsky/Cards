@@ -5786,7 +5786,30 @@ function _pressValue(baseName, type) {
 
 // ── Open / close panels ──
 
+function _isMultiplayerAvailable() {
+    return navigator.onLine && !!window._currentUser;
+}
+
+function _guardMultiplayerOrNotify() {
+    if (_isMultiplayerAvailable()) return true;
+    showCraftMessage('Offline: multiplayer features are unavailable.', 'error');
+    return false;
+}
+
+function _closeMultiplayerPanelsOnOffline() {
+    if (navigator.onLine) return;
+    ['sell-panel', 'market-panel', 'rewards-panel', 'orders-panel', 'create-order-panel', 'fill-order-panel']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+    document.body.style.overflow = '';
+}
+
+window.addEventListener('offline', _closeMultiplayerPanelsOnOffline);
+
 function openSellMenu() {
+    if (!_guardMultiplayerOrNotify()) return;
     _resetSellForm();
     document.getElementById('sell-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -5797,6 +5820,7 @@ function closeSellMenu() {
     document.body.style.overflow = '';
 }
 function openMarketMenu() {
+    if (!_guardMultiplayerOrNotify()) return;
     document.getElementById('market-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     const s = document.getElementById('market-search');
@@ -6111,6 +6135,7 @@ function _updateSellSummary() {
 // ── Post listing ──
 
 async function postListing() {
+    if (!_guardMultiplayerOrNotify()) return;
     const price = _computeSellPrice();
     if (!price) return;
 
@@ -6204,6 +6229,7 @@ function setMarketTab(tab) {
 }
 
 async function refreshMarket() {
+    if (!_guardMultiplayerOrNotify()) return;
     const list = document.getElementById('market-list');
     if (list) list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
     try {
@@ -6487,6 +6513,7 @@ function _renderRapTable() {
 
 // ── Modify listing: cancel it then open sell menu pre-filled ──
 async function modifyListing(listing) {
+    if (!_guardMultiplayerOrNotify()) return;
     // Cancel the listing (refunds cards/xp)
     await cancelListing(listing.id, listing.cardName, listing.cardType || '', listing.amount, listing.itemCategory || 'card');
     // Close market, open sell menu
@@ -6513,6 +6540,7 @@ async function modifyListing(listing) {
 }
 
 async function buyListing(listing, btn) {
+    if (!_guardMultiplayerOrNotify()) return;
     const { id, cardName, cardType, amount, priceTotal, sellerUid, itemCategory } = listing;
     const isFree   = priceTotal === 0;
     const isXpItem = itemCategory === 'xp';
@@ -6572,6 +6600,7 @@ async function buyListing(listing, btn) {
 }
 
 async function cancelListing(id, cardName, cardType, amount, itemCategory) {
+    if (!_guardMultiplayerOrNotify()) return;
     try {
         const deleteListing = window._fbDeleteListing;
         if (!deleteListing) throw new Error('Firebase not ready');
@@ -6599,6 +6628,7 @@ async function cancelListing(id, cardName, cardType, amount, itemCategory) {
 // ═══════════════════════════════════════════════════════════════
 
 async function openRewardsPanel() {
+    if (!_guardMultiplayerOrNotify()) return;
     document.getElementById('rewards-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     await refreshRewards(true);
@@ -6622,6 +6652,7 @@ function _addRewardsBadgeDelta(amount) {
 }
 
 async function refreshRewards(force = false) {
+    if (!_guardMultiplayerOrNotify()) return;
     const user = window._currentUser;
     if (!user) return;
     const get = window._fbGetPendingRewards;
@@ -6755,6 +6786,7 @@ function _updateRewardsBadge(amount) {
 
 // claimRewards (all-at-once) kept for badge/total but UI now uses per-item
 async function claimAllRewards() {
+    if (!_guardMultiplayerOrNotify()) return;
     const user = window._currentUser;
     if (!user) return;
     const get = window._fbGetPendingRewards;
@@ -6802,6 +6834,7 @@ const ORDERS_CACHE_TTL_MS = 2 * 60 * 1000;
 // ── Open / close ──────────────────────────────────────────────
 
 function openOrdersPanel() {
+    if (!_guardMultiplayerOrNotify()) return;
     document.getElementById('orders-panel').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     const s = document.getElementById('orders-search');
@@ -6813,6 +6846,7 @@ function closeOrdersPanel() {
     document.body.style.overflow = '';
 }
 function openCreateOrderPanel() {
+    if (!_guardMultiplayerOrNotify()) return;
     _resetCreateOrderForm();
     document.getElementById('create-order-panel').style.display = 'flex';
     _initOrderCardSearch();
@@ -6841,6 +6875,7 @@ function setOrdersTab(tab) {
 // ── Refresh ───────────────────────────────────────────────────
 
 async function refreshOrders() {
+    if (!_guardMultiplayerOrNotify()) return;
     const listEl = document.getElementById('orders-list');
     if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
     try {
@@ -6986,6 +7021,7 @@ function _renderOrdersList() {
 // ── Cancel order ──────────────────────────────────────────────
 
 async function _cancelOrder(order) {
+    if (!_guardMultiplayerOrNotify()) return;
     const fn = window._fbCancelOrder;
     if (!fn) return;
     try {
@@ -7005,6 +7041,7 @@ async function _cancelOrder(order) {
 // ── Fill order ────────────────────────────────────────────────
 
 function _openFillOrder(order) {
+    if (!_guardMultiplayerOrNotify()) return;
     _currentFillOrder = order;
     const isXp = order.itemCategory === 'xp';
 
@@ -7057,6 +7094,7 @@ function _openFillOrder(order) {
 }
 
 async function submitFillOrder() {
+    if (!_guardMultiplayerOrNotify()) return;
     const order = _currentFillOrder;
     if (!order) return;
     const isXp = order.itemCategory === 'xp';
@@ -7273,6 +7311,7 @@ function _resetCreateOrderForm() {
 }
 
 async function submitOrder() {
+    if (!_guardMultiplayerOrNotify()) return;
     const isXp = _orderItemType === 'xp';
     const amt   = parseInt(document.getElementById('order-amount-input')?.value) || 0;
     const rward = parseFloat(document.getElementById('order-reward-input')?.value) || 0;

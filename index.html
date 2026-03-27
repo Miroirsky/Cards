@@ -1134,6 +1134,12 @@
         let _leaderboardCacheAt = 0;
         const LEADERBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
         function openLeaderboardPanel() {
+            if (!navigator.onLine || !window._currentUser) {
+                if (typeof showCraftMessage === 'function') {
+                    showCraftMessage('Offline: multiplayer features are unavailable.', 'error');
+                }
+                return;
+            }
             document.getElementById('leaderboard-panel').style.display = 'flex';
             document.body.style.overflow = 'hidden';
             loadLeaderboard();
@@ -1143,6 +1149,7 @@
             document.body.style.overflow = '';
         }
         async function loadLeaderboard() {
+            if (!navigator.onLine || !window._currentUser) return;
             const list = document.getElementById('leaderboard-list');
             if (!list) return;
             list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>';
@@ -1194,6 +1201,13 @@
                 list.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
             }
         }
+        window.addEventListener('offline', () => {
+            const lb = document.getElementById('leaderboard-panel');
+            if (lb && lb.style.display === 'flex') {
+                lb.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
     </script>
 </body>
 
