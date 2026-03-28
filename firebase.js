@@ -383,3 +383,46 @@ export async function cancelOrder(orderId, buyerUid) {
 
     return { refund };
 }
+
+// ── Admin System ───────────────────────────────────────────────────
+// Fetch all users with their stats
+export async function getAllUsersStats() {
+    const snap = await getDocs(fsCollection(db, "users"));
+    return snap.docs.map(d => ({
+        uid: d.id,
+        username: d.data().username || 'Unknown',
+        createdAt: d.data().createdAt,
+        level: d.data().save?.level || 1,
+        diamonds: d.data().save?.diamonds || 0,
+        xp: d.data().save?.xp || 0,
+        rolls: d.data().save?.rolls || 0,
+    }));
+}
+
+// Reset a player's save to default
+export async function resetPlayerSave(uid) {
+    const defaultSave = {
+        collection: {},
+        diamonds: 0,
+        xp: 0,
+        rolls: 0,
+        level: 1,
+        xpNext: 50,
+        potionInventory: {},
+        activeEffects: {},
+        tokens: 10,
+        maxToken: 20,
+    };
+    await setDoc(doc(db, "users", uid), { save: defaultSave }, { merge: true });
+}
+
+// Update a player's manual save via admin (editable in Firestore console)
+export async function getPlayerSave(uid) {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return null;
+    return snap.data().save;
+}
+
+export async function setPlayerSave(uid, saveData) {
+    await setDoc(doc(db, "users", uid), { save: saveData }, { merge: true });
+}

@@ -127,7 +127,7 @@ const artifactDefinitions = [
 let artifactInventory = {};   // { "Sugar Magnet": 2 }  — owned but not equipped
 let equippedArtifacts = [];   // [{ name, slot }]  — ordered list of equipped artifacts
 
-const ARTIFACT_SLOT_LEVELS = [10, 20, 30, 40, 50];
+const ARTIFACT_SLOT_LEVELS = [10, 20, 30, 40, 50, 65, 80, 100];
 
 function getMaxArtifactSlots() {
     return ARTIFACT_SLOT_LEVELS.filter(l => level >= l).length;
@@ -7321,7 +7321,7 @@ function _initOrderCardSearch() {
     input.oninput = () => {
         const q = input.value.trim().toLowerCase();
         if (!q) { dd.style.display = 'none'; return; }
-        const matches = items.filter(i => i.rollable && i.name.toLowerCase().includes(q));
+        const matches = items.filter(i => i.name.toLowerCase().includes(q));
         if (!matches.length) { dd.style.display = 'none'; return; }
         dd.innerHTML = '';
         matches.slice(0, 20).forEach(item => {
@@ -7489,3 +7489,150 @@ function _showOrderMsg(text, type) {
         }
     });
 })();
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+let _adminAllPlayers = [];
+let _adminPlayersCacheAt = 0;
+const ADMIN_CACHE_TTL_MS = 2 * 60 * 1000;
+
+function openAdminPanel() {
+    // Simple check: only allow specific admin UIDs (you can manually set this)
+    // For now, show to any logged-in user who accesses it
+    document.getElementById('admin-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    loadAdminStats(true);
+}
+
+function closeAdminPanel() {
+    document.getElementById('admin-panel').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+async function loadAdminStats(force = false) {
+    const listEl = document.getElementById('admin-list');
+    if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>';
+    try {
+        const fn = window._fbGetAllUsersStats;
+        if (!fn) throw new Error('Firebase not ready');
+        const now = Date.now();
+        const isFresh = !force && _adminAllPlayers.length > 0 && (now - _adminPlayersCacheAt) < ADMIN_CACHE_TTL_MS;
+        if (!isFresh) {
+            _adminAllPlayers = await fn();
+            _adminPlayersCacheAt = now;
+        }
+        _renderAdminPlayerList();
+    } catch(e) {
+        if (listEl) listEl.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
+    }
+}
+
+function _renderAdminPlayerList() {
+    const listEl = document.getElementById('admin-list');
+    if (!listEl) return;
+    const q = (document.getElementById('admin-search')?.value || '').toLowerCase().trim();
+
+    let toShow = _adminAllPlayers;
+
+    if (q) {
+        toShow = toShow.filter(p => {
+            const name = (p.username || '').toLowerCase();
+            const uid = (p.uid || '').toLowerCase();
+            return name.includes(q) || uid.includes(q);
+        });
+    }
+
+    if (!toShow.length) {
+        listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
+            + (q ? 'No players match "' + q + '".' : 'No players found.')
+            + '</div>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    toShow.forEach(player => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;background:rgba(255,255,255,0.04);border:1.5px solid rgba(220,53,69,0.2);border-radius:12px;padding:0.8em;';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.8em;';
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;';
+        info.innerHTML = '<div style="font-weight:bold;color:#fff;font-size:1em;">' + (player.username || 'Unknown') + '</div>'
+            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">UID: ' + player.uid + '</div>';
+
+        const stats = document.createElement('div');
+        stats.style.cssText = 'display:flex;gap:1em;align-items:center;';
+        stats.innerHTML = '<span style="color:#a29bfe;font-size:0.9em;"><b>💎 ' + Math.floor(player.diamonds) + '</b></span>'
+            + '<span style="color:#4ecdc4;font-size:0.9em;"><b>⭐ ' + Math.floor(player.xp) + '</b></span>'
+            + '<span style="color:#f1c40f;font-size:0.9em;"><b>Lvl ' + player.level + '</b></span>'
+            + '<span style="color:#95a5a6;font-size:0.9em;"><b>🎲 ' + player.rolls + '</b></span>';
+
+        header.appendChild(info);
+        header.appendChild(stats);
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:0.5em;';
+
+        const resetBtn = document.createElement('button');
+        resetBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(231,76,60,0.4);background:rgba(231,76,60,0.12);color:#e74c3c;font-weight:bold;cursor:pointer;font-size:0.88em;';
+        resetBtn.textContent = 'Reset Save';
+        resetBtn.onclick = () => {
+            if (confirm('Reset all progress for ' + player.username + '? This cannot be undone.')) {
+                _adminResetPlayer(player.uid, player.username);
+            }
+        };
+
+        const viewBtn = document.createElement('button');
+        viewBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(78,205,196,0.4);background:rgba(78,205,196,0.12);color:#4ecdc4;font-weight:bold;cursor:pointer;font-size:0.88em;';
+        viewBtn.textContent = '👁️ View Save';
+        viewBtn.onclick = () => _adminViewPlayerSave(player.uid, player.username);
+
+        btnRow.appendChild(resetBtn);
+        btnRow.appendChild(viewBtn);
+
+        row.appendChild(header);
+        row.appendChild(btnRow);
+        listEl.appendChild(row);
+    });
+}
+
+async function _adminResetPlayer(uid, username) {
+    try {
+        const fn = window._fbResetPlayerSave;
+        if (!fn) throw new Error('Firebase not ready');
+        await fn(uid);
+        showCraftMessage('Reset save for ' + username + '.', 'success');
+        await loadAdminStats(true);
+    } catch(e) {
+        showCraftMessage('Reset failed: ' + (e.message || e), 'error');
+    }
+}
+
+async function _adminViewPlayerSave(uid, username) {
+    try {
+        const fn = window._fbGetPlayerSave;
+        if (!fn) throw new Error('Firebase not ready');
+        const save = await fn(uid);
+        // Show in a simple prompt/modal with JSON
+        const json = JSON.stringify(save, null, 2);
+        alert('Save data for ' + username + ':\n\n' + json.slice(0, 500) + (json.length > 500 ? '\n...(truncated)' : ''));
+    } catch(e) {
+        showCraftMessage('View failed: ' + (e.message || e), 'error');
+    }
+}
+
+// Admin keyboard shortcut: Ctrl+Shift+A
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        if (window._currentUser) {
+            openAdminPanel();
+        } else {
+            alert('You must be logged in to access admin panel.');
+        }
+    }
+});
