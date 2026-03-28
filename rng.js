@@ -5896,7 +5896,7 @@ function openMarketMenu() {
     document.body.style.overflow = 'hidden';
     const s = document.getElementById('market-search');
     if (s) s.value = '';
-    refreshMarket();
+    refreshMarket(true);
 }
 function closeMarketMenu() {
     document.getElementById('market-panel').style.display = 'none';
@@ -6254,6 +6254,7 @@ async function postListing() {
         const label = isXpPost ? postQty + ' XP' : ('\u00D7' + postQty + ' ' + _sellSelectedCard.name);
         const priceLabel = price.priceTotal === 0 ? '\uD83C\uDD93 Free' : '\uD83D\uDC8E' + _fmtPrice(price.priceTotal);
         _showSellMsg('Listed ' + label + ' for ' + priceLabel, 'success');
+        await refreshMarket(true);
         _resetSellForm();
         btn.textContent = 'Post Listing';
     } catch(e) {
@@ -6299,7 +6300,7 @@ function setMarketTab(tab) {
     }
 }
 
-async function refreshMarket() {
+async function refreshMarket(force = false) {
     if (!_guardMultiplayerOrNotify()) return;
     const list = document.getElementById('market-list');
     if (list) list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
@@ -6308,8 +6309,8 @@ async function refreshMarket() {
         const getAllRap     = window._fbGetAllRap;
         if (!fetchListings) throw new Error('Firebase not ready');
         const now = Date.now();
-        const listingsFresh = _marketListings.length > 0 && (now - _marketListingsCacheAt) < MARKET_LISTINGS_CACHE_TTL_MS;
-        const rapFresh = Object.keys(_rapCache).length > 0 && (now - _rapCacheAt) < RAP_CACHE_TTL_MS;
+        const listingsFresh = !force && _marketListings.length > 0 && (now - _marketListingsCacheAt) < MARKET_LISTINGS_CACHE_TTL_MS;
+        const rapFresh = !force && Object.keys(_rapCache).length > 0 && (now - _rapCacheAt) < RAP_CACHE_TTL_MS;
         const [listings, rapData] = await Promise.all([
             listingsFresh ? Promise.resolve(_marketListings) : fetchListings(),
             rapFresh ? Promise.resolve(_rapCache) : (getAllRap ? getAllRap() : Promise.resolve({}))
@@ -6664,6 +6665,7 @@ async function buyListing(listing, btn) {
         showCraftMessage('Bought ' + what + ' ' + cost + '!', 'success');
         _marketListings = _marketListings.filter(l => l.id !== id);
         _renderMarketListings();
+        await refreshMarket(true);
     } catch(e) {
         showCraftMessage('Purchase failed: ' + (e.message || e), 'error');
         if (btn) { btn.disabled = false; btn.textContent = isFree ? '\uD83C\uDD93 Get' : '\uD83D\uDC8E Buy'; }
@@ -6689,6 +6691,7 @@ async function cancelListing(id, cardName, cardType, amount, itemCategory) {
         showCraftMessage('Listing cancelled \u2014 refunded.', 'info');
         _marketListings = _marketListings.filter(l => l.id !== id);
         _renderMarketListings();
+        await refreshMarket(true);
     } catch(e) {
         showCraftMessage('Cancel failed: ' + (e.message || e), 'error');
     }
@@ -6868,13 +6871,50 @@ async function claimAllRewards() {
         const docs = result.docs || [];
         if (!docs.length) return;
         await Promise.all(docs.map(d => claimOne(user.uid, d.id)));
-        const gained = result.diamonds || 0;
-        if (gained > 0) {
-            diamonds += gained;
+
+        let diamondsGained = 0;
+        let cardsGained = 0;
+        let xpGained = 0;
+
+        docs.forEach(doc => {
+            if (doc.type === 'diamonds') {
+                diamondsGained += (Number(doc.amount) || 0);
+            } else if (doc.type === 'xp') {
+                xpGained += (Number(doc.amount) || 0);
+            } else if (doc.type === 'card') {
+                const cardKey = doc.cardType ? doc.cardName + ' (' + doc.cardType + ')' : doc.cardName;
+                const amount = Number(doc.amount) || 0;
+                if (amount > 0) {
+                    collection[cardKey] = (collection[cardKey] || 0) + amount;
+                    cardsGained += amount;
+                }
+            }
+        });
+
+        if (diamondsGained > 0) {
+            diamonds = parseFloat((diamonds + diamondsGained).toFixed(2));
             updateDiamondsDisplay();
-            saveCollection();
-            showCraftMessage('Claimed \uD83D\uDC8E' + _fmtPrice(gained) + '!', 'success');
+            _addRewardsBadgeDelta(-diamondsGained);
         }
+        if (xpGained > 0) {
+            gainXp(xpGained);
+        }
+        if (cardsGained > 0) {
+            updateCollection();
+            updateInventoryStats();
+        }
+
+        if (diamondsGained > 0 || xpGained > 0 || cardsGained > 0) {
+            saveCollection();
+            let msg = 'Claimed ';
+            const parts = [];
+            if (diamondsGained > 0) parts.push('\uD83D\uDC8E' + _fmtPrice(diamondsGained));
+            if (xpGained > 0) parts.push(xpGained + ' XP');
+            if (cardsGained > 0) parts.push(cardsGained + ' cards');
+            msg += parts.join(' + ') + '!';
+            showCraftMessage(msg, 'success');
+        }
+
         _rewardsDocsCache = [];
         _rewardsDiamondsCache = 0;
         _rewardsCacheAt = Date.now();
@@ -6910,7 +6950,7 @@ function openOrdersPanel() {
     document.body.style.overflow = 'hidden';
     const s = document.getElementById('orders-search');
     if (s) s.value = '';
-    refreshOrders();
+    refreshOrders(true);
 }
 function closeOrdersPanel() {
     document.getElementById('orders-panel').style.display = 'none';
@@ -6945,7 +6985,7 @@ function setOrdersTab(tab) {
 
 // ── Refresh ───────────────────────────────────────────────────
 
-async function refreshOrders() {
+async function refreshOrders(force = false) {
     if (!_guardMultiplayerOrNotify()) return;
     const listEl = document.getElementById('orders-list');
     if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading\u2026</div>';
@@ -6953,7 +6993,7 @@ async function refreshOrders() {
         const fn = window._fbFetchOrders;
         if (!fn) throw new Error('Firebase not ready');
         const now = Date.now();
-        const isFresh = _ordersAll.length > 0 && (now - _ordersCacheAt) < ORDERS_CACHE_TTL_MS;
+        const isFresh = !force && _ordersAll.length > 0 && (now - _ordersCacheAt) < ORDERS_CACHE_TTL_MS;
         if (!isFresh) {
             _ordersAll = await fn();
             _ordersCacheAt = now;
@@ -7103,7 +7143,7 @@ async function _cancelOrder(order) {
         } else {
             showCraftMessage('Order cancelled.', 'info');
         }
-        await refreshOrders();
+        await refreshOrders(true);
     } catch(e) {
         showCraftMessage('Cancel failed: ' + (e.message || e), 'error');
     }
@@ -7228,6 +7268,7 @@ async function submitFillOrder() {
         setTimeout(() => {
             closeFillOrderPanel();
             _renderOrdersList();
+            refreshOrders(true);
         }, 1500);
     } catch(e) {
         // Refund locally on error
@@ -7418,7 +7459,7 @@ async function submitOrder() {
         btn.textContent = 'Post Order';
         setTimeout(() => {
             closeCreateOrderPanel();
-            refreshOrders();
+            refreshOrders(true);
         }, 1200);
     } catch(e) {
         // Refund on failure
