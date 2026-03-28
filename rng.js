@@ -322,8 +322,10 @@ const craftRecipes = [
 	{
         name: "Pity",
         ingredients: [
-            { name: "Noob", amount: 25 },
-            { name: "Grass", amount: 15 }
+            { name: "Grass", amount: 1000 },
+            { name: "Noob", amount: 15 },
+            { name: "Pierced Hearth", amount: 5 },
+            { name: "Iceberg", amount: 2 }
         ],
         time: 1000 * 60 * 3,
         type: "artifact"
