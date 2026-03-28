@@ -7503,7 +7503,6 @@ function openAdminPanel() {
         showCraftMessage('You must be logged in.', 'error');
         return;
     }
-    // Check admin status
     _checkAdminStatus();
 }
 
@@ -7529,20 +7528,13 @@ function closeAdminPanel() {
     document.body.style.overflow = '';
 }
 
-// Sync admin button visibility based on user auth + admin status
 async function _syncAdminButtonVisibility(user) {
     const btn = document.getElementById('nav-admin');
     if (!btn) return;
-    if (!user) {
-        btn.style.display = 'none';
-        return;
-    }
+    if (!user) { btn.style.display = 'none'; return; }
     try {
         const fn = window._fbIsUserAdmin;
-        if (!fn) {
-            btn.style.display = 'none';
-            return;
-        }
+        if (!fn) { btn.style.display = 'none'; return; }
         const isAdmin = await fn(user.uid);
         btn.style.display = isAdmin ? 'flex' : 'none';
     } catch(e) {
@@ -7574,85 +7566,376 @@ function _renderAdminPlayerList() {
     const q = (document.getElementById('admin-search')?.value || '').toLowerCase().trim();
 
     let toShow = _adminAllPlayers;
-
     if (q) {
-        toShow = toShow.filter(p => {
-            const name = (p.username || '').toLowerCase();
-            const uid = (p.uid || '').toLowerCase();
-            return name.includes(q) || uid.includes(q);
-        });
+        toShow = toShow.filter(p =>
+            (p.username || '').toLowerCase().includes(q) ||
+            (p.uid || '').toLowerCase().includes(q)
+        );
     }
 
     if (!toShow.length) {
         listEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">'
-            + (q ? 'No players match "' + q + '".' : 'No players found.')
-            + '</div>';
+            + (q ? 'No players match "' + q + '".' : 'No players found.') + '</div>';
         return;
     }
 
     listEl.innerHTML = '';
     toShow.forEach(player => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;background:rgba(255,255,255,0.04);border:1.5px solid rgba(220,53,69,0.2);border-radius:12px;padding:0.8em;';
+        const card = document.createElement('div');
+        card.style.cssText = `
+            background: rgba(255,255,255,0.04);
+            border: 1.5px solid rgba(220,53,69,0.18);
+            border-radius: 14px;
+            padding: 1em;
+            display: flex;
+            flex-direction: column;
+            gap: 0.7em;
+            transition: border-color 0.2s;
+        `;
 
+        // Header: avatar + name + uid
         const header = document.createElement('div');
-        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.8em;';
+        header.style.cssText = 'display:flex;align-items:center;gap:0.8em;';
+        const avatar = document.createElement('div');
+        avatar.style.cssText = `
+            width:42px;height:42px;border-radius:50%;
+            background:linear-gradient(135deg,rgba(220,53,69,0.3),rgba(220,53,69,0.1));
+            border:2px solid rgba(220,53,69,0.35);
+            display:flex;align-items:center;justify-content:center;
+            font-size:1.2em;flex-shrink:0;
+        `;
+        avatar.textContent = (player.username || '?')[0].toUpperCase();
+        const nameBlock = document.createElement('div');
+        nameBlock.style.cssText = 'flex:1;min-width:0;';
+        nameBlock.innerHTML = `
+            <div style="font-weight:bold;color:#fff;font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${player.username || 'Unknown'}</div>
+            <div style="font-size:0.7em;color:#555;font-family:monospace;margin-top:0.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${player.uid}</div>
+        `;
+        const adminBadge = player.admin ? '<span style="background:rgba(220,53,69,0.25);color:#ff6b6b;border:1px solid rgba(220,53,69,0.4);border-radius:6px;padding:2px 7px;font-size:0.7em;font-weight:bold;">ADMIN</span>' : '';
+        if (adminBadge) nameBlock.innerHTML += adminBadge;
+        header.appendChild(avatar);
+        header.appendChild(nameBlock);
 
-        const info = document.createElement('div');
-        info.style.cssText = 'flex:1;';
-        info.innerHTML = '<div style="font-weight:bold;color:#fff;font-size:1em;">' + (player.username || 'Unknown') + '</div>'
-            + '<div style="font-size:0.8em;color:#7f8c8d;margin-top:0.1em;">UID: ' + player.uid + '</div>';
-
+        // Stats row
         const stats = document.createElement('div');
-        stats.style.cssText = 'display:flex;gap:1em;align-items:center;';
-        stats.innerHTML = '<span style="color:#a29bfe;font-size:0.9em;"><b>💎 ' + Math.floor(player.diamonds) + '</b></span>'
-            + '<span style="color:#4ecdc4;font-size:0.9em;"><b>⭐ ' + Math.floor(player.xp) + '</b></span>'
-            + '<span style="color:#f1c40f;font-size:0.9em;"><b>Lvl ' + player.level + '</b></span>'
-            + '<span style="color:#95a5a6;font-size:0.9em;"><b>🎲 ' + player.rolls + '</b></span>';
+        stats.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:0.4em;';
+        const statItems = [
+            { icon: '💎', label: 'Diamonds', val: Math.floor(player.diamonds), color: '#a29bfe' },
+            { icon: '⭐', label: 'XP',       val: Math.floor(player.xp),       color: '#4ecdc4' },
+            { icon: '🏆', label: 'Level',    val: player.level,                color: '#f1c40f' },
+            { icon: '🎲', label: 'Rolls',    val: player.rolls,                color: '#95a5a6' },
+        ];
+        statItems.forEach(s => {
+            const box = document.createElement('div');
+            box.style.cssText = `
+                background:rgba(255,255,255,0.04);border-radius:8px;padding:0.4em 0.3em;
+                text-align:center;border:1px solid rgba(255,255,255,0.06);
+            `;
+            box.innerHTML = `
+                <div style="font-size:0.8em;color:#555;text-transform:uppercase;letter-spacing:0.3px;">${s.icon}</div>
+                <div style="font-weight:bold;color:${s.color};font-size:0.9em;margin-top:0.1em;">${s.val.toLocaleString()}</div>
+                <div style="font-size:0.65em;color:#555;">${s.label}</div>
+            `;
+            stats.appendChild(box);
+        });
 
-        header.appendChild(info);
-        header.appendChild(stats);
+        // Action buttons
+        const btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:0.5em;flex-wrap:wrap;';
 
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:0.5em;flex-wrap:wrap;';
+        const viewBtn = _makeAdminBtn('👁️ View Data', '#4ecdc4', 'rgba(78,205,196,0.12)', 'rgba(78,205,196,0.4)');
+        viewBtn.onclick = () => _adminOpenViewPanel(player.uid, player.username);
 
-        const resetBtn = document.createElement('button');
-        resetBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(231,76,60,0.4);background:rgba(231,76,60,0.12);color:#e74c3c;font-weight:bold;cursor:pointer;font-size:0.88em;';
-        resetBtn.textContent = 'Reset Save';
-        resetBtn.onclick = () => {
-            if (confirm('Reset all progress for ' + player.username + '? This cannot be undone.')) {
-                _adminResetPlayer(player.uid, player.username);
+        const resetBtn = _makeAdminBtn('🔄 Reset Save', '#f39c12', 'rgba(243,156,18,0.1)', 'rgba(243,156,18,0.35)');
+        resetBtn.onclick = () => _adminShowResetConfirm(player.uid, player.username, resetBtn);
+
+        const deleteBtn = _makeAdminBtn('🗑️ Delete', '#ff6b6b', 'rgba(220,53,69,0.15)', 'rgba(220,53,69,0.5)');
+        deleteBtn.onclick = () => _adminShowDeleteConfirm(player.uid, player.username);
+
+        btns.appendChild(viewBtn);
+        btns.appendChild(resetBtn);
+        btns.appendChild(deleteBtn);
+
+        card.appendChild(header);
+        card.appendChild(stats);
+        card.appendChild(btns);
+        listEl.appendChild(card);
+    });
+}
+
+function _makeAdminBtn(label, color, bg, border) {
+    const btn = document.createElement('button');
+    btn.style.cssText = `
+        flex:1;min-width:80px;padding:0.5em 0.8em;border-radius:9px;
+        border:1px solid ${border};background:${bg};color:${color};
+        font-weight:bold;cursor:pointer;font-size:0.85em;
+        transition:background 0.15s,transform 0.1s;white-space:nowrap;
+    `;
+    btn.textContent = label;
+    btn.onmouseenter = () => { btn.style.filter = 'brightness(1.2)'; btn.style.transform = 'translateY(-1px)'; };
+    btn.onmouseleave = () => { btn.style.filter = ''; btn.style.transform = ''; };
+    return btn;
+}
+
+// ── Reset confirmation (inline, no modal needed) ──
+async function _adminShowResetConfirm(uid, username, btn) {
+    const original = btn.textContent;
+    btn.textContent = '⚠️ Confirm Reset?';
+    btn.style.background = 'rgba(243,156,18,0.35)';
+    btn.style.borderColor = 'rgba(243,156,18,0.8)';
+
+    const cancel = () => {
+        btn.textContent = original;
+        btn.style.background = 'rgba(243,156,18,0.1)';
+        btn.style.borderColor = 'rgba(243,156,18,0.35)';
+        btn.onclick = () => _adminShowResetConfirm(uid, username, btn);
+        document.removeEventListener('click', outsideClick);
+    };
+
+    const outsideClick = (e) => { if (e.target !== btn) { cancel(); } };
+    setTimeout(() => document.addEventListener('click', outsideClick, { once: true }), 10);
+
+    btn.onclick = async () => {
+        document.removeEventListener('click', outsideClick);
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            await _adminResetPlayer(uid, username);
+        } finally {
+            btn.disabled = false;
+            cancel();
+        }
+    };
+}
+
+// ── Delete confirmation modal ──
+function _adminShowDeleteConfirm(uid, username) {
+    const modal = document.getElementById('admin-delete-modal');
+    const nameEl = document.getElementById('admin-delete-name');
+    const confirmBtn = document.getElementById('admin-delete-confirm-btn');
+    const cancelBtn = document.getElementById('admin-delete-cancel-btn');
+    if (!modal || !nameEl || !confirmBtn || !cancelBtn) return;
+
+    nameEl.textContent = username;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // Reset button state
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '🗑️ Yes, Delete Forever';
+    confirmBtn.style.opacity = '1';
+
+    const close = () => {
+        modal.style.display = 'none';
+        // don't reset body overflow — admin panel is still open
+    };
+
+    cancelBtn.onclick = close;
+    modal.onclick = (e) => { if (e.target === modal) close(); };
+
+    confirmBtn.onclick = async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting…';
+        confirmBtn.style.opacity = '0.7';
+        try {
+            await _adminDeletePlayer(uid, username);
+            close();
+        } catch(e) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '🗑️ Yes, Delete Forever';
+            confirmBtn.style.opacity = '1';
+        }
+    };
+}
+
+// ── View panel (full-screen save data explorer) ──
+async function _adminOpenViewPanel(uid, username) {
+    const panel = document.getElementById('admin-view-panel');
+    const titleEl = document.getElementById('admin-view-title');
+    const contentEl = document.getElementById('admin-view-content');
+    if (!panel || !contentEl) return;
+
+    titleEl.textContent = '👁️ ' + username;
+    contentEl.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;">Loading save data…</div>';
+    panel.style.display = 'flex';
+
+    try {
+        const fn = window._fbGetPlayerSave;
+        if (!fn) throw new Error('Firebase not ready');
+        const save = await fn(uid);
+        _renderAdminViewContent(save, contentEl, username, uid);
+    } catch(e) {
+        contentEl.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
+    }
+}
+
+function closeAdminViewPanel() {
+    const panel = document.getElementById('admin-view-panel');
+    if (panel) panel.style.display = 'none';
+}
+
+function _renderAdminViewContent(save, container, username, uid) {
+    if (!save) {
+        container.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">No save data found (new account).</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    // ── Key stats overview ──
+    const overview = document.createElement('div');
+    overview.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:0.6em;margin-bottom:1.2em;';
+    const ovStats = [
+        { label: 'Level',       val: save.level || 1,                      color: '#f1c40f', icon: '🏆' },
+        { label: 'XP',          val: (save.xp || 0).toLocaleString(),       color: '#4ecdc4', icon: '⭐' },
+        { label: 'Diamonds',    val: Math.floor(save.diamonds || 0).toLocaleString(), color: '#a29bfe', icon: '💎' },
+        { label: 'Rolls',       val: (save.rolls || 0).toLocaleString(),    color: '#95a5a6', icon: '🎲' },
+        { label: 'Tokens',      val: (save.tokens || 0) + ' / ' + (save.maxToken || 20), color: '#f39c12', icon: '🪙' },
+        { label: 'Cards',       val: Object.keys(save.collection || {}).length + ' types', color: '#2ecc71', icon: '🎴' },
+    ];
+    ovStats.forEach(s => {
+        const box = document.createElement('div');
+        box.style.cssText = `background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0.7em;text-align:center;`;
+        box.innerHTML = `
+            <div style="font-size:1.2em;">${s.icon}</div>
+            <div style="font-size:0.7em;color:#555;text-transform:uppercase;letter-spacing:0.3px;margin:0.2em 0;">${s.label}</div>
+            <div style="font-weight:bold;color:${s.color};font-size:0.9em;">${s.val}</div>
+        `;
+        overview.appendChild(box);
+    });
+    container.appendChild(overview);
+
+    // ── Sections ──
+    const sections = [
+        {
+            title: '🎴 Collection',
+            color: '#2ecc71',
+            render: () => {
+                const col = save.collection || {};
+                const keys = Object.keys(col).sort((a,b) => col[b] - col[a]);
+                if (!keys.length) return '<em style="color:#555;">Empty collection</em>';
+                return keys.slice(0, 50).map(k =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.3em 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="color:#bdc3c7;font-size:0.88em;">${k}</span>
+                        <span style="color:#2ecc71;font-weight:bold;font-size:0.88em;">×${col[k]}</span>
+                    </div>`
+                ).join('') + (keys.length > 50 ? `<div style="color:#555;font-size:0.8em;margin-top:0.5em;">…and ${keys.length-50} more</div>` : '');
             }
-        };
-
-        const viewBtn = document.createElement('button');
-        viewBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(78,205,196,0.4);background:rgba(78,205,196,0.12);color:#4ecdc4;font-weight:bold;cursor:pointer;font-size:0.88em;';
-        viewBtn.textContent = '👁️ View Save';
-        viewBtn.onclick = () => _adminViewPlayerSave(player.uid, player.username);
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(220,53,69,0.6);background:rgba(220,53,69,0.2);color:#ff6b6b;font-weight:bold;cursor:pointer;font-size:0.88em;';
-        deleteBtn.textContent = '🗑️ Delete';
-        deleteBtn.onclick = () => {
-            if (confirm('⚠️ PERMANENTLY DELETE ' + player.username + '? ALL DATA WILL BE LOST. Are you sure?')) {
-                if (confirm('This is irreversible. Type "DELETE" in the next prompt to confirm.')) {
-                    const confirm2 = prompt('Type DELETE to confirm permanent deletion:');
-                    if (confirm2 === 'DELETE') {
-                        _adminDeletePlayer(player.uid, player.username);
-                    } else {
-                        showCraftMessage('Deletion cancelled.', 'info');
-                    }
-                }
+        },
+        {
+            title: '🧪 Potions',
+            color: '#9b59b6',
+            render: () => {
+                const inv = save.potionInventory || {};
+                const keys = Object.keys(inv);
+                if (!keys.length) return '<em style="color:#555;">No potions</em>';
+                return keys.map(k =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.3em 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="color:#bdc3c7;font-size:0.88em;">${k}</span>
+                        <span style="color:#9b59b6;font-weight:bold;font-size:0.88em;">×${inv[k]}</span>
+                    </div>`
+                ).join('');
             }
+        },
+        {
+            title: '🧲 Artifacts',
+            color: '#f39c12',
+            render: () => {
+                const inv = save.artifactInventory || {};
+                const eq = save.equippedArtifacts || [];
+                let html = '';
+                if (eq.length) html += '<div style="color:#f39c12;font-size:0.8em;margin-bottom:0.4em;">Equipped: ' + eq.map(a => a.name).join(', ') + '</div>';
+                const keys = Object.keys(inv);
+                if (!keys.length && !eq.length) return '<em style="color:#555;">No artifacts</em>';
+                html += keys.map(k =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.3em 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="color:#bdc3c7;font-size:0.88em;">${k}</span>
+                        <span style="color:#f39c12;font-weight:bold;font-size:0.88em;">×${inv[k]} in inventory</span>
+                    </div>`
+                ).join('');
+                return html;
+            }
+        },
+        {
+            title: '⚡ Active Effects',
+            color: '#e74c3c',
+            render: () => {
+                const ae = save.activeEffects || {};
+                const keys = Object.keys(ae);
+                if (!keys.length) return '<em style="color:#555;">No active effects</em>';
+                return keys.map(k => {
+                    const eff = ae[k];
+                    const left = Math.max(0, Math.ceil(((eff.endTime||0) - Date.now()) / 1000));
+                    return `<div style="padding:0.3em 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="color:#e74c3c;font-weight:bold;font-size:0.88em;">${k}</span>
+                        <span style="color:#7f8c8d;font-size:0.8em;margin-left:0.5em;">×${eff.power || '?'} — ${left}s remaining</span>
+                    </div>`;
+                }).join('');
+            }
+        },
+        {
+            title: '📊 Upgrades',
+            color: '#3498db',
+            render: () => {
+                return [
+                    ['Token Speed', save.tokenUpgradeLevel || 0],
+                    ['Max Tokens', save.maxTokenUpgradeLevel || 0],
+                    ['Luck', save.luckUpgradeLevel || 0],
+                    ['Roll Speed', save.rollSpeedUpgradeLevel || 0],
+                    ['XP Boost', save.xpUpgradeLevel || 0],
+                ].map(([name, lvl]) =>
+                    `<div style="display:flex;justify-content:space-between;padding:0.3em 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="color:#bdc3c7;font-size:0.88em;">${name}</span>
+                        <span style="color:#3498db;font-weight:bold;font-size:0.88em;">Lv.${lvl}</span>
+                    </div>`
+                ).join('');
+            }
+        },
+        {
+            title: '🗂️ Raw JSON',
+            color: '#555',
+            render: () => {
+                const json = JSON.stringify(save, null, 2);
+                return `<button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent).then(()=>{this.textContent='✅ Copied!';setTimeout(()=>this.textContent='📋 Copy JSON',1500)})"
+                    style="margin-bottom:0.6em;padding:0.4em 1em;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;cursor:pointer;font-size:0.85em;">📋 Copy JSON</button>
+                    <pre style="font-family:monospace;font-size:0.72em;color:#7f8c8d;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;background:rgba(0,0,0,0.3);padding:0.8em;border-radius:8px;">${json.replace(/</g,'&lt;')}</pre>`;
+            }
+        }
+    ];
+
+    sections.forEach(sec => {
+        const block = document.createElement('div');
+        block.style.cssText = 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:0.8em;overflow:hidden;';
+
+        const titleBar = document.createElement('div');
+        titleBar.style.cssText = `
+            display:flex;align-items:center;justify-content:space-between;
+            padding:0.7em 1em;background:rgba(255,255,255,0.04);
+            border-bottom:1px solid rgba(255,255,255,0.07);cursor:pointer;
+        `;
+        titleBar.innerHTML = `<span style="font-weight:bold;color:${sec.color};font-size:0.95em;">${sec.title}</span>
+            <span id="chevron-${sec.title.replace(/\W/g,'')}" style="color:#555;font-size:0.9em;">▼</span>`;
+
+        const body = document.createElement('div');
+        body.style.cssText = 'padding:0.8em 1em;';
+        body.innerHTML = sec.render();
+
+        let open = true;
+        titleBar.onclick = () => {
+            open = !open;
+            body.style.display = open ? '' : 'none';
+            titleBar.querySelector('span:last-child').textContent = open ? '▼' : '▶';
         };
+        // Collapse raw JSON by default
+        if (sec.title === '🗂️ Raw JSON') {
+            open = false;
+            body.style.display = 'none';
+            titleBar.querySelector('span:last-child').textContent = '▶';
+        }
 
-        btnRow.appendChild(resetBtn);
-        btnRow.appendChild(viewBtn);
-        btnRow.appendChild(deleteBtn);
-
-        row.appendChild(header);
-        row.appendChild(btnRow);
-        listEl.appendChild(row);
+        block.appendChild(titleBar);
+        block.appendChild(body);
+        container.appendChild(block);
     });
 }
 
@@ -7668,28 +7951,18 @@ async function _adminResetPlayer(uid, username) {
     }
 }
 
-async function _adminViewPlayerSave(uid, username) {
-    try {
-        const fn = window._fbGetPlayerSave;
-        if (!fn) throw new Error('Firebase not ready');
-        const save = await fn(uid);
-        // Show in a simple prompt/modal with JSON
-        const json = JSON.stringify(save, null, 2);
-        alert('Save data for ' + username + ':\n\n' + json.slice(0, 500) + (json.length > 500 ? '\n...(truncated)' : ''));
-    } catch(e) {
-        showCraftMessage('View failed: ' + (e.message || e), 'error');
-    }
-}
-
 async function _adminDeletePlayer(uid, username) {
     try {
         const fn = window._fbDeletePlayer;
         if (!fn) throw new Error('Firebase not ready');
         await fn(uid);
         showCraftMessage('Player ' + username + ' has been permanently deleted.', 'success');
-        await loadAdminStats(true);
+        // Remove from cache
+        _adminAllPlayers = _adminAllPlayers.filter(p => p.uid !== uid);
+        _renderAdminPlayerList();
     } catch(e) {
         showCraftMessage('Delete failed: ' + (e.message || e), 'error');
+        throw e;
     }
 }
 
@@ -7700,7 +7973,7 @@ document.addEventListener('keydown', e => {
         if (window._currentUser) {
             openAdminPanel();
         } else {
-            alert('You must be logged in to access admin panel.');
+            showCraftMessage('You must be logged in to access admin panel.', 'error');
         }
     }
 });
