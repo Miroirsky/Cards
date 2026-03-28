@@ -72,7 +72,7 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.8.0</div>
+    <div class="update-text">Update 1.8.1</div>
     <!-- Hidden Admin Access (press Ctrl+Shift+A to show) -->
     <div id="connection-indicator" style="position:fixed;top:24px;left:20px;font-size:0.72em;font-weight:bold;color:#2ecc71;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.35);padding:0.2em 0.7em;border-radius:999px;z-index:1000;">● Online</div>
     <!-- Logged-in user display (clickable) -->
@@ -718,6 +718,10 @@
             <span class="bottom-nav-label">Rewards</span>
             <span id="rewards-badge" style="position:absolute;top:6px;right:10px;background:#f39c12;color:#fff;border-radius:50%;width:16px;height:16px;font-size:0.6em;font-weight:bold;display:none;align-items:center;justify-content:center;line-height:16px;text-align:center;"></span>
         </button>
+        <button class="bottom-nav-btn" id="nav-admin" onclick="openAdminPanel()" style="display:none;">
+            <span class="bottom-nav-icon">⚙️</span>
+            <span class="bottom-nav-label">Admin</span>
+        </button>
     </nav>
 
     <!-- Index Modal -->
@@ -946,7 +950,8 @@
                  addPendingReward, claimRewards as fbClaim, getPendingRewards,
                  claimOneReward, updateRap, getAllRap, getLeaderboard,
                  postOrder, fetchOrders, fetchMyOrders, fillOrder, cancelOrder,
-                 getAllUsersStats, resetPlayerSave, getPlayerSave, setPlayerSave } from './firebase.js';
+                 getAllUsersStats, resetPlayerSave, getPlayerSave, setPlayerSave,
+                 isUserAdmin, deletePlayer } from './firebase.js';
         // Expose market + user + rewards + orders functions for rng.js (non-module script)
         window._fbPostListing       = postListing;
         window._fbFetchListings     = fetchListings;
@@ -968,6 +973,8 @@
         window._fbResetPlayerSave   = resetPlayerSave;
         window._fbGetPlayerSave     = getPlayerSave;
         window._fbSetPlayerSave     = setPlayerSave;
+        window._fbIsUserAdmin       = isUserAdmin;
+        window._fbDeletePlayer      = deletePlayer;
 
         watchAuth(
             (user, cloudData) => {
@@ -979,6 +986,9 @@
 
                 // Signal rng.js that auth is ready and pass the cloud save
                 window._onAuthReady(cloudData?.save || null);
+                
+                // Sync admin button visibility
+                if (window._syncAdminButtonVisibility) window._syncAdminButtonVisibility(user);
             },
             () => {
                 // Not logged in — go to login page

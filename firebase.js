@@ -392,6 +392,7 @@ export async function getAllUsersStats() {
         uid: d.id,
         username: d.data().username || 'Unknown',
         createdAt: d.data().createdAt,
+        admin: d.data().admin === true,
         level: d.data().save?.level || 1,
         diamonds: d.data().save?.diamonds || 0,
         xp: d.data().save?.xp || 0,
@@ -425,4 +426,41 @@ export async function getPlayerSave(uid) {
 
 export async function setPlayerSave(uid, saveData) {
     await setDoc(doc(db, "users", uid), { save: saveData }, { merge: true });
+}
+
+// Check if user is admin
+export async function isUserAdmin(uid) {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return false;
+    return snap.data().admin === true;
+}
+
+// Delete a player completely (account + all data)
+export async function deletePlayer(uid) {
+    // Delete user document
+    await deleteDoc(doc(db, "users", uid));
+    
+    // Delete username mapping
+    const usernameSnap = await getDocs(query(fsCollection(db, "usernames"), where("uid", "==", uid)));
+    for (const docSnap of usernameSnap.docs) {
+        await deleteDoc(doc(db, "usernames", docSnap.id));
+    }
+    
+    // Delete market listings
+    const listingsSnap = await getDocs(query(fsCollection(db, "market"), where("sellerUid", "==", uid)));
+    for (const docSnap of listingsSnap.docs) {
+        await deleteDoc(doc(db, "market", docSnap.id));
+    }
+    
+    // Delete orders
+    const ordersSnap = await getDocs(query(fsCollection(db, "orders"), where("buyerUid", "==", uid)));
+    for (const docSnap of ordersSnap.docs) {
+        await deleteDoc(doc(db, "orders", docSnap.id));
+    }
+    
+    // Delete rewards subcollection
+    const rewardsSnap = await getDocs(fsCollection(db, "rewards", uid, "pending"));
+    for (const docSnap of rewardsSnap.docs) {
+        await deleteDoc(doc(db, "rewards", uid, "pending", docSnap.id));
+    }
 }

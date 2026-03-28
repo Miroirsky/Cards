@@ -7499,16 +7499,55 @@ let _adminPlayersCacheAt = 0;
 const ADMIN_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function openAdminPanel() {
-    // Simple check: only allow specific admin UIDs (you can manually set this)
-    // For now, show to any logged-in user who accesses it
-    document.getElementById('admin-panel').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    loadAdminStats(true);
+    if (!window._currentUser) {
+        showCraftMessage('You must be logged in.', 'error');
+        return;
+    }
+    // Check admin status
+    _checkAdminStatus();
+}
+
+async function _checkAdminStatus() {
+    try {
+        const fn = window._fbIsUserAdmin;
+        if (!fn) throw new Error('Firebase not ready');
+        const isAdmin = await fn(window._currentUser.uid);
+        if (!isAdmin) {
+            showCraftMessage('You do not have admin access.', 'error');
+            return;
+        }
+        document.getElementById('admin-panel').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        loadAdminStats(true);
+    } catch(e) {
+        showCraftMessage('Admin check failed: ' + (e.message || e), 'error');
+    }
 }
 
 function closeAdminPanel() {
     document.getElementById('admin-panel').style.display = 'none';
     document.body.style.overflow = '';
+}
+
+// Sync admin button visibility based on user auth + admin status
+async function _syncAdminButtonVisibility(user) {
+    const btn = document.getElementById('nav-admin');
+    if (!btn) return;
+    if (!user) {
+        btn.style.display = 'none';
+        return;
+    }
+    try {
+        const fn = window._fbIsUserAdmin;
+        if (!fn) {
+            btn.style.display = 'none';
+            return;
+        }
+        const isAdmin = await fn(user.uid);
+        btn.style.display = isAdmin ? 'flex' : 'none';
+    } catch(e) {
+        btn.style.display = 'none';
+    }
 }
 
 async function loadAdminStats(force = false) {
@@ -7575,7 +7614,7 @@ function _renderAdminPlayerList() {
         header.appendChild(stats);
 
         const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:0.5em;';
+        btnRow.style.cssText = 'display:flex;gap:0.5em;flex-wrap:wrap;';
 
         const resetBtn = document.createElement('button');
         resetBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(231,76,60,0.4);background:rgba(231,76,60,0.12);color:#e74c3c;font-weight:bold;cursor:pointer;font-size:0.88em;';
@@ -7591,8 +7630,25 @@ function _renderAdminPlayerList() {
         viewBtn.textContent = '👁️ View Save';
         viewBtn.onclick = () => _adminViewPlayerSave(player.uid, player.username);
 
+        const deleteBtn = document.createElement('button');
+        deleteBtn.style.cssText = 'padding:0.45em 1em;border-radius:8px;border:1px solid rgba(220,53,69,0.6);background:rgba(220,53,69,0.2);color:#ff6b6b;font-weight:bold;cursor:pointer;font-size:0.88em;';
+        deleteBtn.textContent = '🗑️ Delete';
+        deleteBtn.onclick = () => {
+            if (confirm('⚠️ PERMANENTLY DELETE ' + player.username + '? ALL DATA WILL BE LOST. Are you sure?')) {
+                if (confirm('This is irreversible. Type "DELETE" in the next prompt to confirm.')) {
+                    const confirm2 = prompt('Type DELETE to confirm permanent deletion:');
+                    if (confirm2 === 'DELETE') {
+                        _adminDeletePlayer(player.uid, player.username);
+                    } else {
+                        showCraftMessage('Deletion cancelled.', 'info');
+                    }
+                }
+            }
+        };
+
         btnRow.appendChild(resetBtn);
         btnRow.appendChild(viewBtn);
+        btnRow.appendChild(deleteBtn);
 
         row.appendChild(header);
         row.appendChild(btnRow);
@@ -7622,6 +7678,18 @@ async function _adminViewPlayerSave(uid, username) {
         alert('Save data for ' + username + ':\n\n' + json.slice(0, 500) + (json.length > 500 ? '\n...(truncated)' : ''));
     } catch(e) {
         showCraftMessage('View failed: ' + (e.message || e), 'error');
+    }
+}
+
+async function _adminDeletePlayer(uid, username) {
+    try {
+        const fn = window._fbDeletePlayer;
+        if (!fn) throw new Error('Firebase not ready');
+        await fn(uid);
+        showCraftMessage('Player ' + username + ' has been permanently deleted.', 'success');
+        await loadAdminStats(true);
+    } catch(e) {
+        showCraftMessage('Delete failed: ' + (e.message || e), 'error');
     }
 }
 
