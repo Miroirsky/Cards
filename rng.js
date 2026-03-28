@@ -110,6 +110,17 @@ const artifactDefinitions = [
         ],
         craftTime: 60 * 1000 * 2, // 2 minutes
         image: "Artifacts-Icons/Sugar Magnet.png"
+    },
+    {
+        name: "Pity",
+        description: "Each roll adds +1 pity per equipped copy. After the roll, pity drops by √rarity of the card (once per roll, not multiplied by copies). While equipped, luck is multiplied by (1 + pity).",
+        effect: "pity",
+        craft: [
+            { name: "Noob", amount: 25 },
+            { name: "Grass", amount: 15 }
+        ],
+        craftTime: 60 * 1000 * 3, // 3 minutes
+        image: "Artifacts-Icons/Pity.png"
     }
 ];
 
@@ -225,6 +236,7 @@ let xpUpgradeLevel = 0;      // Niveau d'amélioration de gain XP
 
 
 let slotInterval = null;
+let pity = 0; // Pity meter — bonus luck when Pity artifact equipped (luck *= 1 + pity)
 let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2 luck sur les cartes sweet)
 let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
 let obeseEndTime = 0; // End time for the Obese effect (x0.8 roll speed)
@@ -305,6 +317,15 @@ const craftRecipes = [
             { name: "Sugar",      amount: 50 }
         ],
         time: 1000 * 60 * 2,
+        type: "artifact"
+    },
+	{
+        name: "Pity",
+        ingredients: [
+            { name: "Noob", amount: 25 },
+            { name: "Grass", amount: 15 }
+        ],
+        time: 1000 * 60 * 3,
         type: "artifact"
     },
 	{
@@ -969,7 +990,9 @@ function updateActiveEffectsDisplay() {
     const totalRollSpeed  = potionRollSpeed  * upgradeRollSpeed;
     const sugarRushMult   = sugarRushRolls > 0 ? 2 : 1;
     const ventrePleinMult = ventrePleinRolls > 0 ? 1.5 : 1;
-    const totalLuck       = (potionLuckMult  * upgradeLuckMult * sugarRushMult * ventrePleinMult).toFixed(2);
+    const pityEquipped    = getEquippedCount('Pity') > 0;
+    const pityLuckMult    = pityEquipped ? (1 + pity) : 1;
+    const totalLuck       = (potionLuckMult * upgradeLuckMult * sugarRushMult * ventrePleinMult * pityLuckMult).toFixed(2);
     const totalTokenSpeed = (potionTokenSpeed * upgradeTokenSpeed).toFixed(2);
     const realTokenRate   = (parseFloat(upgradeTokenRate) * potionTokenSpeed).toFixed(2);
 
@@ -996,7 +1019,7 @@ function updateActiveEffectsDisplay() {
             <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
                 <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🍀 Luck</div>
                 <div style="color:#3498db;font-weight:bold;">×${totalLuck}</div>
-                <div style="color:#555;font-size:0.75em;">upgrade ×${upgradeLuckMult.toFixed(2)}${potionLuckMult > 1 ? ` · potion ×${potionLuckMult}` : ''}</div>
+                <div style="color:#555;font-size:0.75em;">upgrade ×${upgradeLuckMult.toFixed(2)}${potionLuckMult > 1 ? ` · potion ×${potionLuckMult}` : ''}${pityEquipped ? ` · pity ×${pityLuckMult.toFixed(2)}` : ''}</div>
             </div>
             <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
                 <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🪙 Token Rate</div>
@@ -1177,6 +1200,28 @@ function updateActiveEffectsDisplay() {
         activeEffectsDiv.appendChild(vpDiv);
     }
 
+    // Pity (artifact) — luck × (1 + pity)
+    if (getEquippedCount('Pity') > 0) {
+        hasActiveEffects = true;
+        const pc = getEquippedCount('Pity');
+        const pityMult = 1 + pity;
+        const pityDiv = document.createElement('div');
+        pityDiv.style.cssText = "background:linear-gradient(135deg,#9b59b6,#6c3483);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        pityDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">🎲 Pity</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">Luck ×' + pityMult.toFixed(2) + ' (1 + pity)</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">pity ' + pity.toFixed(1) + '</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">' + pc + ' equipped</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;font-size:0.78em;opacity:0.85;">+1 pity per roll per copy · −√rarity after each roll (once)</div>';
+        activeEffectsDiv.appendChild(pityDiv);
+    }
+
     // Message si aucun effet actif
     if (!hasActiveEffects) {
         const noEffect = document.createElement('div');
@@ -1247,6 +1292,11 @@ function updateRollEffectsIndicator() {
         if (ventrePleinRolls > 0) {
             indicator.appendChild(makeChip('#c0392b', '🍔', '×1.5', ventrePleinRolls + '/10', (ventrePleinRolls/10)*100));
         }
+    }
+    if (getEquippedCount('Pity') > 0) {
+        const mult = (1 + pity).toFixed(2);
+        const pct = Math.min(100, Math.sqrt(Math.max(0, pity)) * 12);
+        indicator.appendChild(makeChip('#6c3483', '🎲', '×' + mult, 'pity ' + pity.toFixed(1), pct));
     }
 }
 
@@ -2018,17 +2068,26 @@ function updateLuck() {
     const sugarRushLuck = sugarRushRolls > 0 ? 2 : 1;
     const ventrePleinLuck = ventrePleinRolls > 0 ? 1.5 : 1;
     luck = potionLuck * upgradeLuck * sugarRushLuck * ventrePleinLuck;
+    if (getEquippedCount('Pity') > 0) {
+        luck *= (1 + pity);
+    }
 }
 
 function rollItem() {
-    updateLuck()
-    updateActiveEffects()
+    updateLuck();
+    updateActiveEffects();
     if (isRolling) return; // Empêche les rolls multiples
     if (tokens <= 0) {
         // Ne rien faire, le bouton est désactivé
         return;
     }
-    
+
+    const pityCount = getEquippedCount('Pity');
+    if (pityCount > 0) {
+        pity += pityCount;
+    }
+    updateLuck();
+
     // Consommer un token
     tokens--;
     updateTokensDisplay();
@@ -2108,6 +2167,10 @@ function rollItem() {
         const type         = chosen.type;
         const chanceDisplay = chosen.chanceDisplay;
         let displayName = selected.name + (type ? ` (${type})` : '');
+
+        if (getEquippedCount('Pity') > 0) {
+            pity = Math.max(0, pity - Math.sqrt(chosen.rarity));
+        }
 
         // XP gain: sqrt(roll chance)
         let xpGain = Math.floor(Math.sqrt(chanceDisplay));
@@ -3025,6 +3088,7 @@ function _buildSaveData() {
         discoveredSpecialTags: [...discoveredSpecialTags],
         sugarRushRolls:       sugarRushRolls,
         bleedingEndTime:      bleedingEndTime,
+        pity:                 pity,
         artifactInventory:    artifactInventory,
         equippedArtifacts:    equippedArtifacts,
         activeEffects:        Object.fromEntries(
@@ -3216,6 +3280,7 @@ function _applyCloudSave(save) {
     xpUpgradeLevel       = Number(save.xpUpgradeLevel)       || 0;
     sugarRushRolls       = Number(save.sugarRushRolls)       || 0;
     bleedingEndTime      = Number(save.bleedingEndTime)      || 0;
+    pity                 = Math.max(0, Math.min(Number(save.pity) || 0, 1e12));
 
     // Derived
     tokenRate = 0.2 + tokenUpgradeLevel * 0.1;
@@ -5514,6 +5579,8 @@ function updateArtifactsUI() {
     const hasAny = Object.keys(artifactInventory).some(k => artifactInventory[k] > 0);
     if (!hasAny) {
         invEl.innerHTML = '<div style="color:#7f8c8d;font-style:italic;text-align:center;padding:1em;">No artifacts in inventory.<br><span style="font-size:0.85em;">Craft them in the Craft menu.</span></div>';
+        updateLuck();
+        updateActiveEffectsDisplay();
         return;
     }
     Object.entries(artifactInventory).forEach(([name, qty]) => {
@@ -5532,6 +5599,8 @@ function updateArtifactsUI() {
         `;
         invEl.appendChild(row);
     });
+    updateLuck();
+    updateActiveEffectsDisplay();
 }
 
 function closeIndexArtifacts() {
