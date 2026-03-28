@@ -17,11 +17,11 @@ const items = [
     { name: "Electricity", chance: 250, rollable: true },
     { name: "Coal", chance: 350, rollable: true, tags: ["ai"] },
     { name: "Hearth", chance: 500, rollable: true },
-    { name: "Lava", chance: 625, rollable: true, tags: ["ai"] },
+    { name: "Lava", chance: 625, rollable: true, tags: ["ai", "hot"] },
     { name: "Evil", chance: 666, rollable: true },
     { name: "Sky", chance: 750, rollable: true },
     { name: "Moon", chance: 999, rollable: true, tags: ["ai"] },
-    { name: "Sun", chance: 999, rollable: true, tags: ["ai"] },
+    { name: "Sun", chance: 999, rollable: true, tags: ["ai", "hot"] },
     { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
     { name: "Spikes", chance: 2000, rollable: false, tags: ["ai", "Sharp"] },
@@ -45,10 +45,10 @@ const items = [
     { name: "Slime", chance: 500000, rollable: true, tags: ["ai"] },
     { name: "Ghost", chance: 750000, rollable: true, tags: ["ai"] },
     { name: "Skeleton", chance: 1000000, rollable: true, tags: ["ai"] },
-    { name: "Magma", chance: 1500000, rollable: true, tags: ["ai"] },
+    { name: "Magma", chance: 1500000, rollable: true, tags: ["ai", "hot"] },
     { name: "Monkey", chance: 2500000, rollable: true, tags: ["ai"] },
     { name: "Uranus", chance: 3500000, rollable: true, tags: ["ai"] },
-    { name: "Fire", chance: 5000000, rollable: true, tags: ["ai"] },
+    { name: "Fire", chance: 5000000, rollable: true, tags: ["ai", "hot"] },
     { name: "Neptune", chance: 6250000, rollable: true, tags: ["ai"] },
     { name: "Water", chance: 7500000, rollable: true, tags: ["ai"] },
     { name: "Rubiks Cube", chance: 8500000, rollable: true, tags: ["ai"] },
@@ -113,7 +113,7 @@ const artifactDefinitions = [
     },
     {
         name: "Pity",
-        description: "Each roll adds +1 pity per equipped copy. After the roll, pity drops by √rarity of the card (once per roll, not multiplied by copies). While equipped, luck is multiplied by (1 + pity).",
+        description: "Each roll adds +1 pity per equipped copy. After the roll, pity drops by rarity^0.2 (once per roll, not multiplied by copies). While equipped, luck is multiplied by (1 + pity).",
         effect: "pity",
         craft: [
             { name: "Noob", amount: 25 },
@@ -192,12 +192,12 @@ const cardsGroupes = [
     { name: "AI",        content: [],                                                                                    color: "rgb(112, 18, 156)" }
 ];
 
-// Auto-populate AI group from item tags
-for (let item of items) {
-    if (item.tags && item.tags.includes('ai') && !cardsGroupes.find(g => g.name === "AI").content.includes(item.name)) {
-        cardsGroupes.find(g => g.name === "AI").content.push(item.name);
+    // Auto-populate AI group from item tags
+    for (let item of items) {
+        if (item.tags && item.tags.includes('ai') && !cardsGroupes.find(g => g.name === "AI").content.includes(item.name)) {
+            cardsGroupes.find(g => g.name === "AI").content.push(item.name);
+        }
     }
-}
 
 
 let collection = {};
@@ -241,6 +241,7 @@ let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2
 let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
 let obeseEndTime = 0; // End time for the Obese effect (x0.8 roll speed)
 let bleedingEndTime = 0; // End time for the Bleeding effect (token loss)
+let hotEndTime = 0; // End time for the Hot effect (x2.5 token + roll speed)
 
 let xp = 0;
 let level = 1;
@@ -989,14 +990,15 @@ function updateActiveEffectsDisplay() {
     const upgradeTokenSpeed = 1 + tokenUpgradeLevel * 0.5;  // chaque niveau = +50% de la base
     const upgradeTokenRate  = (0.2 + tokenUpgradeLevel * 0.2).toFixed(1); // tokens/s réels
 
-    const totalRollSpeed  = potionRollSpeed  * upgradeRollSpeed;
+    const hotMult           = hotEndTime > now ? 2.5 : 1;
+    const totalRollSpeed    = potionRollSpeed  * upgradeRollSpeed * hotMult;
     const sugarRushMult   = sugarRushRolls > 0 ? 2 : 1;
     const ventrePleinMult = ventrePleinRolls > 0 ? 1.5 : 1;
     const pityEquipped    = getEquippedCount('Pity') > 0;
     const pityLuckMult    = pityEquipped ? (1 + pity) : 1;
     const totalLuck       = (potionLuckMult * upgradeLuckMult * sugarRushMult * ventrePleinMult * pityLuckMult).toFixed(2);
-    const totalTokenSpeed = (potionTokenSpeed * upgradeTokenSpeed).toFixed(2);
-    const realTokenRate   = (parseFloat(upgradeTokenRate) * potionTokenSpeed).toFixed(2);
+    const totalTokenSpeed = (potionTokenSpeed * upgradeTokenSpeed * hotMult).toFixed(2);
+    const realTokenRate   = (parseFloat(upgradeTokenRate) * potionTokenSpeed * hotMult).toFixed(2);
 
     // Délai effectif en ms
     const effectiveDelay  = Math.max(50, Math.round(1000 / totalRollSpeed));
@@ -1016,7 +1018,7 @@ function updateActiveEffectsDisplay() {
                 <div style="color:#27ae60;font-weight:bold;">×${totalRollSpeed}
                     <span style="color:#555;font-size:0.8em;font-weight:normal;">(${effectiveDelay}ms)</span>
                 </div>
-                <div style="color:#555;font-size:0.75em;">base ×${upgradeRollSpeed}${potionRollSpeed > 1 ? ` · potion ×${potionRollSpeed}` : ''}</div>
+                <div style="color:#555;font-size:0.75em;">base ×${upgradeRollSpeed}${potionRollSpeed > 1 ? ` · potion ×${potionRollSpeed}` : ''}${hotMult > 1 ? ` · hot ×2.5` : ''}</div>
             </div>
             <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
                 <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🍀 Luck</div>
@@ -1026,7 +1028,7 @@ function updateActiveEffectsDisplay() {
             <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
                 <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">🪙 Token Rate</div>
                 <div style="color:#f39c12;font-weight:bold;">${realTokenRate}/s</div>
-                <div style="color:#555;font-size:0.75em;">base ${upgradeTokenRate}/s${potionTokenSpeed > 1 ? ` · potion ×${potionTokenSpeed}` : ''}</div>
+                <div style="color:#555;font-size:0.75em;">base ${upgradeTokenRate}/s${potionTokenSpeed > 1 ? ` · potion ×${potionTokenSpeed}` : ''}${hotMult > 1 ? ` · hot ×2.5` : ''}</div>
             </div>
             <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:0.4em 0.6em;">
                 <div style="color:#7f8c8d;font-size:0.78em;text-transform:uppercase;letter-spacing:0.4px;">📦 Max Tokens</div>
@@ -1040,9 +1042,33 @@ function updateActiveEffectsDisplay() {
     // ── Effets actifs ──
     let hasActiveEffects = false;
 
-    // Effet Obese
-    if (obeseEndTime > now) {
+    // Effet Hot
+    if (hotEndTime > now) {
         hasActiveEffects = true;
+        const timeLeft = hotEndTime - now;
+        const totalDuration = 10 * 60 * 1000;
+        const pct = (timeLeft / totalDuration) * 100;
+        const hotDiv = document.createElement('div');
+        hotDiv.style.cssText = "background:linear-gradient(135deg,#e67e22,#e74c3c);color:white;padding:0.8em;border-radius:8px;margin-bottom:0.5em;";
+        hotDiv.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div>' +
+                    '<div style="font-weight:bold;">🔥 Hot</div>' +
+                    '<div style="font-size:0.8em;opacity:0.9;">Roll Speed & Token Rate ×2.5</div>' +
+                '</div>' +
+                '<div style="text-align:right;">' +
+                    '<div style="font-size:0.9em;font-weight:bold;">' + Math.ceil(timeLeft / 60000) + 'min left</div>' +
+                    '<div style="font-size:0.75em;opacity:0.75;">' + Math.floor((hotEndTime - Date.now())/1000) + 's remaining</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.5em;background:rgba(0,0,0,0.25);border-radius:999px;height:6px;overflow:hidden;">' +
+                '<div style="width:' + Math.max(0,Math.min(100,pct)) + '%;height:100%;background:rgba(255,255,255,0.85);border-radius:999px;transition:width 0.3s;"></div>' +
+            '</div>';
+        activeEffectsDiv.appendChild(hotDiv);
+    }
+
+    // Effet Obese
+    if (obeseEndTime > now) {        hasActiveEffects = true;
         const timeLeft = obeseEndTime - now;
         const totalDuration = 60000;
         const pct = (timeLeft / totalDuration) * 100;
@@ -1300,6 +1326,11 @@ function updateRollEffectsIndicator() {
         const pct = Math.min(100, Math.sqrt(Math.max(0, pity)) * 12);
         indicator.appendChild(makeChip('#6c3483', '🎲', '×' + mult, 'pity ' + pity.toFixed(1), pct));
     }
+    if (hotEndTime > now) {
+        const timeLeft = hotEndTime - now;
+        const pct = Math.min(100, (timeLeft / (10 * 60 * 1000)) * 100);
+        indicator.appendChild(makeChip('#e67e22', '🔥', '×2.5', Math.ceil(timeLeft/60000) + 'min', pct));
+    }
 }
 
 // ═══════════════════════════════════════════════
@@ -1388,8 +1419,9 @@ function updateRollEffectsIndicator() {
         const isObese    = obeseEndTime    > now;
         const isBleeding = bleedingEndTime > now;
         const isFullBelly = !isObese && ventrePleinRolls > 0;
+        const isHot      = hotEndTime > now;
 
-        if (!isObese && !isFullBelly && !isBleeding) {
+        if (!isObese && !isFullBelly && !isBleeding && !isHot) {
             if (borderDiv) { borderDiv.remove(); borderDiv = null; }
             return;
         }
@@ -1404,11 +1436,14 @@ function updateRollEffectsIndicator() {
             const alpha = 0.25 + pct * 0.25;
             borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(192,57,43,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(192,57,43,${(alpha*0.5).toFixed(2)})`;
         } else if (isBleeding) {
-            // Pulsing red glow — faster pulse as time runs out
             const pct = Math.max(0, (bleedingEndTime - now) / 60000);
-            const pulse = 0.5 + 0.5 * Math.sin(now / (200 + pct * 300)); // faster near end
+            const pulse = 0.5 + 0.5 * Math.sin(now / (200 + pct * 300));
             const alpha = (0.2 + pct * 0.2) * (0.7 + 0.3 * pulse);
             borderDiv.style.boxShadow = `inset 0 0 80px 30px rgba(180,0,0,${alpha.toFixed(2)}), inset 0 0 160px 60px rgba(120,0,0,${(alpha*0.4).toFixed(2)})`;
+        } else if (isHot) {
+            const pulse = 0.5 + 0.5 * Math.sin(now / 600);
+            const alpha = (0.18 + 0.12 * pulse);
+            borderDiv.style.boxShadow = `inset 0 0 60px 20px rgba(230,126,34,${alpha.toFixed(2)}), inset 0 0 120px 40px rgba(231,76,60,${(alpha*0.5).toFixed(2)})`;
         } else if (isFullBelly) {
             const pct = ventrePleinRolls / 10;
             const alpha = 0.18 + pct * 0.22;
@@ -1659,6 +1694,12 @@ function updateActiveEffects() {
         rollSpeedMultiplier *= 0.8;
     }
 
+    // Hot gives ×2.5 roll speed and token rate
+    if (hotEndTime > now) {
+        rollSpeedMultiplier *= 2.5;
+        tokenSpeedMultiplier *= 2.5;
+    }
+
     rollDelay = Math.max(50, 1000 / rollSpeedMultiplier);
     luck = luckMultiplier;
     tokenRate = (0.2 + tokenUpgradeLevel * 0.1) * tokenSpeedMultiplier;
@@ -1722,8 +1763,15 @@ function getSharpTag(item) {
     return '';
 }
 
+function getHotTag(item) {
+    if (item && Array.isArray(item.tags) && item.tags.includes('hot')) {
+        return '<span class="rarity-tag rarity-hot">🔥 Hot</span>';
+    }
+    return '';
+}
+
 function getSpecialTags(item) {
-    return getSweetTag(item) + getCaloricTag(item) + getAiTag(item) + getSharpTag(item);
+    return getSweetTag(item) + getCaloricTag(item) + getAiTag(item) + getSharpTag(item) + getHotTag(item);
 }
 
 
@@ -2171,7 +2219,7 @@ function rollItem() {
         let displayName = selected.name + (type ? ` (${type})` : '');
 
         if (getEquippedCount('Pity') > 0) {
-            pity = Math.max(0, pity - Math.sqrt(chosen.rarity));
+            pity = Math.max(0, pity - Math.pow(chosen.rarity, 0.2));
         }
 
         // XP gain: sqrt(roll chance)
@@ -2226,7 +2274,7 @@ function rollItem() {
         // Track discovered special tags from the rolled card
         if (Array.isArray(selected.tags)) {
             for (const t of selected.tags) {
-                if (['sweet','caloric','Sharp','ai'].includes(t)) {
+                if (['sweet','caloric','Sharp','ai','hot'].includes(t)) {
                     discoveredSpecialTags.add(t.toLowerCase());
                 }
             }
@@ -2298,6 +2346,19 @@ function rollItem() {
                 showCraftMessage(`🩸 Bleeding! Losing tokens for 60s`, "error");
                 updateActiveEffects();
             }
+        }
+
+        // ── Hot ──
+        const rolledIsHot = Array.isArray(selected.tags) && selected.tags.includes('hot');
+
+        if (rolledIsHot) {
+            const addedMs = 10 * 60 * 1000; // +10 minutes
+            hotEndTime = Math.max(Date.now(), hotEndTime) + addedMs;
+            discoveredEffects.add('hot');
+            discoveredSpecialTags.add('hot');
+            const minsLeft = Math.ceil((hotEndTime - Date.now()) / 60000);
+            showCraftMessage(`🔥 Hot! ×2.5 Roll Speed & Tokens for ${minsLeft}min`, "success");
+            updateActiveEffects();
         }
 
         updateLuck();
@@ -3090,6 +3151,7 @@ function _buildSaveData() {
         discoveredSpecialTags: [...discoveredSpecialTags],
         sugarRushRolls:       sugarRushRolls,
         bleedingEndTime:      bleedingEndTime,
+        hotEndTime:           hotEndTime,
         pity:                 pity,
         artifactInventory:    artifactInventory,
         equippedArtifacts:    equippedArtifacts,
@@ -3282,6 +3344,7 @@ function _applyCloudSave(save) {
     xpUpgradeLevel       = Number(save.xpUpgradeLevel)       || 0;
     sugarRushRolls       = Number(save.sugarRushRolls)       || 0;
     bleedingEndTime      = Number(save.bleedingEndTime)      || 0;
+    hotEndTime           = Number(save.hotEndTime)           || 0;
     pity                 = Math.max(0, Math.min(Number(save.pity) || 0, 1e12));
 
     // Derived
@@ -4150,6 +4213,7 @@ if (resetBtn) {
             xpNext = 50;
             obeseEndTime = 0;
             bleedingEndTime = 0;
+            hotEndTime = 0;
             stopBleeding();
             updateTokensDisplay();
             updateDiamondsDisplay();
@@ -5215,6 +5279,69 @@ function renderIndexSpecialTags() {
     `;
     list.appendChild(aiCard);
     } // end ai section
+
+    // ── Hot card ──
+    if (!discoveredSpecialTags.has('hot')) {
+        // Not yet discovered
+    } else {
+    const hotItems = items.filter(i => Array.isArray(i.tags) && i.tags.includes('hot'));
+    const hotCard = document.createElement('div');
+    hotCard.style.cssText = 'background:rgba(230,126,34,0.08);border:1.5px solid rgba(230,126,34,0.4);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+    hotCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🔥</span>
+            <div>
+                <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Hot</div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Special property — triggers the Hot effect</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Effect</div>
+            <div style="color:#fff;line-height:1.5;">When a <span style="color:#e67e22;font-weight:bold;">Hot</span> card is rolled, it adds <span style="color:#f39c12;font-weight:bold;">+10 minutes</span> to the <span style="color:#e67e22;font-weight:bold;">Hot</span> effect (cumulative — no cap). While active, both <b>Roll Speed</b> and <b>Token Rate</b> are multiplied by <span style="color:#e74c3c;font-weight:bold;">×2.5</span>.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Chance table</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Trigger</div><div style="color:#f39c12;font-weight:bold;">Always (100%)</div>
+                <div style="color:#7f8c8d;">Duration added</div><div style="color:#fff;font-weight:bold;">+10 minutes</div>
+                <div style="color:#7f8c8d;">Stacks?</div><div style="color:#2ecc71;font-weight:bold;">Yes (cumulative)</div>
+                <div style="color:#7f8c8d;">Roll Speed bonus</div><div style="color:#e74c3c;font-weight:bold;">×2.5</div>
+                <div style="color:#7f8c8d;">Token Rate bonus</div><div style="color:#f39c12;font-weight:bold;">×2.5</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Cards with Hot tag</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${hotItems.map(item => {
+                    const owned = (collection[item.name] || 0) + (collection[item.name + ' (Gold)'] || 0) + (collection[item.name + ' (Rainbow)'] || 0) + (collection[item.name + ' (Shiny)'] || 0) + (collection[item.name + ' (Nuclear)'] || 0);
+                    const safeName = item.name.replace(/'/g, "\\'");
+                    return '<div onclick="openIndexCardDetail(\'' + safeName + '\');closeIndexSpecialTags();" style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.3);border-radius:8px;padding:0.4em 0.7em;display:flex;align-items:center;gap:0.5em;cursor:pointer;">'
+                        + '<img src="' + getCardImageSrc(item) + '" style="width:22px;height:22px;object-fit:cover;border-radius:4px;">'
+                        + '<span style="color:#fff;font-size:0.88em;">' + item.name + '</span>'
+                        + '<span style="color:#7f8c8d;font-size:0.78em;">×' + owned + '</span>'
+                        + '<span style="color:#e67e22;font-size:0.75em;">1 in ' + item.chance + '</span>'
+                        + '</div>';
+                }).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related effect</div>
+            <div onclick="closeIndexSpecialTags();openIndexSection('effects');" style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.3);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🔥</span>
+                <div>
+                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Hot</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">×2.5 Roll Speed & Token Rate · time-based</div>
+                </div>
+                <span style="margin-left:auto;color:#e67e22;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(hotCard);
+    } // end hot section
 }
 
 function renderIndexEffects() {
@@ -5470,6 +5597,70 @@ function renderIndexEffects() {
     `;
     list.appendChild(bleedingCard);
     } // end bleeding section
+
+    // ── Hot ──
+    if (!discoveredEffects.has('hot')) {
+        // not discovered
+    } else {
+    const hotItems2 = items.filter(i => Array.isArray(i.tags) && i.tags.includes('hot'));
+    const hotEffectCard = document.createElement('div');
+    hotEffectCard.style.cssText = 'background:rgba(230,126,34,0.08);border:1.5px solid rgba(230,126,34,0.35);border-radius:14px;padding:1.2em;display:flex;flex-direction:column;gap:0.8em;';
+
+    const hotNow = hotEndTime > Date.now();
+    const hotMinsLeft = hotNow ? Math.ceil((hotEndTime - Date.now()) / 60000) : 0;
+    hotEffectCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.8em;">
+            <span style="font-size:2.2em;">🔥</span>
+            <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:0.5em;">
+                    <div style="font-weight:bold;font-size:1.15em;color:#e67e22;">Hot</div>
+                    ${hotNow ? `<span style="background:#e67e22;color:#fff;font-size:0.7em;font-weight:bold;border-radius:6px;padding:2px 8px;">ACTIVE · ${hotMinsLeft}min</span>` : '<span style="background:rgba(255,255,255,0.08);color:#7f8c8d;font-size:0.7em;border-radius:6px;padding:2px 8px;">INACTIVE</span>'}
+                </div>
+                <div style="font-size:0.82em;color:#7f8c8d;">Time-based passive buff</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;font-size:0.88em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">What it does</div>
+            <div style="color:#fff;line-height:1.5;">Multiplies both <span style="color:#e74c3c;font-weight:bold;">Roll Speed</span> and <span style="color:#f39c12;font-weight:bold;">Token Rate</span> by <b>×2.5</b> for the duration. Rolling additional Hot cards stacks the timer cumulatively — there is no cap.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.6em;">Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5em;font-size:0.85em;">
+                <div style="color:#7f8c8d;">Roll Speed bonus</div><div style="color:#e74c3c;font-weight:bold;">×2.5</div>
+                <div style="color:#7f8c8d;">Token Rate bonus</div><div style="color:#f39c12;font-weight:bold;">×2.5</div>
+                <div style="color:#7f8c8d;">Duration per trigger</div><div style="color:#fff;font-weight:bold;">+10 minutes</div>
+                <div style="color:#7f8c8d;">Stacks?</div><div style="color:#2ecc71;font-weight:bold;">Yes, cumulative</div>
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">How to obtain</div>
+            <div style="font-size:0.85em;color:#fff;margin-bottom:0.6em;">Roll any card with the <span style="color:#e67e22;font-weight:bold;">🔥 Hot</span> tag. Always triggers — adds +10 minutes each time.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5em;">
+                ${hotItems2.map(item => `<div onclick="closeIndexEffects();openIndexCardDetail('${item.name.replace(/'/g,"\'")}');" style="background:rgba(230,126,34,0.12);border:1px solid rgba(230,126,34,0.25);border-radius:8px;padding:0.35em 0.7em;display:flex;align-items:center;gap:0.4em;cursor:pointer;">
+                    <img src="${getCardImageSrc(item)}" style="width:20px;height:20px;object-fit:cover;border-radius:3px;">
+                    <span style="color:#e67e22;font-size:0.85em;font-weight:bold;">${item.name}</span>
+                    <span style="color:#7f8c8d;font-size:0.78em;">1 in ${item.chance.toLocaleString()}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:0.8em 1em;">
+            <div style="color:#7f8c8d;font-size:0.75em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5em;">Related special tag</div>
+            <div onclick="closeIndexEffects();openIndexSection('specialtags');" style="background:rgba(230,126,34,0.1);border:1px solid rgba(230,126,34,0.25);border-radius:8px;padding:0.5em 0.9em;display:flex;align-items:center;gap:0.6em;cursor:pointer;">
+                <span style="font-size:1.3em;">🔥</span>
+                <div>
+                    <div style="font-weight:bold;color:#e67e22;font-size:0.9em;">Hot</div>
+                    <div style="font-size:0.75em;color:#7f8c8d;">Special tag — triggers Hot buff</div>
+                </div>
+                <span style="margin-left:auto;color:#e67e22;">›</span>
+            </div>
+        </div>
+    `;
+    list.appendChild(hotEffectCard);
+    } // end hot effect section
 }
 
 // ===== INDEX: UNLOCKS =====

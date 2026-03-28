@@ -767,6 +767,19 @@ body.rarity-tags-onclick .card-inventory:active .rarity-tag-container.rarity-fro
     text-shadow: 0 0 2px #222, 0 0 6px #b0c4de;
 }
 
+.rarity-hot {
+    background: linear-gradient(45deg, #e67e22, #e74c3c);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(230,126,34,0.7);
+    border: 1px solid #e74c3c;
+    animation: hot-glow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes hot-glow {
+    from { box-shadow: 0 0 6px rgba(230,126,34,0.6), 0 0 12px rgba(231,76,60,0.3); }
+    to   { box-shadow: 0 0 14px rgba(230,126,34,1),  0 0 24px rgba(231,76,60,0.6); }
+}
+
 .roll-btn.bleeding {
     box-shadow: 0 0 18px rgba(231, 76, 60, 0.8);
     animation: bleedPulse 1s ease-in-out infinite alternate;
