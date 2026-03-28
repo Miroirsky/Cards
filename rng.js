@@ -4306,13 +4306,14 @@ function createAutoRollButton() {
                 return;
             }
             rollItem();
-            setTimeout(() => {
-                if (isRolling) {
-                    setTimeout(doAutoRoll, rollDelay);
-                } else {
-                    doAutoRoll();
-                }
-            }, rollDelay + 50);
+            // Poll until rollItem() finishes, then immediately fire the next roll.
+            // rollItem() already handles its own rollDelay internally, so we don't
+            // add any extra wait here — that was doubling the effective delay.
+            (function waitForRoll() {
+                if (!autoRolling) { doAutoRoll(); return; }
+                if (isRolling) { setTimeout(waitForRoll, 50); return; }
+                doAutoRoll();
+            })();
         }
         doAutoRoll();
         // Stop auto roll si on reclique
