@@ -69,8 +69,20 @@ export async function deletePlayer(uid) {
     snap.forEach(async (d) => await deleteDoc(doc(db, "usernames", d.id)));
 }
 
+export async function testConnection() {
+    try {
+        const q = query(fsCollection(db, "rap"), limit(1));
+        await getDocs(q);
+        return true;
+    } catch (e) {
+        console.warn("Firebase connection test failed:", e);
+        return false;
+    }
+}
+
 // Attach to window for rng.js access
 window._fbGetPlayerSave = getPlayerSave;
 window._fbSetPlayerSave = setPlayerSave;
 window._fbIsAdmin = isUserAdmin;
 window._fbDeletePlayer = deletePlayer;
+window._fbTestConnection = testConnection;
