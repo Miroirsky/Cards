@@ -2132,10 +2132,6 @@ function rollItem() {
         return;
     }
 
-    const pityCount = getEquippedCount('Pity');
-    if (pityCount > 0) {
-        pity = parseFloat((pity + pityCount).toFixed(4));
-    }
     updateLuck();
 
     // Consommer un token
@@ -2219,6 +2215,7 @@ function rollItem() {
         let displayName = selected.name + (type ? ` (${type})` : '');
 
         if (getEquippedCount('Pity') > 0) {
+            pity = parseFloat((pity + getEquippedCount('Pity')).toFixed(4));
             pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.2)).toFixed(4));
         }
 
