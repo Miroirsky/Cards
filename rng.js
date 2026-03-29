@@ -8,23 +8,26 @@ const items = [
     { name: "Snow Mountains", chance: 15, rollable: true },
     { name: "Sugar Cube", chance: 20, rollable: true, tags: ["ai", "sweet"] },
     { name: "Sword", chance: 25, rollable: true, tags: ["Sharp"] },
+    { name: "Pasta", chance: 30, rollable: true, tags: ["ai", "caloric"] },
     { name: "Overworld", chance: 35, rollable: true },
     { name: "Mars", chance: 50, rollable: true },
+    { name: "Balls", chance: 65, rollable: true },
+    { name: "Poke Balls", chance: 65000, rollable: false },
     { name: "Bones", chance: 75, rollable: true },
     { name: "Earth", chance: 100, rollable: true },
     { name: "Ice Spikes", chance: 150, rollable: true, tags: ["Sharp"] },
     { name: "Apple", chance: 200, rollable: true },
     { name: "Electricity", chance: 250, rollable: true },
-    { name: "Coal", chance: 350, rollable: true, tags: ["ai"] },
+    { name: "Coal", chance: 350, rollable: true },
     { name: "Hearth", chance: 500, rollable: true },
     { name: "Lava", chance: 625, rollable: true, tags: ["ai", "hot"] },
     { name: "Evil", chance: 666, rollable: true },
     { name: "Sky", chance: 750, rollable: true },
-    { name: "Moon", chance: 999, rollable: true, tags: ["ai"] },
-    { name: "Sun", chance: 999, rollable: true, tags: ["ai", "hot"] },
+    { name: "Moon", chance: 999, rollable: true },
+    { name: "Sun", chance: 999, rollable: true, tags: ["hot"] },
     { name: "Tacos", chance: 1000, rollable: true, tags: ["caloric"] },
     { name: "Gun", chance: 1500, rollable: true },
-    { name: "Spikes", chance: 2000, rollable: false, tags: ["ai", "Sharp"] },
+    { name: "Spikes", chance: 2000, rollable: false, tags: ["Sharp"] },
     { name: "Ugly", chance: 2500, rollable: true },
     { name: "Cute", chance: 2500, rollable: true },
     { name: "Zombie", chance: 3500, rollable: true, tags: ["ai"] },
@@ -46,14 +49,20 @@ const items = [
     { name: "Ghost", chance: 750000, rollable: true, tags: ["ai"] },
     { name: "Skeleton", chance: 1000000, rollable: true, tags: ["ai"] },
     { name: "Magma", chance: 1500000, rollable: true, tags: ["ai", "hot"] },
+    { name: "Star", chance: 2000000, rollable: true },
+    { name: "Star Platnium", chance: 100000000, rollable: false },
     { name: "Monkey", chance: 2500000, rollable: true, tags: ["ai"] },
     { name: "Uranus", chance: 3500000, rollable: true, tags: ["ai"] },
     { name: "Fire", chance: 5000000, rollable: true, tags: ["ai", "hot"] },
     { name: "Neptune", chance: 6250000, rollable: true, tags: ["ai"] },
     { name: "Water", chance: 7500000, rollable: true, tags: ["ai"] },
+    { name: "Cards Up", chance: 7869319, rollable: true },
     { name: "Rubiks Cube", chance: 8500000, rollable: true, tags: ["ai"] },
     { name: "Empty Glass", chance: 10000000, rollable: true, tags: ["ai"] },
     { name: "Iron", chance: 15000000, rollable: true, tags: ["ai"] },
+    { name: "Desert", chance: 20000000, rollable: true, tags: ["ai"] },
+    { name: "River", chance: 25000000, rollable: true, tags: ["ai"] },
+    { name: "Crystal", chance: 1000000000, rollable: true },
     { name: "Iceberg", chance: 15000, rollable: false },
     { name: "Water Glass", chance: 17500000, rollable: false, tags: ["ai"] },
     { name: "Cards Circus", chance: 25000, rollable: false },
@@ -97,6 +106,125 @@ const potions = [
         effectType: "time" // Effet basé sur le temps
     }
 ];
+
+// ===== MUSIC SYSTEM =====
+const musicTracks = [
+    "Musics/Sanstitre9juin20251019.mp3",
+    "Musics/IMG_2449.mp3",
+    "Musics/Sanstitre10juin20251715.mp3",
+    "Musics/Sanstitre10juin20251744.mp3",
+];
+
+let _musicCurrentIndex = -1;
+let _musicAudio = null;
+let _musicVolume = parseFloat(localStorage.getItem('music-volume') ?? '0.4');
+let _musicEnabled = localStorage.getItem('music-enabled') !== 'false';
+
+function _musicGetTrackName(path) {
+    const file = path.split('/').pop().replace(/\.[^.]+$/, '');
+    return file || path;
+}
+
+function _musicPickNext() {
+    if (musicTracks.length === 0) return -1;
+    if (musicTracks.length === 1) return 0;
+    let next;
+    do { next = Math.floor(Math.random() * musicTracks.length); }
+    while (next === _musicCurrentIndex);
+    return next;
+}
+
+function _musicPlay(index) {
+    if (!_musicEnabled) return;
+    if (index < 0 || index >= musicTracks.length) return;
+    if (_musicAudio) {
+        _musicAudio.pause();
+        _musicAudio.onended = null;
+        _musicAudio.onerror = null;
+    }
+    _musicCurrentIndex = index;
+    _musicAudio = new Audio(musicTracks[index]);
+    _musicAudio.volume = _musicVolume;
+    _musicAudio.onended = () => _musicPlay(_musicPickNext());
+    _musicAudio.onerror = () => {
+        // Track not found — skip to next
+        setTimeout(() => _musicPlay(_musicPickNext()), 500);
+    };
+    _musicAudio.play().catch(() => {});
+    _musicUpdateWidget();
+}
+
+function _musicSkip() {
+    _musicPlay(_musicPickNext());
+}
+
+function _musicToggle() {
+    _musicEnabled = !_musicEnabled;
+    localStorage.setItem('music-enabled', _musicEnabled);
+    if (_musicEnabled) {
+        _musicPlay(_musicCurrentIndex >= 0 ? _musicCurrentIndex : _musicPickNext());
+    } else {
+        if (_musicAudio) { _musicAudio.pause(); }
+    }
+    _musicUpdateWidget();
+    _musicSyncSettingsUI();
+}
+
+function _musicSetVolume(v) {
+    _musicVolume = Math.max(0, Math.min(1, parseFloat(v)));
+    localStorage.setItem('music-volume', _musicVolume);
+    if (_musicAudio) _musicAudio.volume = _musicVolume;
+    _musicUpdateWidget();
+}
+
+function _musicStart() {
+    // Only start on first user interaction (browser autoplay policy)
+    if (_musicEnabled && (!_musicAudio || _musicAudio.paused)) {
+        _musicPlay(_musicPickNext());
+    }
+}
+
+function _musicUpdateWidget() {
+    const widget = document.getElementById('music-widget');
+    if (!widget) return;
+    const trackName = _musicCurrentIndex >= 0
+        ? _musicGetTrackName(musicTracks[_musicCurrentIndex])
+        : 'No track';
+    const isPlaying = _musicEnabled && _musicAudio && !_musicAudio.paused;
+
+    widget.innerHTML = `
+        <button onclick="_musicToggle()" title="${isPlaying ? 'Pause' : 'Play'}" style="
+            background:none;border:none;color:${isPlaying ? '#4ecdc4' : '#7f8c8d'};
+            font-size:1.1em;cursor:pointer;padding:0;line-height:1;flex-shrink:0;
+        ">${isPlaying ? '🎵' : '🔇'}</button>
+        <div style="flex:1;min-width:0;overflow:hidden;">
+            <div style="font-size:0.68em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.4px;line-height:1;">Now playing</div>
+            <div id="music-track-name" style="font-size:0.78em;color:${isPlaying ? '#fff' : '#555'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:bold;line-height:1.3;">${isPlaying ? trackName : 'Music off'}</div>
+        </div>
+        <button onclick="_musicSkip()" title="Next track" style="
+            background:none;border:none;color:#7f8c8d;font-size:1em;cursor:pointer;padding:0;line-height:1;flex-shrink:0;
+            transition:color 0.15s;
+        " onmouseenter="this.style.color='#4ecdc4'" onmouseleave="this.style.color='#7f8c8d'">⏭</button>
+    `;
+}
+
+function _musicSyncSettingsUI() {
+    const toggle = document.getElementById('music-toggle-btn');
+    const slider = document.getElementById('music-volume-slider');
+    if (toggle) {
+        toggle.textContent  = _musicEnabled ? 'ON' : 'OFF';
+        toggle.style.background = _musicEnabled ? 'linear-gradient(90deg,#4ecdc4,#2ecc71)' : 'rgba(127,140,141,0.3)';
+        toggle.style.color      = _musicEnabled ? '#fff' : '#7f8c8d';
+    }
+    if (slider) slider.value = _musicVolume;
+}
+
+// Auto-start on first interaction
+(function _attachMusicAutostart() {
+    const _start = () => { _musicStart(); document.removeEventListener('click', _start); document.removeEventListener('keydown', _start); };
+    document.addEventListener('click', _start, { once: true });
+    document.addEventListener('keydown', _start, { once: true });
+})();
 
 // ===== ARTIFACTS =====
 const artifactDefinitions = [
@@ -165,15 +293,15 @@ function unequipArtifact(index) {
 
 const cardsGroupes = [
     // ── Nature & Vegetation ──
-    { name: "Nature",    content: ["Grass", "Bush", "Tree", "Apple", "Wood"],                                           color: "rgb(34, 110, 46)" },
+    { name: "Nature",    content: ["Apple", "Tree", "Bush", "Grass", "Wood"],                                           color: "rgb(34, 110, 46)" },
     // ── Biomes & Environments ──
-    { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg", "Sugar", "Sugar Cube"],                 color: "rgb(78, 140, 160)" },
+    { name: "Biomes",    content: ["Beach", "Snow Mountains", "Overworld", "Sky", "Clouds", "Iceberg", "Crystal"],                 color: "rgb(78, 140, 160)" },
     // ── Food & Sweets ──
-    { name: "Food",      content: ["Sugar", "Sugar Cube", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
+    { name: "Food",      content: ["Pasta", "Sugar", "Sugar Cube", "Burger", "Tacos", "Nars", "Apple"],                                        color: "rgb(210, 160, 40)" },
     // ── Space & Celestial ──
-    { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus", "Neptune"],                                color: "rgb(20, 30, 80)" },
+    { name: "Space",     content: ["Mars", "Earth", "Moon", "Sun", "Uranus", "Infinity", "Star"],                                color: "rgb(20, 30, 80)" },
     // ── Weapons ──
-    { name: "Weapons",   content: ["Sword", "Gun"],                                                                     color: "rgb(60, 60, 60)" },
+    { name: "Weapons",   content: ["Sword", "Gun", "Spikes"],                                                                     color: "rgb(60, 60, 60)" },
     // ── Energy & Elements ──
     { name: "Energy",    content: ["Electricity", "Thunder", "Fire", "Lava", "Magma", "Time"],                          color: "rgb(230, 200, 30)" },
     // ── Elements ──
@@ -311,7 +439,7 @@ const craftRecipes = [
             { name: "Circus", amount: 1 },
             { name: "Cards", amount: 2 }
         ],
-        time: 1000 * 45,
+        time: 1000 * 60 * 1.5,
     },
 	{
         name: "Sugar Magnet",
@@ -330,7 +458,7 @@ const craftRecipes = [
             { name: "Pierced Hearth", amount: 5 },
             { name: "Iceberg", amount: 2 }
         ],
-        time: 1000 * 60 * 3,
+        time: 1000 * 60 * 5,
         type: "artifact"
     },
 	{
@@ -346,7 +474,7 @@ const craftRecipes = [
         ingredients: [
             { name: "Ice Spikes", amount: 100 }
         ],
-        time: 1000 * 60,
+        time: 1000 * 60 * 3,
     },
 	{
         name: "Water Glass",
@@ -354,24 +482,38 @@ const craftRecipes = [
             { name: "Empty Glass", amount: 1 },
             { name: "Water", amount: 1 }
         ],
-        time: 1000 * 60,
+        time: 1000 * 60 * 3,
     },
 	{
         name: "Sugar Cube",
         ingredients: [
             { name: "Sugar", amount: 7 }
         ],
-        time: 1000 * 30,
+        time: 1000 * 20,
     },
 	{
         name: "Sugar",
         ingredients: [
             { name: "Sugar Cube", amount: 1 }
         ],
-        time: 1000 * 30,
+        time: 1000 * 20,
         rewards: [
             { name: "Sugar", amount: 5 }
         ]
+    },
+	{
+        name: "Star Platnium",
+        ingredients: [
+            { name: "Star", amount: 50 }
+        ],
+        time: 1000 * 60 * 3,
+    },
+	{
+        name: "Poke Balls",
+        ingredients: [
+            { name: "Balls", amount: 1000 }
+        ],
+        time: 1000 * 60 * 3,
     }
 ];
 
@@ -2218,7 +2360,7 @@ function rollItem() {
 
         if (getEquippedCount('Pity') > 0) {
             pity = parseFloat((pity + getEquippedCount('Pity')).toFixed(4));
-            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.4) / 10).toFixed(4));
+            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.65) / 10).toFixed(4));
         }
 
         // XP gain: sqrt(roll chance)
@@ -2351,7 +2493,7 @@ function rollItem() {
         const rolledIsHot = Array.isArray(selected.tags) && selected.tags.includes('hot');
 
         if (rolledIsHot) {
-            const addedMs = 10 * 60 * 1000; // +10 minutes
+            const addedMs = 2 * 60 * 1000; // +2 minutes
             hotEndTime = Math.max(Date.now(), hotEndTime) + addedMs;
             discoveredEffects.add('hot');
             discoveredSpecialTags.add('hot');
@@ -3419,6 +3561,9 @@ window._onAuthReady = function(save) {
     updateTokensDisplay();
     if (typeof startRewardsPoll === 'function') startRewardsPoll();
     _startAutoSave();
+    // Init music widget display (actual playback starts on first user click)
+    if (typeof _musicUpdateWidget === 'function') _musicUpdateWidget();
+    if (typeof _musicSyncSettingsUI === 'function') _musicSyncSettingsUI();
 };
 
 window.addEventListener('online', _checkSaveLocation);

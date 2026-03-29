@@ -72,13 +72,29 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.9.4</div>
+    <div class="update-text">Update 1.10.0</div>
     <!-- Hidden Admin Access (press Ctrl+Shift+A to show) -->
     <div id="connection-indicator" style="position:fixed;top:24px;left:20px;font-size:0.72em;font-weight:bold;color:#2ecc71;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.35);padding:0.2em 0.7em;border-radius:999px;z-index:1000;">● Online</div>
     <!-- Logged-in user display (clickable) -->
     <button id="username-display" onclick="openUserMenu()" style="position:fixed;top:62px;left:20px;font-size:0.85em;font-weight:bold;color:#4ecdc4;background:rgba(78,205,196,0.1);padding:0.35em 0.9em;border-radius:20px;border:1.5px solid rgba(78,205,196,0.3);z-index:1000;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(78,205,196,0.2)'" onmouseout="this.style.background='rgba(78,205,196,0.1)'"></button>
     <!-- Mini save button under username -->
     <button id="mini-save-btn" onclick="manualSave('mini-save-btn')" title="Save" style="position:fixed;top:100px;left:20px;z-index:1000;background:rgba(39,174,96,0.15);border:1.5px solid rgba(39,174,96,0.3);border-radius:20px;color:#2ecc71;font-size:0.8em;font-weight:bold;padding:0.25em 0.7em;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(39,174,96,0.28)'" onmouseout="this.style.background='rgba(39,174,96,0.15)'">💾</button>
+
+    <!-- Music widget -->
+    <div id="music-widget" style="
+        position:fixed;top:138px;left:20px;z-index:1000;
+        background:rgba(15,20,15,0.88);
+        border:1.5px solid rgba(78,205,196,0.25);
+        border-radius:14px;
+        padding:0.4em 0.7em;
+        display:flex;align-items:center;gap:0.5em;
+        min-width:160px;max-width:200px;
+        backdrop-filter:blur(8px);
+        box-shadow:0 2px 12px rgba(0,0,0,0.35);
+        cursor:default;
+    ">
+        <span style="color:#7f8c8d;font-size:0.75em;">🎵 Loading…</span>
+    </div>
 
     <!-- User menu modal -->
     <div id="user-menu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:4500;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;" onclick="if(event.target===this)closeUserMenu()">
@@ -307,6 +323,26 @@
                         </button>
                     </div>
                 </div>
+                <!-- Music settings -->
+                <div style="margin-top:0.8em;padding:0.9em 1em;background:rgba(255,255,255,0.04);border-radius:12px;border:1.5px solid rgba(255,255,255,0.08);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:1em;margin-bottom:0.7em;">
+                        <div>
+                            <div style="font-weight:bold;font-size:0.95em;">🎵 Music</div>
+                            <div style="font-size:0.78em;color:#7f8c8d;margin-top:0.15em;">Background music</div>
+                        </div>
+                        <button id="music-toggle-btn" onclick="_musicToggle()"
+                            style="min-width:72px;padding:0.45em 1em;border-radius:20px;border:none;font-size:0.95em;font-weight:bold;cursor:pointer;transition:all 0.2s;">
+                        </button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.7em;">
+                        <span style="font-size:0.85em;color:#7f8c8d;flex-shrink:0;">🔈</span>
+                        <input type="range" id="music-volume-slider" min="0" max="1" step="0.02" value="0.4"
+                            oninput="_musicSetVolume(this.value)"
+                            style="flex:1;accent-color:#4ecdc4;cursor:pointer;height:4px;">
+                        <span style="font-size:0.85em;color:#7f8c8d;flex-shrink:0;">🔊</span>
+                    </div>
+                </div>
+
                 <div style="display:flex;gap:0.8em;margin-top:2em;flex-wrap:wrap;">
                     <button id="manual-save-btn" onclick="manualSave()"
                         style="flex:1;min-width:100px;background:linear-gradient(90deg,#27ae60,#2ecc71);color:white;padding:0.7em 1.2em;border:none;border-radius:10px;font-size:1.05em;font-weight:bold;cursor:pointer;">💾 Save</button>
@@ -1223,6 +1259,7 @@
             _origSettingsOpen && _origSettingsOpen.call(this);
             _syncNotifMasterBtn();
             _syncAlwaysNavBtn();
+            if (typeof _musicSyncSettingsUI === 'function') _musicSyncSettingsUI();
         };
         // ── Leaderboard ──
         let _leaderboardCacheRows = [];
