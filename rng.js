@@ -2218,7 +2218,7 @@ function rollItem() {
 
         if (getEquippedCount('Pity') > 0) {
             pity = parseFloat((pity + getEquippedCount('Pity')).toFixed(4));
-            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.2) / 20).toFixed(4));
+            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.1) / 25).toFixed(4));
         }
 
         // XP gain: sqrt(roll chance)
