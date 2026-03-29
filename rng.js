@@ -116,8 +116,10 @@ const artifactDefinitions = [
         description: "Each roll adds +1 pity per equipped copy. After the roll, pity drops by rarity^0.2 (once per roll, not multiplied by copies). While equipped, luck is multiplied by (1 + pity).",
         effect: "pity",
         craft: [
-            { name: "Noob", amount: 25 },
-            { name: "Grass", amount: 15 }
+            { name: "Grass", amount: 1000 },
+            { name: "Noob", amount: 15 },
+            { name: "Pierced Hearth", amount: 5 },
+            { name: "Iceberg", amount: 2 }
         ],
         craftTime: 60 * 1000 * 3, // 3 minutes
         image: "Artifacts-Icons/Pity.png"
@@ -2216,7 +2218,7 @@ function rollItem() {
 
         if (getEquippedCount('Pity') > 0) {
             pity = parseFloat((pity + getEquippedCount('Pity')).toFixed(4));
-            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.2)).toFixed(4));
+            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.3) / 2).toFixed(4));
         }
 
         // XP gain: sqrt(roll chance)
