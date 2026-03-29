@@ -1246,7 +1246,7 @@ function updateActiveEffectsDisplay() {
                     '<div style="font-size:0.75em;opacity:0.75;">' + pc + ' equipped</div>' +
                 '</div>' +
             '</div>' +
-            '<div style="margin-top:0.5em;font-size:0.78em;opacity:0.85;">+1 pity per roll per copy · −√rarity after each roll (once)</div>';
+            '<div style="margin-top:0.5em;font-size:0.78em;opacity:0.85;">+1 pity per roll per copy · −rarity^0.2 after each roll (once)</div>';
         activeEffectsDiv.appendChild(pityDiv);
     }
 
@@ -1843,7 +1843,7 @@ function updateDiamondsDisplay() {
     const diamondsElement = document.getElementById('diamonds-count');
     const indicator = document.getElementById('diamonds-indicator');
     if (!diamondsElement || !indicator) return;
-    diamondsElement.innerText = diamonds.toString();
+    diamondsElement.innerText = (Math.round(diamonds * 10) / 10).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
 function startTokenRecharge() {
@@ -2134,7 +2134,7 @@ function rollItem() {
 
     const pityCount = getEquippedCount('Pity');
     if (pityCount > 0) {
-        pity += pityCount;
+        pity = parseFloat((pity + pityCount).toFixed(4));
     }
     updateLuck();
 
@@ -2219,7 +2219,7 @@ function rollItem() {
         let displayName = selected.name + (type ? ` (${type})` : '');
 
         if (getEquippedCount('Pity') > 0) {
-            pity = Math.max(0, pity - Math.pow(chosen.rarity, 0.2));
+            pity = parseFloat(Math.max(0, pity - Math.pow(chosen.rarity, 0.2)).toFixed(4));
         }
 
         // XP gain: sqrt(roll chance)
@@ -4454,7 +4454,7 @@ function buyXpUpgrade() {
 
 function renderShop() {
     const diamDisplay = document.getElementById('shop-diamonds-display');
-    if (diamDisplay) diamDisplay.innerHTML = `💎 ${diamonds}`;
+    if (diamDisplay) diamDisplay.innerHTML = `💎 ${(Math.round(diamonds * 10) / 10).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`;
 
     const list = document.getElementById('shop-items-list');
     if (!list) return;
