@@ -366,6 +366,8 @@ let xpUpgradeLevel = 0;      // Niveau d'amélioration de gain XP
 
 
 let slotInterval = null;
+let bestCardChance = 0; // Effective chance of the rarest card ever rolled (higher = rarer)
+let bestCardName = '';  // Display name of that card
 let pity = 0; // Pity meter — bonus luck when Pity artifact equipped (luck *= 1 + pity)
 let sugarRushRolls = 0; // Nombre de rolls restants avec l'effet Sugar Rush (×2 luck sur les cartes sweet)
 let ventrePleinRolls = 0; // Nombre de rolls restants avec l'effet Ventre Plein (×1.5 luck, déclenché par les cartes caloric)
@@ -2410,6 +2412,11 @@ function rollItem() {
         } else {
             collection[displayName]++;
         }
+        // Track best card ever rolled (highest chanceDisplay = rarest)
+        if (chanceDisplay > bestCardChance) {
+            bestCardChance = chanceDisplay;
+            bestCardName   = displayName;
+        }
         // Track discovered tag types
         if (type) discoveredTags.add(type);
         // Track discovered special tags from the rolled card
@@ -3295,6 +3302,8 @@ function _buildSaveData() {
         bleedingEndTime:      bleedingEndTime,
         hotEndTime:           hotEndTime,
         pity:                 pity,
+        bestCardChance:       bestCardChance,
+        bestCardName:         bestCardName,
         artifactInventory:    artifactInventory,
         equippedArtifacts:    equippedArtifacts,
         activeEffects:        Object.fromEntries(
@@ -3488,6 +3497,8 @@ function _applyCloudSave(save) {
     bleedingEndTime      = Number(save.bleedingEndTime)      || 0;
     hotEndTime           = Number(save.hotEndTime)           || 0;
     pity                 = Math.max(0, Math.min(Number(save.pity) || 0, 1e12));
+    bestCardChance       = Number(save.bestCardChance) || 0;
+    bestCardName         = save.bestCardName || '';
 
     // Derived
     tokenRate = 0.2 + tokenUpgradeLevel * 0.1;

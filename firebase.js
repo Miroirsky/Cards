@@ -194,17 +194,29 @@ export async function getAllRap() {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────
-// Fetches top 10 players by diamonds from their saved game state.
-export async function getLeaderboard() {
+// Fetches top 100 players by the chosen category.
+// category: 'diamonds' | 'level' | 'rolls' | 'bestCard'
+export async function getLeaderboard(category = 'diamonds', n = 100) {
+    const fieldMap = {
+        diamonds: 'save.diamonds',
+        level:    'save.level',
+        rolls:    'save.rolls',
+        bestCard: 'save.bestCardChance',
+    };
+    const field = fieldMap[category] || 'save.diamonds';
     const snap = await getDocs(
-        query(fsCollection(db, "users"), orderBy("save.diamonds", "desc"), limit(10))
+        query(fsCollection(db, "users"), orderBy(field, "desc"), limit(n))
     );
     return snap.docs.map((d, i) => ({
-        rank:     i + 1,
-        uid:      d.id,
-        username: d.data().username || 'Unknown',
-        diamonds: d.data().save?.diamonds || 0,
-        level:    d.data().save?.level    || 1,
+        rank:          i + 1,
+        uid:           d.id,
+        username:      d.data().username     || 'Unknown',
+        diamonds:      d.data().save?.diamonds      || 0,
+        level:         d.data().save?.level         || 1,
+        xp:            d.data().save?.xp            || 0,
+        rolls:         d.data().save?.rolls         || 0,
+        bestCardChance: d.data().save?.bestCardChance || 0,
+        bestCardName:  d.data().save?.bestCardName   || '',
     }));
 }
 // Each document: { type: 'diamonds'|'card'|'item', amount, from, createdAt }

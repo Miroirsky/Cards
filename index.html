@@ -72,7 +72,7 @@
         style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2000;background:rgba(255,255,255,0.2);backdrop-filter:blur(6px);display:none;">
     </div>
     <!-- Update Text -->
-    <div class="update-text">Update 1.10.1</div>
+    <div class="update-text">Update 1.11.0</div>
     <!-- Hidden Admin Access (press Ctrl+Shift+A to show) -->
     <div id="connection-indicator" style="position:fixed;top:24px;left:20px;font-size:0.72em;font-weight:bold;color:#2ecc71;background:rgba(46,204,113,0.12);border:1px solid rgba(46,204,113,0.35);padding:0.2em 0.7em;border-radius:999px;z-index:1000;">● Online</div>
     <!-- Logged-in user display (clickable) -->
@@ -685,10 +685,17 @@
     <div id="leaderboard-panel" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:4100;background:#1a1a2e;flex-direction:column;overflow:hidden;">
         <div style="display:flex;align-items:center;padding:1em 1.2em;background:rgba(0,0,0,0.35);border-bottom:2px solid rgba(241,196,15,0.35);flex-shrink:0;">
             <button onclick="closeLeaderboardPanel()" style="background:none;border:none;color:#f1c40f;font-size:1.6em;cursor:pointer;margin-right:0.8em;">←</button>
-            <h2 style="margin:0;color:#f1c40f;font-size:1.3em;">🏆 Top Diamonds</h2>
-            <button onclick="loadLeaderboard(true)" style="margin-left:auto;background:rgba(241,196,15,0.15);border:1.5px solid rgba(241,196,15,0.35);border-radius:8px;color:#f1c40f;font-size:0.9em;font-weight:bold;padding:0.4em 0.7em;cursor:pointer;">↻</button>
+            <h2 style="margin:0;color:#f1c40f;font-size:1.3em;">🏆 Leaderboard</h2>
+            <button onclick="loadLeaderboard(true)" style="margin-left:auto;background:rgba(241,196,15,0.15);border:1.5px solid rgba(241,196,15,0.35);border-radius:8px;color:#f1c40f;font-size:0.9em;font-weight:bold;padding:0.4em 0.7em;cursor:pointer;">↻ Refresh</button>
         </div>
-        <div id="leaderboard-list" style="flex:1;overflow-y:auto;padding:1em;display:flex;flex-direction:column;gap:0.5em;">
+        <!-- Category tabs -->
+        <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;background:rgba(0,0,0,0.2);">
+            <button id="lb-tab-diamonds" onclick="setLeaderboardTab('diamonds')" style="flex:1;padding:0.65em 0.3em;background:none;border:none;color:#a29bfe;font-weight:bold;cursor:pointer;border-bottom:2px solid #a29bfe;font-size:0.82em;transition:all 0.15s;">💎 Diamonds</button>
+            <button id="lb-tab-level"    onclick="setLeaderboardTab('level')"    style="flex:1;padding:0.65em 0.3em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.82em;transition:all 0.15s;">⭐ Level</button>
+            <button id="lb-tab-rolls"    onclick="setLeaderboardTab('rolls')"    style="flex:1;padding:0.65em 0.3em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.82em;transition:all 0.15s;">🎲 Rolls</button>
+            <button id="lb-tab-bestCard" onclick="setLeaderboardTab('bestCard')" style="flex:1;padding:0.65em 0.3em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.82em;transition:all 0.15s;">🃏 Best Card</button>
+        </div>
+        <div id="leaderboard-list" style="flex:1;overflow-y:auto;padding:0.8em;display:flex;flex-direction:column;gap:0.4em;">
             <div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>
         </div>
     </div>
@@ -1061,7 +1068,7 @@
         window._fbClaimOneReward    = claimOneReward;
         window._fbUpdateRap         = updateRap;
         window._fbGetAllRap         = getAllRap;
-        window._fbGetLeaderboard    = getLeaderboard;
+        window._fbGetLeaderboard    = (category, n) => getLeaderboard(category, n);
         window._fbPostOrder         = postOrder;
         window._fbFetchOrders       = fetchOrders;
         window._fbFetchMyOrders     = fetchMyOrders;
@@ -1262,14 +1269,98 @@
             if (typeof _musicSyncSettingsUI === 'function') _musicSyncSettingsUI();
         };
         // ── Leaderboard ──
-        let _leaderboardCacheRows = [];
-        let _leaderboardCacheAt = 0;
+        let _leaderboardCache = {}; // { category: { rows, at } }
         const LEADERBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+        let _lbCurrentTab = 'diamonds';
+
+        // ── Tier system: rank → { label, world, colors } ──
+        // colors: { text, border, bg, badgeBg, badgeText, glow }
+        function _lbTier(rank) {
+            const tiers = [
+                { max: 1,   label: 'Bismuth',  world: '🌈',
+                  text: 'transparent', border: 'rgba(255,100,255,0.7)', bg: 'rgba(180,0,255,0.10)',
+                  badgeBg: 'linear-gradient(135deg,#ff0080,#ff8c00,#ffe000,#00ff80,#00cfff,#a020f0)',
+                  badgeText: '#fff', glow: '0 0 18px rgba(200,0,255,0.6), 0 0 36px rgba(255,0,128,0.3)',
+                  nameGrad: 'linear-gradient(90deg,#ff0080,#ff8c00,#ffe000,#00ff80,#00cfff,#a020f0)',
+                  nameClip: true },
+                { max: 2,   label: 'Sapphire', world: '💎',
+                  text: '#4fc3f7', border: 'rgba(13,71,161,0.8)', bg: 'rgba(13,71,161,0.18)',
+                  badgeBg: 'linear-gradient(135deg,#0d47a1,#1565c0,#4fc3f7)', badgeText: '#fff',
+                  glow: '0 0 14px rgba(13,71,161,0.7)' },
+                { max: 3,   label: 'Emerald',  world: '🍀',
+                  text: '#43d463', border: 'rgba(1,77,32,0.8)', bg: 'rgba(1,77,32,0.18)',
+                  badgeBg: 'linear-gradient(135deg,#014d20,#1b5e20,#43d463)', badgeText: '#fff',
+                  glow: '0 0 14px rgba(1,77,32,0.7)' },
+                { max: 5,   label: 'Ruby',     world: '❤️‍🔥',
+                  text: '#ef5350', border: 'rgba(183,28,28,0.8)', bg: 'rgba(183,28,28,0.18)',
+                  badgeBg: 'linear-gradient(135deg,#b71c1c,#c62828,#ef5350)', badgeText: '#fff',
+                  glow: '0 0 14px rgba(183,28,28,0.7)' },
+                { max: 7,   label: 'Diamond',  world: '🔷',
+                  text: '#b2ebf2', border: 'rgba(178,235,242,0.6)', bg: 'rgba(178,235,242,0.08)',
+                  badgeBg: 'linear-gradient(135deg,#80deea,#b2ebf2,#e0f7fa)', badgeText: '#00363a',
+                  glow: '0 0 14px rgba(178,235,242,0.5)' },
+                { max: 10,  label: 'Gold',     world: '🏅',
+                  text: '#ffd600', border: 'rgba(255,214,0,0.6)', bg: 'rgba(255,214,0,0.09)',
+                  badgeBg: 'linear-gradient(135deg,#f57f17,#f9a825,#ffd600)', badgeText: '#3e2000',
+                  glow: '0 0 12px rgba(255,214,0,0.5)' },
+                { max: 15,  label: 'Iron',     world: '⚙️',
+                  text: '#cfd8dc', border: 'rgba(176,190,197,0.5)', bg: 'rgba(176,190,197,0.07)',
+                  badgeBg: 'linear-gradient(135deg,#78909c,#90a4ae,#cfd8dc)', badgeText: '#1c313a',
+                  glow: '0 0 8px rgba(176,190,197,0.35)' },
+                { max: 20,  label: 'Bronze',   world: '🪨',
+                  text: '#a1887f', border: 'rgba(78,52,46,0.7)', bg: 'rgba(78,52,46,0.15)',
+                  badgeBg: 'linear-gradient(135deg,#4e342e,#6d4c41,#a1887f)', badgeText: '#fff',
+                  glow: '0 0 8px rgba(78,52,46,0.5)' },
+                { max: 25,  label: 'Copper',   world: '🟠',
+                  text: '#ff8a65', border: 'rgba(191,97,26,0.6)', bg: 'rgba(191,97,26,0.12)',
+                  badgeBg: 'linear-gradient(135deg,#bf611a,#d4752a,#ff8a65)', badgeText: '#fff',
+                  glow: '0 0 8px rgba(191,97,26,0.4)' },
+                { max: 50,  label: 'Wood',     world: '🪵',
+                  text: '#bcaaa4', border: 'rgba(121,85,72,0.5)', bg: 'rgba(121,85,72,0.10)',
+                  badgeBg: 'linear-gradient(135deg,#795548,#8d6e63,#bcaaa4)', badgeText: '#fff',
+                  glow: '0 0 6px rgba(121,85,72,0.3)' },
+                { max: 100, label: 'Paper',    world: '📄',
+                  text: '#eceff1', border: 'rgba(207,216,220,0.3)', bg: 'rgba(207,216,220,0.05)',
+                  badgeBg: 'linear-gradient(135deg,#b0bec5,#cfd8dc,#eceff1)', badgeText: '#37474f',
+                  glow: 'none' },
+            ];
+            for (const t of tiers) { if (rank <= t.max) return t; }
+            return tiers[tiers.length - 1];
+        }
+
+        // Category config
+        const _lbTabConfig = {
+            diamonds: { label: '💎 Diamonds',  color: '#a29bfe', activeStyle: 'color:#a29bfe;border-bottom-color:#a29bfe;',
+                        scoreOf: e => '💎 ' + Math.floor(e.diamonds).toLocaleString(),
+                        subOf:   e => 'Level ' + e.level },
+            level:    { label: '⭐ Level',      color: '#f1c40f', activeStyle: 'color:#f1c40f;border-bottom-color:#f1c40f;',
+                        scoreOf: e => 'Lv. ' + e.level,
+                        subOf:   e => '' + e.xp.toLocaleString() + ' XP' },
+            rolls:    { label: '🎲 Rolls',      color: '#4ecdc4', activeStyle: 'color:#4ecdc4;border-bottom-color:#4ecdc4;',
+                        scoreOf: e => e.rolls.toLocaleString() + ' rolls',
+                        subOf:   e => 'Level ' + e.level },
+            bestCard: { label: '🃏 Best Card',  color: '#e67e22', activeStyle: 'color:#e67e22;border-bottom-color:#e67e22;',
+                        scoreOf: e => e.bestCardName ? '1 in ' + (e.bestCardChance||0).toLocaleString() : '—',
+                        subOf:   e => e.bestCardName || 'No card yet' },
+        };
+
+        function setLeaderboardTab(tab) {
+            _lbCurrentTab = tab;
+            Object.keys(_lbTabConfig).forEach(t => {
+                const btn = document.getElementById('lb-tab-' + t);
+                if (!btn) return;
+                if (t === tab) {
+                    btn.style.cssText = 'flex:1;padding:0.65em 0.3em;background:none;border:none;font-weight:bold;cursor:pointer;font-size:0.82em;transition:all 0.15s;' + _lbTabConfig[t].activeStyle;
+                } else {
+                    btn.style.cssText = 'flex:1;padding:0.65em 0.3em;background:none;border:none;color:#7f8c8d;font-weight:bold;cursor:pointer;border-bottom:2px solid transparent;font-size:0.82em;transition:all 0.15s;';
+                }
+            });
+            loadLeaderboard(false);
+        }
+
         function openLeaderboardPanel() {
             if (!navigator.onLine || !window._currentUser) {
-                if (typeof showCraftMessage === 'function') {
-                    showCraftMessage('Offline: multiplayer features are unavailable.', 'error');
-                }
+                if (typeof showCraftMessage === 'function') showCraftMessage('Offline: multiplayer features are unavailable.', 'error');
                 return;
             }
             document.getElementById('leaderboard-panel').style.display = 'flex';
@@ -1280,59 +1371,115 @@
             document.getElementById('leaderboard-panel').style.display = 'none';
             document.body.style.overflow = '';
         }
+
         async function loadLeaderboard(force = false) {
             if (!navigator.onLine || !window._currentUser) return;
             const list = document.getElementById('leaderboard-list');
             if (!list) return;
+            const tab = _lbCurrentTab;
+            const cfg = _lbTabConfig[tab];
             list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">Loading…</div>';
             const fn = window._fbGetLeaderboard;
             if (!fn) { list.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Not available</div>'; return; }
             try {
                 const now = Date.now();
-                const rows = (!force && _leaderboardCacheRows.length > 0 && (now - _leaderboardCacheAt) < LEADERBOARD_CACHE_TTL_MS)
-                    ? _leaderboardCacheRows
-                    : await fn();
-                if (rows !== _leaderboardCacheRows) {
-                    _leaderboardCacheRows = rows || [];
-                    _leaderboardCacheAt = now;
+                const cached = _leaderboardCache[tab];
+                let rows;
+                if (!force && cached && (now - cached.at) < LEADERBOARD_CACHE_TTL_MS) {
+                    rows = cached.rows;
+                } else {
+                    rows = await fn(tab, 100);
+                    _leaderboardCache[tab] = { rows: rows || [], at: now };
                 }
                 list.innerHTML = '';
-                if (!rows.length) {
+                if (!rows || !rows.length) {
                     list.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;font-style:italic;">No data yet.</div>';
                     return;
                 }
-                const medals = ['🥇','🥈','🥉'];
                 const myUid = window._currentUser?.uid;
                 rows.forEach(entry => {
-                    const isMe = entry.uid === myUid;
+                    const isMe  = entry.uid === myUid;
+                    const tier  = _lbTier(entry.rank);
+                    const score = cfg.scoreOf(entry);
+                    const sub   = cfg.subOf(entry);
+
                     const row = document.createElement('div');
-                    row.style.cssText = 'display:flex;align-items:center;gap:0.9em;padding:0.8em 1em;border-radius:12px;border:1.5px solid '
-                        + (isMe ? 'rgba(241,196,15,0.5)' : 'rgba(255,255,255,0.07)') + ';background:'
-                        + (isMe ? 'rgba(241,196,15,0.1)' : 'rgba(255,255,255,0.04)') + ';';
+                    row.style.cssText = [
+                        'display:flex;align-items:center;gap:0.75em',
+                        'padding:0.7em 0.9em',
+                        'border-radius:12px',
+                        'border:1.5px solid ' + (isMe ? 'rgba(241,196,15,0.6)' : tier.border),
+                        'background:' + (isMe ? 'rgba(241,196,15,0.12)' : tier.bg),
+                        'box-shadow:' + (isMe ? '0 0 12px rgba(241,196,15,0.3)' : (tier.glow || 'none')),
+                        'transition:all 0.15s',
+                        'cursor:default',
+                    ].join(';');
 
-                    const rank = document.createElement('div');
-                    rank.style.cssText = 'font-size:1.4em;width:2em;text-align:center;flex-shrink:0;';
-                    rank.textContent = medals[entry.rank - 1] || '#' + entry.rank;
+                    // Rank badge
+                    const badge = document.createElement('div');
+                    const isTop3 = entry.rank <= 3;
+                    badge.style.cssText = [
+                        'flex-shrink:0',
+                        'width:2.6em;height:2.6em',
+                        'border-radius:50%',
+                        'display:flex;align-items:center;justify-content:center',
+                        'font-size:' + (isTop3 ? '1.3em' : '0.82em'),
+                        'font-weight:bold',
+                        'background:' + (isTop3 ? 'none' : tier.badgeBg),
+                        'color:' + (isTop3 ? 'inherit' : tier.badgeText),
+                        tier.nameClip ? '' : ('box-shadow:' + (tier.glow || 'none')),
+                    ].join(';');
+                    if (isTop3) {
+                        badge.textContent = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : '🥉';
+                    } else {
+                        badge.textContent = '#' + entry.rank;
+                    }
 
+                    // World emoji
+                    const worldEl = document.createElement('div');
+                    worldEl.style.cssText = 'flex-shrink:0;font-size:1.2em;line-height:1;';
+                    worldEl.textContent = tier.world;
+
+                    // Info block
                     const info = document.createElement('div');
                     info.style.cssText = 'flex:1;min-width:0;';
-                    info.innerHTML = '<div style="font-weight:bold;color:' + (isMe ? '#f1c40f' : '#fff') + ';font-size:1em;">'
-                        + (entry.username || 'Unknown') + (isMe ? ' (you)' : '') + '</div>'
-                        + '<div style="font-size:0.78em;color:#7f8c8d;margin-top:0.1em;">Level ' + entry.level + '</div>';
 
-                    const score = document.createElement('div');
-                    score.style.cssText = 'text-align:right;flex-shrink:0;';
-                    score.innerHTML = '<div style="font-weight:bold;color:#a29bfe;font-size:1.05em;">💎 ' + Math.floor(entry.diamonds) + '</div>';
+                    // Username — rainbow gradient for rank 1
+                    const nameEl = document.createElement('div');
+                    nameEl.style.cssText = [
+                        'font-weight:bold;font-size:0.95em',
+                        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis',
+                        tier.nameClip
+                            ? 'background:' + tier.nameGrad + ';-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;'
+                            : 'color:' + (isMe ? '#f1c40f' : tier.text),
+                    ].join(';');
+                    nameEl.textContent = (entry.username || 'Unknown') + (isMe ? ' (you)' : '');
 
-                    row.appendChild(rank);
+                    // Tier label + sub
+                    const subEl = document.createElement('div');
+                    subEl.style.cssText = 'font-size:0.72em;color:#7f8c8d;margin-top:0.15em;display:flex;gap:0.5em;align-items:center;flex-wrap:wrap;';
+                    subEl.innerHTML = '<span style="color:' + tier.text + ';font-weight:bold;">' + tier.label + '</span>'
+                        + (sub ? '<span>·</span><span>' + sub + '</span>' : '');
+
+                    info.appendChild(nameEl);
+                    info.appendChild(subEl);
+
+                    // Score
+                    const scoreEl = document.createElement('div');
+                    scoreEl.style.cssText = 'text-align:right;flex-shrink:0;';
+                    scoreEl.innerHTML = '<div style="font-weight:bold;color:' + cfg.color + ';font-size:0.95em;">' + score + '</div>';
+
+                    row.appendChild(badge);
+                    row.appendChild(worldEl);
                     row.appendChild(info);
-                    row.appendChild(score);
+                    row.appendChild(scoreEl);
                     list.appendChild(row);
                 });
             } catch(e) {
                 list.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:2em;">Failed: ' + (e.message || e) + '</div>';
             }
         }
+
         window.addEventListener('offline', () => {
             const lb = document.getElementById('leaderboard-panel');
             if (lb && lb.style.display === 'flex') {
