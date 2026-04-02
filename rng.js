@@ -8327,6 +8327,37 @@ document.addEventListener('keydown', e => {
     }
 });
 
+// Close page when user tries to inspect tooling
+// (may be blocked by browser security in some environments)
+function _closeOnInspect() {
+    try {
+        window.close();
+    } catch (err) {
+        console.warn('Unable to close window after inspect attempt:', err);
+    }
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key.toLowerCase() === 'i'))) {
+        e.preventDefault();
+        _closeOnInspect();
+    }
+});
+
+let _devtoolsDetected = false;
+function _checkDevTools() {
+    const widthDiff = window.outerWidth - window.innerWidth;
+    const heightDiff = window.outerHeight - window.innerHeight;
+    const isOpen = widthDiff > 160 || heightDiff > 160;
+    if (isOpen && !_devtoolsDetected) {
+        _devtoolsDetected = true;
+        _closeOnInspect();
+    } else if (!isOpen) {
+        _devtoolsDetected = false;
+    }
+}
+setInterval(_checkDevTools, 1000);
+
 // ═══════════════════════════════════════════════════════════════
 // EVENTS SYSTEM — World Clicker
 // ═══════════════════════════════════════════════════════════════
