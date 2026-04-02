@@ -8326,3 +8326,731 @@ document.addEventListener('keydown', e => {
         }
     }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// EVENTS SYSTEM — World Clicker
+// ═══════════════════════════════════════════════════════════════
+
+// State
+let _eventMyEntry      = null;  // { uid, cardName, cardType, cardChance, points, clicks, ... }
+let _eventLeaderboard  = [];
+let _eventCooldown     = false; // 1-second click cooldown
+let _eventLbCacheAt    = 0;
+let _eventPanelOpen    = false;
+const EVENT_LB_TTL     = 15 * 1000; // refresh leaderboard every 15s when panel open
+let _eventLbInterval   = null;
+
+// ── Time until next midnight UTC ─────────────────────────────
+function _eventMsUntilMidnight() {
+    const now = new Date();
+    const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    return midnight - now;
+}
+
+function _eventFormatCountdown(ms) {
+    if (ms <= 0) return '00:00:00';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ── Open / close panel ────────────────────────────────────────
+function openEventPanel() {
+    if (!navigator.onLine || !window._currentUser) {
+        showCraftMessage('Offline: events are unavailable.', 'error');
+        return;
+    }
+    _eventPanelOpen = true;
+    document.getElementById('event-panel').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _eventRenderPanel();
+    _eventStartLbRefresh();
+    // Check/resolve yesterday
+    if (window._fbEventCheckAndResolve) window._fbEventCheckAndResolve().catch(() => {});
+}
+
+function closeEventPanel() {
+    _eventPanelOpen = false;
+    document.getElementById('event-panel').style.display = 'none';
+    document.body.style.overflow = '';
+    _eventStopLbRefresh();
+}
+
+// ── Full panel render ─────────────────────────────────────────
+async function _eventRenderPanel() {
+    const panel = document.getElementById('event-panel-content');
+    if (!panel) return;
+    panel.innerHTML = '<div style="text-align:center;color:#7f8c8d;padding:3em;">Loading event…</div>';
+
+    // Load my entry
+    try {
+        const fn = window._fbEventGetMyEntry;
+        if (fn) _eventMyEntry = await fn(window._currentUser.uid);
+    } catch(e) { _eventMyEntry = null; }
+
+    _eventRenderContent();
+    _eventLoadLeaderboard(true);
+}
+
+// ── Render content based on state ────────────────────────────
+function _eventRenderContent() {
+    const panel = document.getElementById('event-panel-content');
+    if (!panel) return;
+    panel.innerHTML = '';
+
+    // ── Header info ──
+    const msLeft = _eventMsUntilMidnight();
+    const headerDiv = document.createElement('div');
+    headerDiv.style.cssText = `
+        background: rgba(255,255,255,0.04);
+        border: 1.5px solid rgba(255,100,0,0.25);
+        border-radius: 16px;
+        padding: 1em 1.2em;
+        margin-bottom: 1em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5em;
+    `;
+    headerDiv.innerHTML = `
+        <div>
+            <div style="font-size:1.1em;font-weight:bold;color:#ff6b35;">🌍 World Clicker</div>
+            <div style="font-size:0.8em;color:#7f8c8d;margin-top:0.2em;">Daily event · Resets at 00:00 UTC</div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:0.75em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;">Time left</div>
+            <div id="event-countdown" style="font-size:1.3em;font-weight:bold;color:#f39c12;font-family:monospace;">${_eventFormatCountdown(msLeft)}</div>
+        </div>
+    `;
+    panel.appendChild(headerDiv);
+
+    // Start countdown ticker
+    if (window._eventCountdownTimer) clearInterval(window._eventCountdownTimer);
+    window._eventCountdownTimer = setInterval(() => {
+        const el = document.getElementById('event-countdown');
+        if (el) el.textContent = _eventFormatCountdown(_eventMsUntilMidnight());
+        else clearInterval(window._eventCountdownTimer);
+    }, 1000);
+
+    if (!_eventMyEntry) {
+        _eventRenderJoinSection(panel);
+    } else {
+        _eventRenderClickSection(panel);
+    }
+
+    // ── Leaderboard ──
+    const lbTitle = document.createElement('div');
+    lbTitle.style.cssText = 'font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin:1.2em 0 0.5em 0;';
+    lbTitle.textContent = 'Today\'s Leaderboard';
+    panel.appendChild(lbTitle);
+
+    const lbEl = document.createElement('div');
+    lbEl.id = 'event-leaderboard';
+    lbEl.style.cssText = 'display:flex;flex-direction:column;gap:0.4em;';
+    lbEl.innerHTML = '<div style="color:#555;font-style:italic;font-size:0.88em;">Loading…</div>';
+    panel.appendChild(lbEl);
+}
+
+// ── Join section (not yet joined) ────────────────────────────
+function _eventRenderJoinSection(panel) {
+    const section = document.createElement('div');
+    section.style.cssText = `
+        background: rgba(255,107,53,0.07);
+        border: 1.5px solid rgba(255,107,53,0.3);
+        border-radius: 16px;
+        padding: 1.2em;
+        margin-bottom: 0.8em;
+    `;
+
+    // Card selector
+    const cardKeys = Object.keys(collection).filter(k => (collection[k] || 0) > 0);
+
+    section.innerHTML = `
+        <div style="font-weight:bold;font-size:1.05em;color:#ff6b35;margin-bottom:0.8em;">Join Today's Event</div>
+        <div style="font-size:0.85em;color:#bdc3c7;margin-bottom:1em;line-height:1.5;">
+            Bet a card and click the button as many times as possible before midnight!
+            The player with the most points wins <b style="color:#f1c40f;">all bet cards</b>.
+            <br><span style="color:#a29bfe;font-size:0.9em;">Entry cost: 💎 100 &nbsp;·&nbsp; Points per click = √(card rarity)</span>
+        </div>
+        <div style="font-size:0.8em;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.4em;">Select a card to bet</div>
+        <div id="event-card-search-wrap" style="position:relative;margin-bottom:0.8em;">
+            <input id="event-card-search" type="text" placeholder="Search your cards…"
+                style="width:100%;box-sizing:border-box;padding:0.65em 1em;border-radius:10px;border:1.5px solid rgba(255,107,53,0.35);background:rgba(255,255,255,0.06);color:#fff;font-size:0.95em;outline:none;">
+            <div id="event-card-dropdown" style="display:none;position:absolute;top:calc(100%+4px);left:0;right:0;background:#1e1e32;border:1.5px solid rgba(255,107,53,0.3);border-radius:10px;max-height:200px;overflow-y:auto;z-index:10;"></div>
+        </div>
+        <div id="event-selected-card" style="display:none;background:rgba(255,107,53,0.1);border:1.5px solid rgba(255,107,53,0.3);border-radius:12px;padding:0.7em;margin-bottom:0.8em;display:none;align-items:center;gap:0.8em;">
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5em;">
+            <div style="font-size:0.85em;color:#a29bfe;">Your diamonds: <b style="color:#a29bfe;">💎 ${Math.floor(diamonds)}</b></div>
+            <button id="event-join-btn" onclick="_eventJoin()" style="
+                padding:0.7em 1.8em;border:none;border-radius:12px;
+                background:linear-gradient(90deg,#ff6b35,#ff4500);
+                color:#fff;font-size:1em;font-weight:bold;cursor:pointer;
+                opacity:0.5;
+            " disabled>💎 100 — Join!</button>
+        </div>
+    `;
+    panel.appendChild(section);
+
+    // Wire up card search
+    let _evtSelectedCard = null;
+    const input = section.querySelector('#event-card-search');
+    const dd    = section.querySelector('#event-card-dropdown');
+    const selDiv = section.querySelector('#event-selected-card');
+    const joinBtn = section.querySelector('#event-join-btn');
+
+    input.oninput = () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) { dd.style.display = 'none'; return; }
+        const matches = _getSortedCardNames().filter(n => n.toLowerCase().includes(q) && (collection[n]||0) > 0);
+        if (!matches.length) { dd.style.display = 'none'; return; }
+        dd.innerHTML = '';
+        matches.slice(0, 20).forEach(name => {
+            const type = name.endsWith('(Nuclear)') ? 'Nuclear' : name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
+            const baseName = type ? name.replace(` (${type})`, '') : name;
+            const item = items.find(i => i.name === baseName);
+            const chance = item ? (item.chance * ({'':[1],'Gold':10,'Rainbow':100,'Shiny':1000,'Nuclear':10000}[type]||1)) : 1;
+            const pts = Math.floor(Math.sqrt(chance));
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:0.7em;padding:0.5em 0.8em;cursor:pointer;';
+            row.onmouseenter = () => row.style.background = 'rgba(255,107,53,0.12)';
+            row.onmouseleave = () => row.style.background = '';
+            const img = document.createElement('img');
+            img.src = getCardImageSrc(item);
+            img.style.cssText = 'width:40px;height:26px;object-fit:cover;border-radius:4px;flex-shrink:0;';
+            row.innerHTML = '';
+            row.appendChild(img);
+            const lbl = document.createElement('div');
+            lbl.style.cssText = 'flex:1;';
+            lbl.innerHTML = `<div style="color:#fff;font-size:0.92em;">${name}</div><div style="color:#f39c12;font-size:0.75em;">+${pts} pts/click · 1 in ${chance.toLocaleString()}</div>`;
+            row.appendChild(lbl);
+            row.onclick = () => {
+                _evtSelectedCard = { name, baseName, type, chance, pts };
+                selDiv.style.display = 'flex';
+                selDiv.innerHTML = `
+                    <img src="${getCardImageSrc(item)}" style="width:48px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+                    <div style="flex:1;">
+                        <div style="font-weight:bold;color:#ff6b35;">${name}</div>
+                        <div style="font-size:0.78em;color:#f39c12;">+${pts} points per click</div>
+                    </div>
+                    <button onclick="event.stopPropagation();_evtSelectedCard=null;selDiv.style.display='none';joinBtn.disabled=true;joinBtn.style.opacity='0.5';" style="background:none;border:none;color:#7f8c8d;font-size:1.1em;cursor:pointer;">✕</button>
+                `;
+                dd.style.display = 'none';
+                input.value = '';
+                if (diamonds >= 100) {
+                    joinBtn.disabled = false;
+                    joinBtn.style.opacity = '1';
+                }
+            };
+            dd.appendChild(row);
+        });
+        dd.style.display = 'block';
+    };
+
+    document.addEventListener('click', function _closeEvtDD(e) {
+        const wrap = document.getElementById('event-card-search-wrap');
+        if (wrap && !wrap.contains(e.target)) { dd.style.display = 'none'; document.removeEventListener('click', _closeEvtDD); }
+    });
+
+    // Expose for join button
+    window._evtGetSelectedCard = () => _evtSelectedCard;
+}
+
+// ── Click / playing section (already joined) ──────────────────
+function _eventRenderClickSection(panel) {
+    const entry = _eventMyEntry;
+    if (!entry) return;
+
+    const type = entry.cardType || '';
+    const baseName = entry.cardName;
+    const fullName = type ? `${baseName} (${type})` : baseName;
+    const item = items.find(i => i.name === baseName);
+    const pts = Math.floor(Math.sqrt(entry.cardChance || 1));
+
+    const section = document.createElement('div');
+    section.style.cssText = `
+        background: rgba(255,107,53,0.07);
+        border: 1.5px solid rgba(255,107,53,0.35);
+        border-radius: 16px;
+        padding: 1.2em;
+        margin-bottom: 0.8em;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.8em;
+    `;
+
+    // Bet card display
+    const betRow = document.createElement('div');
+    betRow.style.cssText = 'display:flex;align-items:center;gap:0.8em;background:rgba(255,255,255,0.04);border-radius:12px;padding:0.6em 0.9em;width:100%;box-sizing:border-box;';
+    betRow.innerHTML = `
+        <img src="${getCardImageSrc(item)}" style="width:52px;height:34px;object-fit:cover;border-radius:6px;flex-shrink:0;" onerror="this.style.display='none'">
+        <div style="flex:1;">
+            <div style="font-weight:bold;color:#ff6b35;font-size:0.95em;">${fullName}</div>
+            <div style="font-size:0.78em;color:#f39c12;">+${pts} pts per click</div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-size:0.75em;color:#7f8c8d;">My score</div>
+            <div id="event-my-score" style="font-weight:bold;color:#4ecdc4;font-size:1.2em;">${(entry.points||0).toLocaleString()}</div>
+            <div style="font-size:0.72em;color:#555;">${(entry.clicks||0)} clicks</div>
+        </div>
+    `;
+    section.appendChild(betRow);
+
+    // THE BIG CLICK BUTTON
+    const clickWrap = document.createElement('div');
+    clickWrap.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;width:100%;';
+
+    const clickBtn = document.createElement('button');
+    clickBtn.id = 'event-click-btn';
+    clickBtn.style.cssText = `
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        border: none;
+        background: radial-gradient(circle at 35% 35%, #ff8c42, #ff4500 60%, #c23000);
+        color: #fff;
+        font-size: 2.8em;
+        cursor: pointer;
+        box-shadow: 0 8px 32px rgba(255,69,0,0.5), 0 0 0 0 rgba(255,107,53,0.4);
+        transition: transform 0.08s, box-shadow 0.08s;
+        position: relative;
+        z-index: 2;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    `;
+    clickBtn.textContent = '👊';
+    clickBtn.title = `Click to earn +${pts} points!`;
+    clickBtn.onclick = _eventHandleClick;
+
+    // Cooldown arc overlay (SVG)
+    const cooldownSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    cooldownSvg.setAttribute('id', 'event-cooldown-svg');
+    cooldownSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:196px;height:196px;pointer-events:none;z-index:3;display:none;';
+    cooldownSvg.setAttribute('viewBox', '0 0 196 196');
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '98'); circle.setAttribute('cy', '98'); circle.setAttribute('r', '90');
+    circle.setAttribute('fill', 'none'); circle.setAttribute('stroke', 'rgba(255,255,255,0.25)'); circle.setAttribute('stroke-width', '6');
+    circle.setAttribute('stroke-linecap', 'round');
+    circle.setAttribute('transform', 'rotate(-90 98 98)');
+    circle.id = 'event-cooldown-circle';
+    const circumference = 2 * Math.PI * 90;
+    circle.setAttribute('stroke-dasharray', circumference);
+    circle.setAttribute('stroke-dashoffset', '0');
+    cooldownSvg.appendChild(circle);
+
+    clickWrap.appendChild(clickBtn);
+    clickWrap.appendChild(cooldownSvg);
+
+    // Explosion container
+    const explosionContainer = document.createElement('div');
+    explosionContainer.id = 'event-explosion-container';
+    explosionContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:5;';
+    clickWrap.appendChild(explosionContainer);
+
+    section.appendChild(clickWrap);
+
+    // Points flash
+    const flashEl = document.createElement('div');
+    flashEl.id = 'event-pts-flash';
+    flashEl.style.cssText = 'font-size:1.3em;font-weight:bold;color:#f1c40f;min-height:1.8em;text-align:center;';
+    section.appendChild(flashEl);
+
+    // Change card button
+    const changeBtn = document.createElement('button');
+    changeBtn.style.cssText = `
+        background:rgba(162,155,254,0.1);border:1.5px solid rgba(162,155,254,0.3);
+        border-radius:10px;color:#a29bfe;padding:0.5em 1.2em;cursor:pointer;
+        font-size:0.85em;font-weight:bold;align-self:flex-end;
+    `;
+    changeBtn.textContent = '💎 500 — Change card';
+    changeBtn.onclick = () => _eventShowChangeCard();
+    section.appendChild(changeBtn);
+
+    panel.appendChild(section);
+}
+
+// ── Handle a click ────────────────────────────────────────────
+async function _eventHandleClick() {
+    if (_eventCooldown) return;
+    if (!_eventMyEntry) return;
+
+    const btn = document.getElementById('event-click-btn');
+    const svgEl = document.getElementById('event-cooldown-svg');
+    const circle = document.getElementById('event-cooldown-circle');
+    const flash = document.getElementById('event-pts-flash');
+    const pts = Math.floor(Math.sqrt(_eventMyEntry.cardChance || 1));
+
+    // Trigger explosion
+    _eventExplosion();
+
+    // Visual feedback on button
+    if (btn) {
+        btn.style.transform = 'scale(0.88)';
+        btn.style.boxShadow = '0 4px 16px rgba(255,69,0,0.7), 0 0 0 18px rgba(255,107,53,0.15)';
+        setTimeout(() => {
+            if (btn) { btn.style.transform = ''; btn.style.boxShadow = '0 8px 32px rgba(255,69,0,0.5), 0 0 0 0 rgba(255,107,53,0.4)'; }
+        }, 100);
+    }
+
+    // Points flash
+    if (flash) {
+        flash.textContent = `+${pts} pts!`;
+        flash.style.opacity = '1';
+        flash.style.transform = 'translateY(0)';
+        flash.style.transition = 'none';
+        setTimeout(() => {
+            flash.style.transition = 'opacity 0.6s, transform 0.6s';
+            flash.style.opacity = '0';
+            flash.style.transform = 'translateY(-20px)';
+        }, 50);
+    }
+
+    // Start cooldown arc
+    _eventCooldown = true;
+    if (btn) { btn.style.cursor = 'not-allowed'; btn.style.filter = 'brightness(0.7)'; }
+    if (svgEl) svgEl.style.display = 'block';
+    const circumference = 2 * Math.PI * 90;
+    const start = performance.now();
+    const cooldownMs = 1000;
+    const animCooldown = (now) => {
+        const pct = Math.min(1, (now - start) / cooldownMs);
+        if (circle) circle.setAttribute('stroke-dashoffset', circumference * pct);
+        if (pct < 1) requestAnimationFrame(animCooldown);
+        else {
+            _eventCooldown = false;
+            if (btn) { btn.style.cursor = 'pointer'; btn.style.filter = ''; }
+            if (svgEl) svgEl.style.display = 'none';
+            if (circle) circle.setAttribute('stroke-dashoffset', '0');
+        }
+    };
+    requestAnimationFrame(animCooldown);
+
+    // Optimistic local update
+    _eventMyEntry.points = (_eventMyEntry.points || 0) + pts;
+    _eventMyEntry.clicks = (_eventMyEntry.clicks || 0) + 1;
+    const scoreEl = document.getElementById('event-my-score');
+    if (scoreEl) scoreEl.textContent = (_eventMyEntry.points).toLocaleString();
+
+    // Send to Firestore (fire-and-forget)
+    try {
+        const fn = window._fbEventClick;
+        if (fn) fn({ uid: window._currentUser.uid, pointsGained: pts });
+    } catch(e) {}
+}
+
+// ── Explosion particle effect ─────────────────────────────────
+function _eventExplosion() {
+    const container = document.getElementById('event-explosion-container');
+    const btn = document.getElementById('event-click-btn');
+    if (!container || !btn) return;
+
+    const rect = btn.getBoundingClientRect();
+    const cx = btn.offsetWidth / 2;
+    const cy = btn.offsetHeight / 2;
+
+    const colors = ['#ff6b35','#ff4500','#f1c40f','#fff','#ff8c42','#ffcc00'];
+    const shapes = ['●','★','✦','✸','💥'];
+
+    for (let i = 0; i < 18; i++) {
+        const el = document.createElement('div');
+        const angle = (i / 18) * 360 + (Math.random() * 20 - 10);
+        const dist  = 70 + Math.random() * 90;
+        const rad   = angle * Math.PI / 180;
+        const dx    = Math.cos(rad) * dist;
+        const dy    = Math.sin(rad) * dist;
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const shape = shapes[Math.floor(Math.random() * shapes.length)];
+        const size  = 10 + Math.random() * 14;
+        const dur   = 0.5 + Math.random() * 0.4;
+
+        el.style.cssText = `
+            position:absolute;
+            left:${cx}px; top:${cy}px;
+            font-size:${size}px;
+            color:${color};
+            pointer-events:none;
+            transform:translate(-50%,-50%);
+            z-index:10;
+            animation: evtParticle${i} ${dur}s ease-out forwards;
+        `;
+        el.textContent = shape;
+
+        // Inject keyframe
+        const styleId = `evt-kf-${i}`;
+        let styleEl = document.getElementById(styleId);
+        if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+        styleEl.textContent = `@keyframes evtParticle${i} {
+            0%   { transform: translate(-50%,-50%) scale(1); opacity:1; }
+            100% { transform: translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0); opacity:0; }
+        }`;
+
+        container.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, dur * 1000 + 50);
+    }
+
+    // Central burst ring
+    const ring = document.createElement('div');
+    ring.style.cssText = `
+        position:absolute;
+        left:${cx}px; top:${cy}px;
+        width:10px; height:10px;
+        border:4px solid #ff6b35;
+        border-radius:50%;
+        transform:translate(-50%,-50%);
+        pointer-events:none;
+        animation: evtRing 0.4s ease-out forwards;
+    `;
+    let rs = document.getElementById('evt-ring-style');
+    if (!rs) { rs = document.createElement('style'); rs.id = 'evt-ring-style'; document.head.appendChild(rs); }
+    rs.textContent = `@keyframes evtRing {
+        0%   { width:10px;height:10px;opacity:1;border-width:4px; }
+        100% { width:180px;height:180px;opacity:0;border-width:1px; }
+    }`;
+    container.appendChild(ring);
+    setTimeout(() => { if (ring.parentNode) ring.parentNode.removeChild(ring); }, 450);
+}
+
+// ── Show change-card popup ────────────────────────────────────
+function _eventShowChangeCard() {
+    if (diamonds < 500) { showCraftMessage('Need 💎 500 to change your card!', 'error'); return; }
+
+    const overlay = document.getElementById('blur-overlay');
+    let popup = document.getElementById('event-change-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'event-change-popup';
+        popup.style.cssText = `
+            position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+            background:#1a1a2e;border:2px solid rgba(162,155,254,0.4);border-radius:20px;
+            padding:1.8em;width:90%;max-width:360px;z-index:4500;
+            max-height:80vh;overflow-y:auto;
+        `;
+        document.body.appendChild(popup);
+    }
+
+    popup.innerHTML = `
+        <h3 style="margin:0 0 0.5em 0;color:#a29bfe;">💎 Change Bet Card</h3>
+        <div style="font-size:0.85em;color:#7f8c8d;margin-bottom:1em;">Cost: <b style="color:#a29bfe;">500 💎</b>. Your current points are kept.</div>
+        <div id="event-card-search-wrap2" style="position:relative;margin-bottom:0.8em;">
+            <input id="event-card-search2" type="text" placeholder="Search your cards…"
+                style="width:100%;box-sizing:border-box;padding:0.6em 0.9em;border-radius:8px;border:1.5px solid rgba(162,155,254,0.35);background:rgba(255,255,255,0.06);color:#fff;font-size:0.95em;outline:none;">
+            <div id="event-card-dropdown2" style="display:none;position:absolute;top:calc(100%+4px);left:0;right:0;background:#1e1e32;border:1.5px solid rgba(162,155,254,0.3);border-radius:10px;max-height:180px;overflow-y:auto;z-index:10;"></div>
+        </div>
+        <div id="event-change-selected" style="display:none;margin-bottom:0.8em;"></div>
+        <div style="display:flex;gap:0.5em;">
+            <button id="evt-change-confirm" onclick="_eventConfirmChange()" style="flex:1;padding:0.7em;border:none;border-radius:10px;background:linear-gradient(90deg,#a29bfe,#6c5ce7);color:#fff;font-weight:bold;cursor:pointer;opacity:0.5;" disabled>Confirm 💎500</button>
+            <button onclick="document.getElementById('event-change-popup').style.display='none';document.getElementById('blur-overlay').style.display='none';" style="flex:1;padding:0.7em;border:none;border-radius:10px;background:rgba(127,140,141,0.2);color:#7f8c8d;cursor:pointer;font-weight:bold;">Cancel</button>
+        </div>
+    `;
+
+    let _changeCard = null;
+    const input2 = popup.querySelector('#event-card-search2');
+    const dd2 = popup.querySelector('#event-card-dropdown2');
+    const selDiv2 = popup.querySelector('#event-change-selected');
+    const confirmBtn = popup.querySelector('#evt-change-confirm');
+
+    input2.oninput = () => {
+        const q = input2.value.trim().toLowerCase();
+        if (!q) { dd2.style.display = 'none'; return; }
+        const matches = _getSortedCardNames().filter(n => n.toLowerCase().includes(q) && (collection[n]||0) > 0);
+        dd2.innerHTML = '';
+        matches.slice(0,15).forEach(name => {
+            const type = name.endsWith('(Nuclear)') ? 'Nuclear' : name.endsWith('(Shiny)') ? 'Shiny' : name.endsWith('(Rainbow)') ? 'Rainbow' : name.endsWith('(Gold)') ? 'Gold' : '';
+            const baseName = type ? name.replace(` (${type})`, '') : name;
+            const item = items.find(i => i.name === baseName);
+            const chance = item ? (item.chance * ({'':[1],'Gold':10,'Rainbow':100,'Shiny':1000,'Nuclear':10000}[type]||1)) : 1;
+            const pts = Math.floor(Math.sqrt(chance));
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:0.7em;padding:0.5em 0.8em;cursor:pointer;';
+            row.onmouseenter = () => row.style.background = 'rgba(162,155,254,0.1)';
+            row.onmouseleave = () => row.style.background = '';
+            const img = document.createElement('img');
+            img.src = getCardImageSrc(item); img.style.cssText = 'width:36px;height:24px;object-fit:cover;border-radius:4px;';
+            row.appendChild(img);
+            const lbl = document.createElement('div');
+            lbl.innerHTML = `<div style="color:#fff;font-size:0.9em;">${name}</div><div style="color:#f39c12;font-size:0.73em;">+${pts} pts/click</div>`;
+            row.appendChild(lbl);
+            row.onclick = () => {
+                _changeCard = { name, baseName, type, chance, pts };
+                selDiv2.style.display = 'block';
+                selDiv2.innerHTML = `<div style="background:rgba(162,155,254,0.1);border-radius:8px;padding:0.5em 0.8em;color:#a29bfe;font-size:0.9em;">${name} (+${pts} pts/click)</div>`;
+                dd2.style.display = 'none'; input2.value = '';
+                confirmBtn.disabled = false; confirmBtn.style.opacity = '1';
+            };
+            dd2.appendChild(row);
+        });
+        dd2.style.display = matches.length ? 'block' : 'none';
+    };
+
+    window._evtGetChangeCard = () => _changeCard;
+
+    overlay.style.display = 'block';
+    popup.style.display = 'block';
+    overlay.onclick = () => { popup.style.display = 'none'; overlay.style.display = 'none'; };
+    popup.onclick = e => e.stopPropagation();
+}
+
+async function _eventConfirmChange() {
+    const card = window._evtGetChangeCard ? window._evtGetChangeCard() : null;
+    if (!card) return;
+    if (diamonds < 500) { showCraftMessage('Not enough diamonds!', 'error'); return; }
+
+    const btn = document.getElementById('evt-change-confirm');
+    if (btn) { btn.disabled = true; btn.textContent = 'Changing…'; }
+
+    diamonds -= 500;
+    updateDiamondsDisplay();
+    saveCollection();
+
+    try {
+        const fn = window._fbEventJoin;
+        if (fn) await fn({
+            uid: window._currentUser.uid,
+            username: window._cloudUserData?.username || 'Unknown',
+            cardName: card.baseName,
+            cardType: card.type,
+            cardChance: card.chance,
+            isChanging: true,
+        });
+
+        // Deduct card
+        collection[card.name] = (collection[card.name] || 0) - 1;
+        if ((collection[card.name] || 0) <= 0) delete collection[card.name];
+        updateCollection(); updateInventoryStats();
+        saveCollection();
+
+        _eventMyEntry = await window._fbEventGetMyEntry(window._currentUser.uid);
+
+        document.getElementById('event-change-popup').style.display = 'none';
+        document.getElementById('blur-overlay').style.display = 'none';
+
+        showCraftMessage('Card changed!', 'success');
+        _eventRenderContent();
+        _eventLoadLeaderboard(true);
+    } catch(e) {
+        diamonds += 500; updateDiamondsDisplay(); saveCollection();
+        showCraftMessage('Failed: ' + (e.message || e), 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirm 💎500'; }
+    }
+}
+
+// ── Join action ───────────────────────────────────────────────
+async function _eventJoin() {
+    const card = window._evtGetSelectedCard ? window._evtGetSelectedCard() : null;
+    if (!card) { showCraftMessage('Select a card first!', 'error'); return; }
+    if (diamonds < 100) { showCraftMessage('Need 💎 100 to join!', 'error'); return; }
+    if (!(collection[card.name] > 0)) { showCraftMessage('You don\'t own that card!', 'error'); return; }
+
+    const btn = document.getElementById('event-join-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+
+    diamonds -= 100;
+    updateDiamondsDisplay();
+    saveCollection();
+
+    // Deduct card from collection
+    collection[card.name] = (collection[card.name] || 0) - 1;
+    if ((collection[card.name] || 0) <= 0) delete collection[card.name];
+    updateCollection(); updateInventoryStats(); saveCollection();
+
+    try {
+        const fn = window._fbEventJoin;
+        if (fn) await fn({
+            uid: window._currentUser.uid,
+            username: window._cloudUserData?.username || 'Unknown',
+            cardName: card.baseName,
+            cardType: card.type,
+            cardChance: card.chance,
+            isChanging: false,
+        });
+
+        _eventMyEntry = await window._fbEventGetMyEntry(window._currentUser.uid);
+        showCraftMessage('Joined World Clicker!', 'success');
+        _eventRenderContent();
+        _eventLoadLeaderboard(true);
+    } catch(e) {
+        // Refund on failure
+        diamonds += 100; updateDiamondsDisplay();
+        collection[card.name] = (collection[card.name] || 0) + 1;
+        updateCollection(); saveCollection();
+        showCraftMessage('Join failed: ' + (e.message || e), 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '💎 100 — Join!'; }
+    }
+}
+
+// ── Load leaderboard ──────────────────────────────────────────
+async function _eventLoadLeaderboard(force = false) {
+    const lb = document.getElementById('event-leaderboard');
+    if (!lb) return;
+    const fn = window._fbEventFetchLeaderboard;
+    if (!fn) return;
+
+    const now = Date.now();
+    if (!force && (now - _eventLbCacheAt) < EVENT_LB_TTL && _eventLeaderboard.length) {
+        _eventRenderLeaderboard();
+        return;
+    }
+    try {
+        _eventLeaderboard = await fn();
+        _eventLbCacheAt = now;
+        _eventRenderLeaderboard();
+    } catch(e) {
+        lb.innerHTML = '<div style="color:#e74c3c;font-size:0.85em;">Failed to load leaderboard.</div>';
+    }
+}
+
+function _eventRenderLeaderboard() {
+    const lb = document.getElementById('event-leaderboard');
+    if (!lb) return;
+    lb.innerHTML = '';
+    if (!_eventLeaderboard.length) {
+        lb.innerHTML = '<div style="color:#555;font-style:italic;font-size:0.85em;">No participants yet. Be the first!</div>';
+        return;
+    }
+    const myUid = window._currentUser?.uid;
+    _eventLeaderboard.slice(0, 20).forEach((entry, i) => {
+        const isMe = entry.uid === myUid;
+        const rank = i + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+        const type = entry.cardType || '';
+        const fullName = type ? `${entry.cardName} (${type})` : entry.cardName;
+        const item = items.find(it => it.name === entry.cardName);
+
+        const row = document.createElement('div');
+        row.style.cssText = `
+            display:flex;align-items:center;gap:0.7em;
+            background:${isMe ? 'rgba(241,196,15,0.1)' : 'rgba(255,255,255,0.04)'};
+            border:1.5px solid ${isMe ? 'rgba(241,196,15,0.4)' : 'rgba(255,255,255,0.07)'};
+            border-radius:10px;padding:0.55em 0.8em;
+        `;
+        row.innerHTML = `
+            <div style="flex-shrink:0;font-size:${rank<=3?'1.2em':'0.82em'};font-weight:bold;color:${isMe?'#f1c40f':'#7f8c8d'};min-width:2em;text-align:center;">${medal}</div>
+            <img src="${getCardImageSrc(item)}" style="width:36px;height:24px;object-fit:cover;border-radius:4px;flex-shrink:0;" onerror="this.style.display='none'">
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:bold;color:${isMe?'#f1c40f':'#fff'};font-size:0.88em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${entry.username || 'Unknown'}${isMe?' (you)':''}</div>
+                <div style="font-size:0.72em;color:#7f8c8d;">${fullName} · ${(entry.clicks||0)} clicks</div>
+            </div>
+            <div style="font-weight:bold;color:#ff6b35;font-size:0.95em;flex-shrink:0;">${(entry.points||0).toLocaleString()} pts</div>
+        `;
+        lb.appendChild(row);
+    });
+}
+
+// ── Auto-refresh leaderboard while panel open ─────────────────
+function _eventStartLbRefresh() {
+    _eventStopLbRefresh();
+    _eventLbInterval = setInterval(() => {
+        if (_eventPanelOpen) _eventLoadLeaderboard(true);
+    }, EVENT_LB_TTL);
+}
+function _eventStopLbRefresh() {
+    if (_eventLbInterval) { clearInterval(_eventLbInterval); _eventLbInterval = null; }
+    if (window._eventCountdownTimer) { clearInterval(window._eventCountdownTimer); window._eventCountdownTimer = null; }
+}
+
+window.addEventListener('offline', () => {
+    if (_eventPanelOpen) closeEventPanel();
+});

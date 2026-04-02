@@ -476,3 +476,128 @@ export async function deletePlayer(uid) {
         await deleteDoc(doc(db, "rewards", uid, "pending", docSnap.id));
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// EVENTS SYSTEM — World Clicker
+// ═══════════════════════════════════════════════════════════════
+
+// Helper: get today's event day key (UTC, resets at 00:00)
+function _todayKey() {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-${String(now.getUTCDate()).padStart(2,'0')}`;
+}
+
+// ── Join the World Clicker event ──────────────────────────────
+// Creates or updates the player's entry doc for today.
+// cardName / cardType: the card being bet.
+// isChanging: true if player already has an entry and is swapping card (costs 500).
+export async function eventJoin({ uid, username, cardName, cardType, cardChance, isChanging }) {
+    const day = _todayKey();
+    const entryRef = doc(db, "events", "world_clicker", "days", day, "entries", uid);
+
+    const snap = await getDoc(entryRef);
+    if (snap.exists() && !isChanging) throw new Error("Already joined today's event.");
+
+    await setDoc(entryRef, {
+        uid,
+        username:   username || 'Unknown',
+        cardName:   cardName || '',
+        cardType:   cardType || '',
+        cardChance: Number(cardChance) || 1,
+        points:     snap.exists() ? (snap.data().points || 0) : 0,
+        clicks:     snap.exists() ? (snap.data().clicks || 0) : 0,
+        joinedAt:   snap.exists() ? snap.data().joinedAt : Date.now(),
+        updatedAt:  Date.now(),
+        day,
+    }, { merge: true });
+
+    return { success: true };
+}
+
+// ── Submit a click (add points) ───────────────────────────────
+// pointsGained = floor(sqrt(cardChance)) per click.
+export async function eventClick({ uid, pointsGained }) {
+    const day = _todayKey();
+    const entryRef = doc(db, "events", "world_clicker", "days", day, "entries", uid);
+
+    const snap = await getDoc(entryRef);
+    if (!snap.exists()) throw new Error("Not joined today's event.");
+
+    const data = snap.data();
+    const newPoints = (data.points || 0) + Number(pointsGained);
+    const newClicks = (data.clicks || 0) + 1;
+
+    await setDoc(entryRef, {
+        points:    newPoints,
+        clicks:    newClicks,
+        updatedAt: Date.now(),
+    }, { merge: true });
+
+    return { points: newPoints, clicks: newClicks };
+}
+
+// ── Fetch today's leaderboard ─────────────────────────────────
+export async function eventFetchLeaderboard() {
+    const day = _todayKey();
+    const entriesCol = fsCollection(db, "events", "world_clicker", "days", day, "entries");
+    const snap = await getDocs(query(entriesCol, orderBy("points", "desc"), limit(50)));
+    return snap.docs.map((d, i) => ({ rank: i+1, ...d.data() }));
+}
+
+// ── Fetch this player's entry for today ───────────────────────
+export async function eventGetMyEntry(uid) {
+    const day = _todayKey();
+    const entryRef = doc(db, "events", "world_clicker", "days", day, "entries", uid);
+    const snap = await getDoc(entryRef);
+    if (!snap.exists()) return null;
+    return snap.data();
+}
+
+// ── Admin: resolve yesterday's event (Cloud Function alternative) ─
+// Reads yesterday's entries, finds winner, distributes prizes.
+// Called manually or on page load check.
+export async function eventResolveDay(targetDay) {
+    const resolvedRef = doc(db, "events", "world_clicker", "days", targetDay);
+    const resolvedSnap = await getDoc(resolvedRef);
+    if (resolvedSnap.exists() && resolvedSnap.data().resolved) return null; // already done
+
+    const entriesCol = fsCollection(db, "events", "world_clicker", "days", targetDay, "entries");
+    const snap = await getDocs(query(entriesCol, orderBy("points", "desc"), limit(50)));
+    if (snap.empty) return null;
+
+    const entries = snap.docs.map(d => d.data());
+    const winner  = entries[0];
+
+    // Give all bet cards to the winner
+    for (const entry of entries) {
+        const cardKey = entry.cardType ? `${entry.cardName} (${entry.cardType})` : entry.cardName;
+        const label   = `🏆 World Clicker win: ${entry.amount || 1}× ${cardKey}`;
+        await addDoc(fsCollection(db, "rewards", winner.uid, "pending"), {
+            type:      'card',
+            cardName:  entry.cardName,
+            cardType:  entry.cardType || '',
+            amount:    1,
+            from:      'event_world_clicker',
+            label,
+            createdAt: Date.now(),
+        });
+    }
+
+    // Mark day resolved
+    await setDoc(resolvedRef, { resolved: true, winner: winner.uid, winnerName: winner.username, resolvedAt: Date.now() }, { merge: true });
+
+    return winner;
+}
+
+// ── Check and auto-resolve yesterday if not done ──────────────
+export async function eventCheckAndResolve() {
+    const now  = new Date();
+    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+    const yKey = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth()+1).padStart(2,'0')}-${String(yesterday.getUTCDate()).padStart(2,'0')}`;
+
+    const ref  = doc(db, "events", "world_clicker", "days", yKey);
+    const snap = await getDoc(ref);
+    if (!snap.exists() || !snap.data().resolved) {
+        await eventResolveDay(yKey);
+    }
+}
