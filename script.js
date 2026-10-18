@@ -2528,7 +2528,8 @@ function HandleRollerSlotRoll(slotIndex, isAutoRoll) {
     StartRollerSlotCooldown(slotIdx, rollDuration)
 
     SaveGame()
-    UpdateUI()
+    let rolledCardNames = new Set(rolledCards.map(function(c) { return c && c.name }).filter(Boolean))
+    UpdateUI({ updatedCardNames: rolledCardNames, isRoll: true })
     return true
 }
 
@@ -5295,77 +5296,177 @@ function RenderItemsInventory() {
     }
 }
 
-function RenderInventory() {
+function CreateInventoryCardElement(cardData) {
+    let entry = PlayerData.inventory[cardData.name]
+    let count = entry ? entry.count : 0
+    let mutation = GetCardMutation(cardData)
+    let frontTagsHtml = RenderCardTagsHTML(cardData, "front")
+    let backTagsHtml = RenderCardTagsHTML(cardData, "back")
+
+    let cardEl = document.createElement("div")
+    cardEl.className = "inventory-card"
+    cardEl.dataset.cardName = cardData.name
+
+    cardEl.innerHTML = `
+        <div class="card-flip-inner">
+            <div class="card-face card-front">
+                <div class="card-image-container">
+                    <img src="${FormatImagePath(cardData.image)}" alt="${cardData.name}" draggable="false">
+                    <div class="card-holo-glare"></div>
+                    ${frontTagsHtml ? `<div class="card-front-tags-overlay">${frontTagsHtml}</div>` : ""}
+                    <div class="card-title-overlay">
+                        <span class="card-front-name">${cardData.name}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-face card-back ${mutation.cssClass}">
+                ${backTagsHtml ? `<div class="card-back-tags">${backTagsHtml}</div>` : ""}
+                <div class="card-back-rarity">${FormatRarityText(cardData.rarity)}</div>
+                <div class="card-back-quantity">Owned: ${FormatNumber(count)}</div>
+            </div>
+        </div>
+        <div class="hold-progress"></div>
+    `
+
+    AttachCardInteractions(cardEl, function() {
+        return cardData
+    }, true)
+
+    return cardEl
+}
+
+function RenderInventory(options) {
     let grid = document.getElementById("inventory-grid")
     let uniqueCountEl = document.getElementById("unique-count")
     let rarestOwnedEl = document.getElementById("rarest-owned")
     let tabCardsCount = document.getElementById("inv-tab-cards-count")
 
     if (!grid) return
-    grid.innerHTML = ""
 
     let ownedCardsData = GetDiscoveredCards()
+    let totalCount = ownedCardsData.length
 
     if (uniqueCountEl) {
-        uniqueCountEl.textContent = "🃏 Discovered: " + FormatNumber(ownedCardsData.length) + " / " + FormatNumber(CardsList.length)
+        let uniqueText = "🃏 Discovered: " + FormatNumber(totalCount) + " / " + FormatNumber(CardsList.length)
+        if (uniqueCountEl.textContent !== uniqueText) {
+            uniqueCountEl.textContent = uniqueText
+        }
     }
     if (tabCardsCount) {
-        tabCardsCount.textContent = FormatNumber(ownedCardsData.length)
+        let tabText = FormatNumber(totalCount)
+        if (tabCardsCount.textContent !== tabText) {
+            tabCardsCount.textContent = tabText
+        }
     }
 
-    if (ownedCardsData.length > 0) {
-        grid.classList.remove("is-empty")
-        let rarestOwned = GetRarest(ownedCardsData)
-        if (rarestOwnedEl) {
-            rarestOwnedEl.textContent = "👑 Rarest: " + rarestOwned.name + " (" + FormatRarityText(rarestOwned.rarity) + ")"
-        }
-    } else {
+    if (totalCount === 0) {
         grid.classList.add("is-empty")
-        if (rarestOwnedEl) {
+        if (rarestOwnedEl && rarestOwnedEl.textContent !== "👑 Rarest: None") {
             rarestOwnedEl.textContent = "👑 Rarest: None"
         }
-        let emptyMsg = document.createElement("div")
-        emptyMsg.className = "inventory-empty"
-        emptyMsg.textContent = "✨ No cards discovered yet! Equip your Basic Roller from the Items Inventory tab and hit Roll above!"
-        grid.appendChild(emptyMsg)
+        let cards = grid.querySelectorAll(".inventory-card")
+        for (let i = 0; i < cards.length; i++) {
+            cards[i].remove()
+        }
+        if (!grid.querySelector(".inventory-empty")) {
+            let emptyMsg = document.createElement("div")
+            emptyMsg.className = "inventory-empty"
+            emptyMsg.textContent = "✨ No cards discovered yet! Equip your Basic Roller from the Items Inventory tab and hit Roll above!"
+            grid.appendChild(emptyMsg)
+        }
         return
     }
 
-    for (let [i, cardData] of pairs(ownedCardsData)) {
+    let emptyMsg = grid.querySelector(".inventory-empty")
+    if (emptyMsg) {
+        emptyMsg.remove()
+    }
+    grid.classList.remove("is-empty")
+
+    let rarestOwned = GetRarest(ownedCardsData)
+    if (rarestOwnedEl && rarestOwned) {
+        let rarestText = "👑 Rarest: " + rarestOwned.name + " (" + FormatRarityText(rarestOwned.rarity) + ")"
+        if (rarestOwnedEl.textContent !== rarestText) {
+            rarestOwnedEl.textContent = rarestText
+        }
+    }
+
+    // Map existing card DOM elements by data-card-name
+    let existingMap = new Map()
+    let existingElements = grid.querySelectorAll(".inventory-card")
+    for (let i = 0; i < existingElements.length; i++) {
+        let el = existingElements[i]
+        let name = el.dataset.cardName
+        if (name) {
+            existingMap.set(name, el)
+        }
+    }
+
+    // Set of current valid card names to prune removed cards
+    let targetNames = new Set()
+    for (let i = 0; i < totalCount; i++) {
+        targetNames.add(ownedCardsData[i].name)
+    }
+
+    // Remove cards no longer in inventory (e.g. sold or consumed in craft/press)
+    for (let [name, el] of existingMap) {
+        if (!targetNames.has(name)) {
+            el.remove()
+            existingMap.delete(name)
+        }
+    }
+
+    let updatedCardNamesSet = (options && options.updatedCardNames)
+        ? (options.updatedCardNames instanceof Set ? options.updatedCardNames : new Set(options.updatedCardNames))
+        : null
+
+    let isRoll = Boolean(options && options.isRoll)
+    let savedScrollLeft = grid.scrollLeft
+
+    // In-place reconciliation: update only affected cards and values, preserving all DOM elements, hover, flip, scroll, and animations
+    for (let i = 0; i < totalCount; i++) {
+        let cardData = ownedCardsData[i]
         let entry = PlayerData.inventory[cardData.name]
-        let mutation = GetCardMutation(cardData)
-        let frontTagsHtml = RenderCardTagsHTML(cardData, "front")
-        let backTagsHtml = RenderCardTagsHTML(cardData, "back")
+        let count = entry ? entry.count : 0
+        let cardEl = existingMap.get(cardData.name)
 
-        let cardEl = document.createElement("div")
-        cardEl.className = "inventory-card"
+        if (!cardEl) {
+            // Newly discovered card! Create and animate entrance
+            cardEl = CreateInventoryCardElement(cardData)
+            existingMap.set(cardData.name, cardEl)
+            if (isRoll) {
+                cardEl.classList.add("card-new-discovery")
+                setTimeout(function() {
+                    cardEl.classList.remove("card-new-discovery")
+                }, 800)
+            }
+        } else {
+            // Card already in DOM: only update quantity if it actually changed
+            let qtyEl = cardEl.querySelector(".card-back-quantity")
+            if (qtyEl) {
+                let qtyText = "Owned: " + FormatNumber(count)
+                if (qtyEl.textContent !== qtyText) {
+                    qtyEl.textContent = qtyText
+                    let wasRolled = updatedCardNamesSet ? updatedCardNamesSet.has(cardData.name) : true
+                    if (wasRolled) {
+                        qtyEl.classList.remove("quantity-bump")
+                        void qtyEl.offsetWidth
+                        qtyEl.classList.add("quantity-bump")
+                    }
+                }
+            }
+        }
 
-        cardEl.innerHTML = `
-            <div class="card-flip-inner">
-                <div class="card-face card-front">
-                    <div class="card-image-container">
-                        <img src="${FormatImagePath(cardData.image)}" alt="${cardData.name}" draggable="false">
-                        <div class="card-holo-glare"></div>
-                        ${frontTagsHtml ? `<div class="card-front-tags-overlay">${frontTagsHtml}</div>` : ""}
-                        <div class="card-title-overlay">
-                            <span class="card-front-name">${cardData.name}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-face card-back ${mutation.cssClass}">
-                    ${backTagsHtml ? `<div class="card-back-tags">${backTagsHtml}</div>` : ""}
-                    <div class="card-back-rarity">${FormatRarityText(cardData.rarity)}</div>
-                    <div class="card-back-quantity">Owned: ${FormatNumber(entry.count)}</div>
-                </div>
-            </div>
-            <div class="hold-progress"></div>
-        `
+        // Maintain exact sorted position in-place without rebuilding or resetting DOM state
+        let currentChild = grid.children[i]
+        if (currentChild !== cardEl) {
+            grid.insertBefore(cardEl, currentChild || null)
+        }
+    }
 
-        AttachCardInteractions(cardEl, function() {
-            return cardData
-        }, true)
-
-        grid.appendChild(cardEl)
+    // Restore horizontal scroll position if needed
+    if (grid.scrollLeft !== savedScrollLeft) {
+        grid.scrollLeft = savedScrollLeft
     }
 }
 
@@ -5514,7 +5615,7 @@ function SetCardSort(sortMode) {
     }
 }
 
-function UpdateUI() {
+function UpdateUI(options) {
     UpdateTopBarUI()
     UpdateSortControlsUI()
     let isCards = (PlayerData.activeView === "cards")
@@ -5538,7 +5639,7 @@ function UpdateUI() {
         RenderCrafting()
     }
     if (isCards) {
-        RenderInventory()
+        RenderInventory(options)
     }
     if (TagModalState.isOpen && TagModalState.currentTagId) {
         PopulateTagModal(TagModalState.currentTagId)
