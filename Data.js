@@ -452,9 +452,9 @@ const CraftingRecipes = [
         description: "A reliable standard roller with ×1 luck, 2s roll time, and rolls up to 3 cards per roll.",
         craftTime: 60, // 1 minute in seconds
         materials: [
-            { cardName: "Grass", amount: 500 },
-            { cardName: "Tree", amount: 200 },
-            { cardName: "Sugar", amount: 50 },
+            { cardName: "Grass", amount: 100 },
+            { cardName: "Tree", amount: 50 },
+            { cardName: "Sugar", amount: 20 },
             { cardName: "Earth", amount: 5 },
         ],
     },

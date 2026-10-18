@@ -665,15 +665,34 @@ function PlayGameSound(kind) {
         osc.connect(gain)
         gain.connect(audioCtx.destination)
 
-        if (kind === "rare") {
+        if (kind === "legendary") {
+            osc.type = "triangle"
+            osc.frequency.setValueAtTime(523.25, now) // C5
+            osc.frequency.setValueAtTime(659.25, now + 0.08) // E5
+            osc.frequency.setValueAtTime(783.99, now + 0.16) // G5
+            osc.frequency.setValueAtTime(987.77, now + 0.24) // B5
+            osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.32) // C6
+            gain.gain.setValueAtTime(0.16, now)
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55)
+            osc.start(now)
+            osc.stop(now + 0.56)
+        } else if (kind === "rare") {
             osc.type = "triangle"
             osc.frequency.setValueAtTime(440, now)
             osc.frequency.exponentialRampToValueAtTime(660, now + 0.09)
             osc.frequency.exponentialRampToValueAtTime(880, now + 0.22)
-            gain.gain.setValueAtTime(0.12, now)
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32)
+            gain.gain.setValueAtTime(0.13, now)
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
             osc.start(now)
-            osc.stop(now + 0.33)
+            osc.stop(now + 0.36)
+        } else if (kind === "ready") {
+            osc.type = "sine"
+            osc.frequency.setValueAtTime(880, now)
+            osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12)
+            gain.gain.setValueAtTime(0.08, now)
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
+            osc.start(now)
+            osc.stop(now + 0.19)
         } else if (kind === "diamond") {
             osc.type = "sine"
             osc.frequency.setValueAtTime(587.33, now)
@@ -688,10 +707,10 @@ function PlayGameSound(kind) {
             osc.frequency.setValueAtTime(523.25, now + 0.08)
             osc.frequency.setValueAtTime(659.25, now + 0.16)
             osc.frequency.setValueAtTime(783.99, now + 0.24)
-            gain.gain.setValueAtTime(0.13, now)
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42)
+            gain.gain.setValueAtTime(0.14, now)
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
             osc.start(now)
-            osc.stop(now + 0.43)
+            osc.stop(now + 0.46)
         } else {
             osc.type = "sine"
             osc.frequency.setValueAtTime(320, now)
@@ -717,16 +736,24 @@ function SpawnParticleBurst(targetEl, preset) {
 
     let symbols = ["✦", "★", "✨", "🎉", "⚡"]
     let colors = ["#818cf8", "#ec4899", "#fbbf24", "#38bdf8", "#34d399"]
-    let count = 12
+    let count = 14
 
-    if (preset === "diamond") {
-        symbols = ["💎", "✦", "✨", "★"]
-        colors = ["#38bdf8", "#7dd3fc", "#e0f2fe", "#818cf8"]
-        count = 14
+    if (preset === "legendary") {
+        symbols = ["👑", "🌟", "✨", "💎", "⚡", "🎉", "🔥", "★"]
+        colors = ["#f43f5e", "#fbbf24", "#38bdf8", "#ec4899", "#a855f7", "#34d399", "#f59e0b"]
+        count = 32
     } else if (preset === "rare") {
         symbols = ["👑", "✨", "🌟", "🎉", "🔥", "💎"]
         colors = ["#fbbf24", "#ec4899", "#38bdf8", "#a855f7", "#4ade80"]
-        count = 22
+        count = 24
+    } else if (preset === "ready") {
+        symbols = ["✨", "✦", "⚡", "★"]
+        colors = ["#34d399", "#10b981", "#6ee7b7", "#fbbf24"]
+        count = 10
+    } else if (preset === "diamond") {
+        symbols = ["💎", "✦", "✨", "★"]
+        colors = ["#38bdf8", "#7dd3fc", "#e0f2fe", "#818cf8"]
+        count = 16
     }
 
     for (let i = 0; i < count; i++) {
@@ -738,11 +765,11 @@ function SpawnParticleBurst(targetEl, preset) {
         p.style.top = centerY + "px"
 
         let angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.45
-        let dist = 55 + Math.random() * 110
+        let dist = (preset === "legendary" ? 75 : 55) + Math.random() * (preset === "legendary" ? 140 : 100)
         let tx = Math.cos(angle) * dist
         let ty = Math.sin(angle) * dist - 20
-        let rot = Math.round((Math.random() - 0.5) * 320) + "deg"
-        let sc = (0.85 + Math.random() * 0.65).toFixed(2)
+        let rot = Math.round((Math.random() - 0.5) * 360) + "deg"
+        let sc = ((preset === "legendary" ? 1.05 : 0.85) + Math.random() * 0.65).toFixed(2)
 
         p.style.setProperty("--tx", tx + "px")
         p.style.setProperty("--ty", ty + "px")
@@ -752,7 +779,7 @@ function SpawnParticleBurst(targetEl, preset) {
         fxLayer.appendChild(p)
         setTimeout(function() {
             if (p.parentNode) p.parentNode.removeChild(p)
-        }, 920)
+        }, 950)
     }
 }
 
@@ -1560,6 +1587,42 @@ function SyncGlobalCooldownState() {
     PlayerData.isCooldown = allOnCooldown
 }
 
+let CooldownTickInterval = null
+
+function StartCooldownTicker() {
+    if (CooldownTickInterval) return
+    CooldownTickInterval = setInterval(function() {
+        let hasActive = false
+        for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
+            let state = RollerCooldownState[slotIndex]
+            if (state) {
+                hasActive = true
+                let remainingMs = state.endTime - Date.now()
+                let slotEl = document.querySelector(`[data-slot-index="${slotIndex}"]`)
+                let slotBtn = document.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
+                if (remainingMs > 0) {
+                    let progressPercent = Math.min(100, Math.max(0, (1 - remainingMs / (state.duration * 1000)) * 100))
+                    if (slotEl && !slotEl.classList.contains("is-rolling")) {
+                        slotEl.classList.add("is-rolling")
+                    }
+                    if (slotBtn) {
+                        let btnText = slotBtn.querySelector(".roll-button-text")
+                        if (btnText) btnText.textContent = "⏳ " + (remainingMs / 1000).toFixed(1) + "s"
+                        let bar = slotBtn.querySelector(".roll-cooldown-bar")
+                        if (bar) bar.style.width = progressPercent + "%"
+                    }
+                } else {
+                    if (slotEl) slotEl.classList.remove("is-rolling")
+                }
+            }
+        }
+        if (!hasActive) {
+            clearInterval(CooldownTickInterval)
+            CooldownTickInterval = null
+        }
+    }, 45)
+}
+
 function StartRollerSlotCooldown(slotIndex, customDurationSec) {
     let slotIdx = Number(slotIndex)
     EnsureRollerSlotsNormalized()
@@ -1578,11 +1641,25 @@ function StartRollerSlotCooldown(slotIndex, customDurationSec) {
             delete RollerCooldownState[slotIdx]
         }
         SyncGlobalCooldownState()
+        let slotEl = document.querySelector(`[data-slot-index="${slotIdx}"]`)
         let slotBtn = document.querySelector(`[data-roller-roll-slot="${slotIdx}"]`)
+        if (slotEl) {
+            slotEl.classList.remove("is-rolling", "ready-flash")
+            void slotEl.offsetWidth
+            slotEl.classList.add("ready-flash")
+            setTimeout(function() {
+                if (slotEl) slotEl.classList.remove("ready-flash")
+            }, 700)
+        }
         if (slotBtn) {
             slotBtn.classList.remove("cooling-down")
+            let bar = slotBtn.querySelector(".roll-cooldown-bar")
+            if (bar) bar.style.width = "0%"
+            SpawnParticleBurst(slotBtn, "ready")
         }
+        PlayGameSound("ready")
         UpdateTopBarUI()
+        RenderRollerButtons()
     }, duration * 1000)
 
     RollerCooldownState[slotIdx] = {
@@ -1601,6 +1678,11 @@ function StartRollerSlotCooldown(slotIndex, customDurationSec) {
         slotBtn.classList.add("cooling-down")
     }
 
+    let slotEl = document.querySelector(`[data-slot-index="${slotIdx}"]`)
+    if (slotEl) {
+        slotEl.classList.add("is-rolling")
+    }
+
     let fallbackBtn = document.getElementById("roll-button")
     if (fallbackBtn) {
         fallbackBtn.style.setProperty("--roller-cooldown", duration + "s")
@@ -1609,6 +1691,7 @@ function StartRollerSlotCooldown(slotIndex, customDurationSec) {
         fallbackBtn.classList.add("cooling-down")
     }
 
+    StartCooldownTicker()
     UpdateTopBarUI()
 }
 
@@ -1872,7 +1955,8 @@ function HandleRollerSlotRoll(slotIndex, isAutoRoll) {
     PlayerData.lastRolledCard = GetRarest(rolledCards) || null
 
     let totalGainedXp = 0
-    let hasRareOrMutated = false
+    let hasLegendary = false
+    let hasRare = false
 
     for (let [i, cardData] of pairs(rolledCards)) {
         if (!cardData) continue
@@ -1880,17 +1964,40 @@ function HandleRollerSlotRoll(slotIndex, isAutoRoll) {
         totalGainedXp += GetCardXp(cardData)
 
         let mutation = GetCardMutation(cardData)
-        if (mutation.name !== "None" || cardData.rarity >= 10) {
-            hasRareOrMutated = true
+        if (cardData.rarity >= 1000 || (mutation && mutation.name !== "None")) {
+            hasLegendary = true
+        } else if (cardData.rarity >= 50) {
+            hasRare = true
         }
     }
 
     AddXp(totalGainedXp)
 
-    PlayGameSound(hasRareOrMutated ? "rare" : "roll")
+    let soundKind = hasLegendary ? "legendary" : (hasRare ? "rare" : "roll")
+    PlayGameSound(soundKind)
+
+    let stageWrap = document.getElementById("roll-stage-wrap")
+    if (stageWrap) {
+        stageWrap.classList.remove("shake-stage", "legendary-flash-stage")
+        if (hasLegendary) {
+            void stageWrap.offsetWidth
+            stageWrap.classList.add("shake-stage", "legendary-flash-stage")
+            setTimeout(function() {
+                if (stageWrap) stageWrap.classList.remove("shake-stage", "legendary-flash-stage")
+            }, 750)
+        } else if (hasRare) {
+            void stageWrap.offsetWidth
+            stageWrap.classList.add("shake-stage")
+            setTimeout(function() {
+                if (stageWrap) stageWrap.classList.remove("shake-stage")
+            }, 450)
+        }
+    }
+
     let displayEl = document.getElementById("rolled-card-display")
     if (displayEl) {
-        SpawnParticleBurst(displayEl, hasRareOrMutated ? "rare" : "normal")
+        let burstPreset = hasLegendary ? "legendary" : (hasRare ? "rare" : "normal")
+        SpawnParticleBurst(displayEl, burstPreset)
     }
 
     RenderRolledCards(rolledCards, totalGainedXp)
@@ -2009,16 +2116,28 @@ function RenderRolledCards(rolledCardsInput, totalGainedXp) {
     }
 
     display.innerHTML = ""
-    let staggerSec = (coreValues.roll && coreValues.roll.staggerDelay !== undefined) ? coreValues.roll.staggerDelay : 0.06
+    let staggerSec = (coreValues.roll && coreValues.roll.staggerDelay !== undefined) ? coreValues.roll.staggerDelay : 0.08
 
     for (let [i, cardData] of pairs(rolledCards)) {
         let idx = Number(i)
         let frontTagsHtml = RenderCardTagsHTML(cardData, "front")
         let isBestPull = isMulti && rarestCard && cardData.name === rarestCard.name && cardData.rarity > 0
         let cardXp = GetCardXp(cardData)
+        let mutation = GetCardMutation(cardData)
+
+        let rarityTier = "common"
+        if (cardData.rarity >= 1000 || (mutation && mutation.name !== "None")) {
+            rarityTier = "legendary"
+        } else if (cardData.rarity >= 200) {
+            rarityTier = "epic"
+        } else if (cardData.rarity >= 50) {
+            rarityTier = "rare"
+        } else if (cardData.rarity >= 10) {
+            rarityTier = "uncommon"
+        }
 
         let itemEl = document.createElement("div")
-        itemEl.className = "rolled-card-item" + (isBestPull ? " is-best-pull" : "")
+        itemEl.className = "rolled-card-item rarity-tier-" + rarityTier + (isBestPull ? " is-best-pull" : "")
         itemEl.style.setProperty("--roll-delay", (idx * staggerSec).toFixed(3) + "s")
 
         itemEl.innerHTML = `
@@ -2142,6 +2261,10 @@ function SwitchView(viewName) {
     if (showRollPanel) {
         RenderEquippedRollers()
         RenderRollerButtons()
+    }
+
+    if (window.innerWidth <= 900) {
+        CloseMobileSidebar()
     }
 
     SaveGame()
@@ -4615,6 +4738,8 @@ function Init() {
             RenderCrafting()
         }
     }, 250)
+
+    StartCooldownTicker()
 }
 
 window.addEventListener("DOMContentLoaded", Init)

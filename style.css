@@ -84,6 +84,9 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     transition: background-color 0.35s ease, color 0.35s ease;
 }
 
@@ -173,20 +176,22 @@ h1, h2, h3, h4, .level-badge, .roll-button, .auto-roll-button, .card-front-name,
     font-weight: 900;
     user-select: none;
     will-change: transform, opacity;
-    animation: particlePop 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+    animation: particleArcPop 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes particlePop {
+@keyframes particleArcPop {
     0% {
         opacity: 1;
-        transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+        transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
     }
-    65% {
+    45% {
         opacity: 1;
+        transform: translate(calc(-50% + var(--tx) * 0.72), calc(-50% + var(--ty) * 0.72 - 22px)) scale(var(--sc, 1.25)) rotate(calc(var(--rot) * 0.5));
     }
     100% {
         opacity: 0;
-        transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(var(--sc, 1.1)) rotate(var(--rot));
+        transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty) + 38px)) scale(0.5) rotate(var(--rot));
     }
 }
 
@@ -809,6 +814,40 @@ body:not(.no-bouncy) .stat-pill:hover {
     max-width: 100%;
 }
 
+.roll-stage-wrap.shake-stage {
+    animation: stageRumble 0.45s ease-in-out;
+}
+
+.roll-stage-wrap.legendary-flash-stage {
+    animation: stageRumble 0.65s ease-in-out;
+}
+
+.roll-stage-wrap.legendary-flash-stage::after {
+    content: "";
+    position: absolute;
+    inset: -20px;
+    border-radius: 30px;
+    background: radial-gradient(circle, rgba(236, 72, 153, 0.4) 0%, rgba(99, 102, 241, 0.3) 40%, transparent 75%);
+    pointer-events: none;
+    z-index: 10;
+    animation: stageFlashAura 0.75s ease-out forwards;
+}
+
+@keyframes stageRumble {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    15% { transform: translate(-5px, 3px) rotate(-0.6deg); }
+    30% { transform: translate(5px, -3px) rotate(0.6deg); }
+    45% { transform: translate(-4px, -2px) rotate(-0.4deg); }
+    60% { transform: translate(4px, 2px) rotate(0.4deg); }
+    75% { transform: translate(-2px, 1px) rotate(-0.2deg); }
+}
+
+@keyframes stageFlashAura {
+    0% { opacity: 1; transform: scale(0.9); }
+    50% { opacity: 0.85; transform: scale(1.05); }
+    100% { opacity: 0; transform: scale(1.15); }
+}
+
 .roll-batch-banner {
     position: relative;
     z-index: 2;
@@ -821,7 +860,7 @@ body:not(.no-bouncy) .stat-pill:hover {
     border-radius: 999px;
     background: var(--bg-panel-inner);
     border: 2px solid var(--border-chunky);
-    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2), 0 0 16px var(--accent-glow);
     font-family: "Fredoka", sans-serif;
     font-size: 0.9rem;
     font-weight: 700;
@@ -833,7 +872,18 @@ body:not(.no-bouncy) .stat-pill:hover {
 }
 
 .roll-batch-banner.banner-pop {
-    animation: popSlideDown 0.35s var(--spring-bounce);
+    animation: bannerDropPop 0.45s var(--spring-bounce);
+}
+
+@keyframes bannerDropPop {
+    0% {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.85);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .batch-banner-count {
@@ -846,10 +896,12 @@ body:not(.no-bouncy) .stat-pill:hover {
 
 .batch-banner-best strong {
     color: var(--token-gold);
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
 }
 
 .batch-banner-xp {
     color: var(--xp-purple);
+    text-shadow: 0 0 8px rgba(192, 132, 252, 0.5);
 }
 
 .roll-starburst {
@@ -961,47 +1013,84 @@ body:not(.no-bouncy) .stat-pill:hover {
         box-shadow 0.25s ease;
 }
 
+/* Rarity Tier Glows & Highlights */
+.rolled-card-item.rarity-tier-uncommon {
+    border-color: #34d399;
+    box-shadow: var(--shadow-card), 0 0 16px rgba(52, 211, 153, 0.3);
+}
+
+.rolled-card-item.rarity-tier-rare {
+    border-color: #fbbf24;
+    box-shadow: var(--shadow-card), 0 0 24px rgba(251, 191, 36, 0.42);
+}
+
+.rolled-card-item.rarity-tier-epic {
+    border-color: #c084fc;
+    box-shadow: var(--shadow-card), 0 0 30px rgba(192, 132, 252, 0.52);
+}
+
+.rolled-card-item.rarity-tier-legendary {
+    border-color: #f43f5e;
+    box-shadow: var(--shadow-card), 0 0 36px rgba(236, 72, 153, 0.6), 0 0 60px rgba(99, 102, 241, 0.35);
+    animation: legendaryAuraPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes legendaryAuraPulse {
+    0%, 100% {
+        border-color: #f43f5e;
+        box-shadow: var(--shadow-card), 0 0 30px rgba(236, 72, 153, 0.5);
+    }
+    33% {
+        border-color: #fbbf24;
+        box-shadow: var(--shadow-card), 0 0 38px rgba(251, 191, 36, 0.6);
+    }
+    66% {
+        border-color: #38bdf8;
+        box-shadow: var(--shadow-card), 0 0 42px rgba(56, 189, 248, 0.65);
+    }
+}
+
 .rolled-card-item.is-best-pull {
     border-color: var(--token-gold);
     box-shadow:
         var(--shadow-card),
-        0 0 26px rgba(251, 191, 36, 0.38);
+        0 0 32px rgba(251, 191, 36, 0.55);
 }
 
 body:not(.no-bouncy) .rolled-card-item:hover {
-    transform: translateY(-5px) scale(1.02) rotate(-1deg);
+    transform: translateY(-6px) scale(1.03) rotate(-1deg);
     border-color: var(--border-highlight);
-    box-shadow: 0 22px 46px rgba(0, 0, 0, 0.42), 0 0 32px var(--accent-glow);
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45), 0 0 34px var(--accent-glow);
 }
 
 body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
     border-color: var(--token-gold);
-    box-shadow: 0 22px 46px rgba(0, 0, 0, 0.45), 0 0 34px rgba(251, 191, 36, 0.55);
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.48), 0 0 38px rgba(251, 191, 36, 0.65);
 }
 
 .roll-showcase.pop .rolled-card-item {
-    animation: goofyCardBoing 0.62s var(--spring-bounce) both;
+    animation: cardRevealPop 0.68s var(--spring-bounce) both;
     animation-delay: var(--roll-delay, 0s);
 }
 
-@keyframes goofyCardBoing {
+@keyframes cardRevealPop {
     0% {
         opacity: 0;
-        transform: scale(0.65, 1.3) rotate(-7deg);
-        filter: brightness(1.5);
+        transform: translateY(35px) scale(0.68) rotate(-6deg);
+        filter: brightness(2) contrast(1.15);
     }
-    38% {
+    45% {
         opacity: 1;
-        transform: scale(1.12, 0.88) rotate(3.5deg);
-        filter: brightness(1.15);
+        transform: translateY(-10px) scale(1.08) rotate(2.5deg);
+        filter: brightness(1.25);
     }
-    68% {
-        opacity: 1;
-        transform: scale(0.96, 1.04) rotate(-1.5deg);
+    75% {
+        transform: translateY(2px) scale(0.98) rotate(-1deg);
+        filter: brightness(1.08);
     }
     100% {
         opacity: 1;
-        transform: scale(1, 1) rotate(0deg);
+        transform: translateY(0) scale(1) rotate(0deg);
         filter: brightness(1);
     }
 }
@@ -1029,35 +1118,40 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 
 .rolled-card-rarity-pill {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 8px;
+    left: 8px;
     z-index: 5;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 10px;
+    gap: 4px;
+    padding: 3px 8px;
     border-radius: 999px;
-    background: rgba(7, 9, 18, 0.76);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1.5px solid rgba(255, 255, 255, 0.26);
+    background: rgba(7, 9, 18, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255, 255, 255, 0.28);
     color: #ffffff;
     font-family: "Fredoka", sans-serif;
-    font-size: 0.74rem;
+    font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.02em;
     pointer-events: none;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+    max-width: calc(52% - 10px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .rolled-card-item.is-best-pull .rolled-card-rarity-pill {
-    border-color: rgba(251, 191, 36, 0.8);
-    background: rgba(20, 14, 4, 0.82);
+    border-color: rgba(251, 191, 36, 0.85);
+    background: rgba(20, 14, 4, 0.86);
     color: #fef08a;
+    box-shadow: 0 3px 10px rgba(251, 191, 36, 0.3);
 }
 
 .best-crown {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     line-height: 1;
 }
 
@@ -1117,14 +1211,15 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 .card-title-overlay {
     position: absolute;
     inset: auto 0 0 0;
-    padding: 32px 16px 12px;
-    background: linear-gradient(to top, rgba(7, 9, 18, 0.9) 0%, rgba(7, 9, 18, 0.48) 58%, transparent 100%);
+    padding: 24px 12px 8px;
+    background: linear-gradient(to top, rgba(6, 8, 16, 0.94) 0%, rgba(6, 8, 16, 0.52) 60%, transparent 100%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
     gap: 2px;
     pointer-events: none;
+    z-index: 3;
 }
 
 .card-title-overlay h2,
@@ -1133,48 +1228,51 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
     color: #ffffff;
     font-weight: 700;
     letter-spacing: 0.02em;
-    text-shadow: 0 3px 10px rgba(0, 0, 0, 0.9);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    max-width: 95%;
 }
 
 .card-title-overlay h2 {
-    font-size: 1.45rem;
+    font-size: clamp(1.05rem, 2.4vw, 1.45rem);
 }
 
 .roll-showcase.multi-roll .card-title-overlay h2 {
-    font-size: 1.15rem;
+    font-size: clamp(0.9rem, 2vw, 1.15rem);
 }
 
 .rolled-item-xp {
     font-family: "Fredoka", sans-serif;
-    font-size: 0.74rem;
+    font-size: clamp(0.68rem, 1.6vw, 0.74rem);
     font-weight: 700;
     color: #e9d5ff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
 }
 
 .card-title-overlay h3 {
-    font-size: 1.45rem;
+    font-size: clamp(1.1rem, 2.5vw, 1.45rem);
 }
 
 .card-front-name {
-    font-size: 1.06rem;
+    font-size: clamp(0.85rem, 2.2vw, 1.02rem);
 }
 
 .card-mutation-pill,
 .card-front-tags-overlay {
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: 8px;
+    right: 8px;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 6px;
-    max-width: calc(100% - 20px);
+    align-items: flex-start;
+    gap: 4px;
+    max-width: calc(100% - 16px);
+    max-height: 48px;
+    overflow: hidden;
     z-index: 5;
     pointer-events: none;
 }
@@ -1189,7 +1287,8 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
+    max-width: 100%;
 }
 
 .card-tags-front {
@@ -1201,23 +1300,33 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
     overflow: hidden;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
+    gap: 3.5px;
+    padding: 3px 8px;
     border-radius: 999px;
     font-family: "Fredoka", sans-serif;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    line-height: 1.1;
+    line-height: 1.15;
     white-space: nowrap;
     background: var(--tag-bg, linear-gradient(135deg, #475569 0%, #334155 100%));
     color: var(--tag-color, #ffffff);
-    border: 1.8px solid var(--tag-border, rgba(255, 255, 255, 0.55));
+    border: 1.5px solid var(--tag-border, rgba(255, 255, 255, 0.55));
     box-shadow:
-        0 3px 8px rgba(0, 0, 0, 0.38),
-        0 0 12px var(--tag-glow, rgba(0, 0, 0, 0.2));
+        0 2px 6px rgba(0, 0, 0, 0.35),
+        0 0 10px var(--tag-glow, rgba(0, 0, 0, 0.2));
     transition: transform 0.18s var(--spring-bounce), filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card-tags-front .card-tag-pill,
+.card-front-tags-overlay .card-tag-pill {
+    padding: 2.5px 7px;
+    font-size: 0.65rem;
+    gap: 3px;
+    border-width: 1.2px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+    animation: pillFloat 2.4s ease-in-out infinite;
 }
 
 .card-tag-pill.card-tag-interactive {
@@ -1229,15 +1338,15 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 }
 
 .card-tag-pill.card-tag-interactive:hover {
-    filter: brightness(1.12);
+    filter: brightness(1.15);
     box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.45),
-        0 0 16px var(--tag-glow, rgba(255, 255, 255, 0.35));
+        0 4px 10px rgba(0, 0, 0, 0.45),
+        0 0 14px var(--tag-glow, rgba(255, 255, 255, 0.35));
 }
 
 .card-tag-pill.card-tag-interactive.pressing {
     transform: scale(0.92) !important;
-    filter: brightness(1.18);
+    filter: brightness(1.2);
 }
 
 .tag-hold-progress {
@@ -1257,11 +1366,6 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
     transition: width var(--long-press-duration) linear;
 }
 
-.card-tags-front .card-tag-pill,
-.card-front-tags-overlay .card-tag-pill {
-    animation: pillFloat 2.4s ease-in-out infinite;
-}
-
 .card-tag-pill.card-tag-animated {
     background-size: 230% 230%;
     animation: rainbowShift 3s ease infinite, pillFloat 2.4s ease-in-out infinite;
@@ -1272,18 +1376,18 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 }
 
 .card-tag-icon {
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     line-height: 1;
 }
 
 .card-tag-suffix {
     opacity: 0.9;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
 }
 
 @keyframes pillFloat {
     0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-3px) rotate(1.5deg); }
+    50% { transform: translateY(-2px) rotate(1deg); }
 }
 
 /* Roll Actions & Tactile 3D Arcade Buttons */
@@ -1397,22 +1501,21 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 
 .roll-cooldown-bar {
     position: absolute;
-    inset: 0;
+    inset: 0 auto 0 0;
     width: 0%;
-    background: repeating-linear-gradient(
-        -45deg,
-        rgba(255, 255, 255, 0.25),
-        rgba(255, 255, 255, 0.25) 10px,
-        rgba(255, 255, 255, 0.12) 10px,
-        rgba(255, 255, 255, 0.12) 20px
-    );
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899, #fbbf24);
+    background-size: 200% 100%;
+    animation: rainbowShift 2.5s linear infinite;
     z-index: 1;
     pointer-events: none;
+    border-radius: 999px;
+    box-shadow: 0 0 16px rgba(236, 72, 153, 0.7);
+    transition: width 0.05s linear;
 }
 
-.roll-button.cooling-down .roll-cooldown-bar {
-    width: 100%;
-    transition: width var(--roller-cooldown, var(--roll-cooldown)) linear;
+.roll-button.cooling-down {
+    border-color: rgba(236, 72, 153, 0.7);
+    box-shadow: 0 4px 0 #3730a3, 0 0 18px rgba(236, 72, 153, 0.45);
 }
 
 .roll-button:hover:not(:disabled) {
@@ -2515,14 +2618,15 @@ body:not(.no-bouncy) .settings-card:hover {
 /* Card Inventory: 5 Rows / Layers Grid flowing horizontally */
 #inventory-grid.horizontal-inventory {
     display: grid !important;
-    grid-template-rows: repeat(5, 140px);
+    grid-template-rows: repeat(5, clamp(108px, 14vh, 140px));
     grid-auto-flow: column;
-    grid-auto-columns: 280px;
-    column-gap: 20px;
-    row-gap: 16px;
+    grid-auto-columns: clamp(216px, 28vh, 280px);
+    column-gap: clamp(12px, 1.8vw, 20px);
+    row-gap: clamp(10px, 1.5vw, 16px);
     align-content: start;
     user-select: none;
     -webkit-user-select: none;
+    padding: 10px 4px 22px;
 }
 
 #inventory-grid.horizontal-inventory.is-empty {
@@ -2530,8 +2634,8 @@ body:not(.no-bouncy) .settings-card:hover {
 }
 
 #inventory-grid.horizontal-inventory .inventory-card {
-    width: 280px;
-    height: 140px;
+    width: clamp(216px, 28vh, 280px);
+    height: clamp(108px, 14vh, 140px);
     aspect-ratio: 2 / 1;
     flex: none;
 }
@@ -2546,14 +2650,15 @@ body:not(.no-bouncy) .settings-card:hover {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
-    gap: 20px;
+    gap: clamp(12px, 2vw, 20px);
     align-items: stretch;
+    padding: 10px 4px 22px;
 }
 
 #items-inventory-grid.horizontal-inventory .item-inventory-card {
-    flex: 0 0 340px;
-    width: 340px;
-    min-width: 300px;
+    flex: 0 0 clamp(260px, 85vw, 340px);
+    width: clamp(260px, 85vw, 340px);
+    min-width: 0;
 }
 
 #items-inventory-grid.horizontal-inventory .inventory-empty {
@@ -2669,12 +2774,15 @@ body:not(.no-bouncy) .inventory-card:hover {
     transform: rotateY(180deg);
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 12px 14px;
+    gap: 4px;
+    padding: 10px 12px;
     text-align: center;
     pointer-events: none;
+    box-sizing: border-box;
+    overflow: hidden;
+    height: 100%;
 }
 
 .card-back-tags {
@@ -2682,32 +2790,40 @@ body:not(.no-bouncy) .inventory-card:hover {
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    margin-bottom: 2px;
+    gap: 3.5px;
     max-width: 100%;
+    max-height: 44px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    margin: 0;
+}
+
+.card-back-tags::-webkit-scrollbar {
+    display: none;
 }
 
 .card-back-mutation {
     font-family: "Fredoka", sans-serif;
-    font-size: 0.74rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 3px 10px;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.18);
     margin-bottom: 2px;
 }
 
 .card-back-rarity {
-    font-size: 1.32rem;
+    font-size: clamp(1rem, 2.4vw, 1.3rem);
     font-weight: 700;
     letter-spacing: -0.01em;
     line-height: 1.15;
+    margin: auto 0;
 }
 
 .card-back-quantity {
-    font-size: 0.92rem;
+    font-size: clamp(0.72rem, 1.8vw, 0.88rem);
     font-weight: 800;
     opacity: 0.88;
 }
@@ -3243,21 +3359,23 @@ body:not(.no-bouncy) .tag-modal-card-item:hover {
     background: var(--bg-panel-inner);
 }
 
-/* Roller Equipment Bar & Fixed-Size Roller Slots */
+/* Roller Equipment Bar & Responsive Roller Slots */
 .roller-equipment-bar {
     width: 100%;
-    max-width: 530px;
+    max-width: 960px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 16px 18px;
-    margin-bottom: 18px;
-    border-radius: 20px;
+    gap: 14px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    border-radius: 24px;
     background: var(--bg-panel-inner);
     border: 2px solid var(--border-chunky);
-    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.16);
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.16), 0 14px 32px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 .roller-equipment-header {
@@ -3265,7 +3383,8 @@ body:not(.no-bouncy) .tag-modal-card-item:hover {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    text-align: center;
 }
 
 .roller-equipment-title-wrap {
@@ -3278,16 +3397,16 @@ body:not(.no-bouncy) .tag-modal-card-item:hover {
 
 .roller-equipment-title {
     font-family: "Fredoka", sans-serif;
-    font-size: 1rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: var(--text-main);
 }
 
 .roller-slots-badge {
     font-family: "Fredoka", sans-serif;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    padding: 3px 10px;
+    padding: 3px 12px;
     border-radius: 999px;
     background: var(--bg-panel);
     border: 1.5px solid var(--border-highlight);
@@ -3295,28 +3414,29 @@ body:not(.no-bouncy) .tag-modal-card-item:hover {
 }
 
 .roller-equipment-hint {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
     color: var(--text-soft);
+    line-height: 1.4;
+    text-align: center;
 }
 
 .equipped-rollers-slots {
     width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(clamp(260px, 100%, 300px), 1fr));
     justify-content: center;
-    gap: 12px;
+    gap: 14px;
 }
 
 .roller-slot {
-    width: 290px;
-    min-width: 270px;
-    max-width: 320px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 204px;
     box-sizing: border-box;
-    padding: 12px 14px;
-    border-radius: 18px;
+    padding: 14px 16px;
+    border-radius: 20px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -3355,6 +3475,40 @@ html[data-theme="light"] .roller-slot.empty {
 
 .roller-slot.has-autoroller.auto-paused {
     border-color: rgba(245, 158, 11, 0.7);
+}
+
+.roller-slot.is-rolling {
+    border-color: #818cf8 !important;
+    box-shadow: 0 0 24px rgba(99, 102, 241, 0.45), 0 4px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+.roller-slot.is-rolling .roller-slot-icon {
+    animation: diceRumble 0.32s ease-in-out infinite alternate;
+}
+
+@keyframes diceRumble {
+    0% { transform: scale(1) rotate(-6deg); }
+    100% { transform: scale(1.15) rotate(6deg); }
+}
+
+.roller-slot.ready-flash {
+    animation: readyGlowPulse 0.65s ease-out;
+}
+
+@keyframes readyGlowPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), 0 0 25px rgba(16, 185, 129, 0.5);
+        border-color: #10b981;
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.3), 0 0 35px rgba(52, 211, 153, 0.7);
+        border-color: #34d399;
+        transform: translateY(-2px) scale(1.02);
+    }
+    100% {
+        box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
+        transform: translateY(0) scale(1);
+    }
 }
 
 .roller-slot.drag-over-valid {
@@ -3861,7 +4015,29 @@ html[data-theme="light"] .roller-slot.empty {
     white-space: nowrap;
 }
 
-/* Responsive Mobile & Tablet Layout */
+/* Comprehensive Responsive Mobile, Tablet & Desktop Layout */
+@media (max-width: 1024px) {
+    .container {
+        padding: 0 16px;
+    }
+
+    #inventory-grid.horizontal-inventory {
+        grid-template-rows: repeat(5, clamp(100px, 13vh, 128px));
+        grid-auto-columns: clamp(200px, 26vh, 256px);
+        column-gap: 14px;
+        row-gap: 12px;
+    }
+
+    #inventory-grid.horizontal-inventory .inventory-card {
+        width: clamp(200px, 26vh, 256px);
+        height: clamp(100px, 13vh, 128px);
+    }
+
+    .shop-upgrades-grid {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+}
+
 @media (max-width: 900px) {
     .sidebar {
         position: fixed;
@@ -3871,6 +4047,7 @@ html[data-theme="light"] .roller-slot.empty {
         margin-left: 0 !important;
         transform: translateX(-100%);
         box-shadow: 16px 0 40px rgba(0, 0, 0, 0.55);
+        z-index: 60;
     }
 
     .sidebar.mobile-open {
@@ -3882,9 +4059,18 @@ html[data-theme="light"] .roller-slot.empty {
     }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
     .header {
         padding: 12px 16px;
+        gap: 10px;
+    }
+
+    .header-left {
+        gap: 8px;
+    }
+
+    .view-title {
+        font-size: 1.18rem;
     }
 
     .level-bar-container {
@@ -3892,65 +4078,79 @@ html[data-theme="light"] .roller-slot.empty {
         max-width: 100%;
         width: 100%;
         flex-basis: 100%;
+        margin-top: 2px;
+    }
+
+    .stats-bar {
+        gap: 6px;
+        flex-wrap: wrap;
     }
 
     .stat-pill {
         padding: 6px 11px;
         font-size: 0.82rem;
+        gap: 5px;
     }
 
     .container {
-        margin: 18px auto;
-        padding: 0 14px;
+        margin: 16px auto;
+        padding: 0 12px;
     }
 
     .panel {
-        padding: 20px 16px;
+        padding: 18px 14px;
         border-radius: 20px;
     }
 
-    .roll-buttons-row {
-        grid-template-columns: 1fr;
+    /* Roll Showcase Multi-Roll Grid */
+    .roll-showcase.multi-roll {
+        grid-template-columns: repeat(auto-fit, minmax(clamp(160px, 45vw, 240px), 1fr));
+        gap: 12px;
     }
 
-    .roller-action-buttons {
-        grid-template-columns: 1fr;
+    .rolled-card-item {
+        border-radius: 16px;
     }
 
-    .auto-roll-button {
-        width: 100%;
-    }
-
-    .press-tabs {
-        grid-template-columns: 1fr;
-    }
-
-    .press-card-row {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .press-card-actions {
-        width: 100%;
-    }
-
-    .press-sell-btn {
-        flex: 1;
-    }
-
-    .settings-card {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
+    /* Sort Bar: Horizontal Touch Swipe */
     .inventory-header {
         flex-direction: column;
         align-items: flex-start;
+        gap: 10px;
     }
 
     .inventory-sort-bar {
         flex-direction: column;
         align-items: stretch;
+        gap: 10px;
+    }
+
+    .sort-label-wrap {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .sort-pills-group {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+    }
+
+    .sort-pills-group::-webkit-scrollbar {
+        display: none;
+    }
+
+    .sort-pill-btn {
+        flex-shrink: 0;
+        padding: 6px 12px;
+        font-size: 0.78rem;
     }
 
     .sort-select-wrap {
@@ -3962,62 +4162,169 @@ html[data-theme="light"] .roller-slot.empty {
         width: 100%;
     }
 
-    .inventory-grid {
-        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-        gap: 16px;
-    }
-
+    /* 5-Layer Inventory Grid on Tablet/Mobile */
     #inventory-grid.horizontal-inventory {
-        grid-template-rows: repeat(5, 120px);
-        grid-auto-columns: 240px;
-        column-gap: 14px;
-        row-gap: 12px;
+        grid-template-rows: repeat(5, 114px);
+        grid-auto-columns: 228px;
+        column-gap: 12px;
+        row-gap: 10px;
+        padding: 8px 2px 18px;
     }
 
     #inventory-grid.horizontal-inventory .inventory-card {
-        width: 240px;
-        height: 120px;
+        width: 228px;
+        height: 114px;
     }
 
-    .modal-wrapper {
-        position: relative;
-        flex-wrap: wrap;
-        gap: 12px;
+    .card-back {
+        padding: 8px 10px;
+        gap: 3px;
     }
 
-    .modal-card {
-        order: 1;
+    .card-back-tags {
+        max-height: 40px;
+    }
+
+    .card-back-tags .card-tag-pill {
+        font-size: 0.62rem;
+        padding: 2px 6px;
+    }
+
+    .card-back-rarity {
+        font-size: 1.05rem;
+    }
+
+    .card-back-quantity {
+        font-size: 0.75rem;
+    }
+
+    /* Equipped Rollers & Slots */
+    .roller-equipment-bar {
+        padding: 14px 12px;
+        border-radius: 20px;
+    }
+
+    .equipped-rollers-slots {
+        grid-template-columns: 1fr;
+    }
+
+    .roller-slot {
+        min-height: auto;
+        padding: 12px 14px;
+    }
+
+    /* Crafting */
+    .crafting-workbench {
+        padding: 16px 14px;
+        border-radius: 18px;
+    }
+
+    .workbench-idle-state {
+        flex-direction: column;
+        text-align: center;
+        padding: 18px 12px;
+        gap: 8px;
+    }
+
+    .active-craft-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .craft-refund-btn,
+    .craft-claim-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .crafting-recipes-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Presses */
+    .press-tabs {
+        grid-template-columns: 1fr;
+    }
+
+    .press-card-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .press-card-actions {
         width: 100%;
     }
 
-    .modal-prev {
-        order: 2;
+    .press-sell-btn {
+        flex: 1;
     }
 
-    .modal-next {
-        order: 3;
+    /* Settings */
+    .settings-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    /* Modals */
+    .modal-wrapper {
+        position: relative;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        max-width: 520px;
+    }
+
+    .modal-card {
+        width: 100%;
+        max-height: 84vh;
+        overflow-y: auto;
+        border-radius: 22px;
+    }
+
+    .modal-nav-btn {
+        width: 44px;
+        height: 44px;
     }
 
     .modal-body {
-        padding: 18px 16px 20px;
+        padding: 16px 16px 20px;
     }
 
     .modal-details-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .modal-detail-item {
+        padding: 10px 12px;
+    }
+
+    .tag-modal-wrapper {
+        max-width: 100%;
+        padding: 0 8px;
+    }
+
+    .tag-modal-card {
+        max-height: 88vh;
+        border-radius: 22px;
     }
 
     .tag-modal-header {
         flex-direction: column;
         align-items: flex-start;
-        padding: 18px 54px 14px 16px;
+        padding: 18px 50px 14px 16px;
     }
 
     .tag-modal-summary {
-        padding: 12px 16px 0;
+        padding: 12px 14px 0;
+        gap: 6px;
     }
 
     .tag-modal-body {
-        padding: 14px 16px 18px;
+        padding: 12px 14px 16px;
     }
 
     .tag-modal-card-item {
@@ -4027,6 +4334,85 @@ html[data-theme="light"] .roller-slot.empty {
 
     .tag-modal-card-thumb-wrap {
         width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .view-title {
+        font-size: 1.05rem;
+    }
+
+    .stat-pill {
+        padding: 5px 8px;
+        font-size: 0.78rem;
+    }
+
+    .stat-pill .stat-label {
+        display: none;
+    }
+
+    /* 5-Layer Inventory Grid on Small Phones */
+    #inventory-grid.horizontal-inventory {
+        grid-template-rows: repeat(5, 96px);
+        grid-auto-columns: 192px;
+        column-gap: 8px;
+        row-gap: 8px;
+        padding: 6px 2px 14px;
+    }
+
+    #inventory-grid.horizontal-inventory .inventory-card {
+        width: 192px;
+        height: 96px;
+        border-radius: 14px;
+    }
+
+    .card-face {
+        border-radius: 14px;
+    }
+
+    .card-front-name {
+        font-size: 0.82rem;
+    }
+
+    .card-title-overlay {
+        padding: 16px 8px 6px;
+    }
+
+    .card-back {
+        padding: 6px 8px;
+        gap: 2px;
+    }
+
+    .card-back-tags {
+        max-height: 32px;
+        gap: 2px;
+    }
+
+    .card-back-tags .card-tag-pill {
+        font-size: 0.56rem;
+        padding: 1.5px 5px;
+    }
+
+    .card-back-rarity {
+        font-size: 0.92rem;
+    }
+
+    .card-back-quantity {
+        font-size: 0.68rem;
+    }
+
+    .modal-details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tag-modal-summary {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
 
