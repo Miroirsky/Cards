@@ -52,7 +52,11 @@
                     <span class="nav-icon-bubble">⚙️</span>
                     <span>Presses</span>
                 </button>
-                <button id="nav-settings" class="sidebar-nav-item">
+                <button id="nav-crafting" class="sidebar-nav-item">
+                    <span class="nav-icon-bubble">🔨</span>
+                    <span>Crafting</span>
+                </button>
+                <button id="nav-settings" class="sidebar-nav-item" title="Settings / Parameters">
                     <span class="nav-icon-bubble">🛠️</span>
                     <span>Settings</span>
                 </button>
@@ -115,56 +119,56 @@
             </header>
 
             <main class="container">
+                <section class="panel roll-panel" id="roll-panel">
+                    <div class="roll-stage-wrap" id="roll-stage-wrap">
+                        <div class="roll-starburst" id="roll-starburst"></div>
+                        <div id="roll-batch-banner" class="roll-batch-banner hidden"></div>
+                        <div id="rolled-card-display" class="roll-showcase empty">
+                            <div class="roll-image-frame">
+                                <img id="rolled-card-image" src="Assets/Cards/Cards.png" alt="Card Preview" draggable="false">
+                                <div class="card-holo-glare"></div>
+                                <div class="card-shine"></div>
+                                <div id="rolled-mutation-tag" class="card-front-tags-overlay hidden"></div>
+                                <div class="card-title-overlay">
+                                    <h2 id="rolled-card-name">Ready to Roll!</h2>
+                                </div>
+                                <div class="hold-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="roller-equipment-bar" id="roller-equipment-bar" role="region" aria-label="Equipped Rollers">
+                        <div class="roller-equipment-header">
+                            <div class="roller-equipment-title-wrap">
+                                <span class="roller-equipment-title">⚙️ Equipped Rollers</span>
+                                <span id="roller-slots-badge" class="roller-slots-badge">0 / 1 Equipped</span>
+                            </div>
+                            <span class="roller-equipment-hint">Drag a Roller here to equip • Drag an Autoroller onto an equipped roller to automate</span>
+                        </div>
+                        <div id="equipped-rollers-slots" class="equipped-rollers-slots"></div>
+                    </div>
+
+                    <div class="roll-actions">
+                        <div id="roll-buttons-row" class="roll-buttons-row">
+                            <button id="roll-button" class="roll-button" disabled>
+                                <span class="btn-gloss"></span>
+                                <span id="roll-button-text" class="roll-button-text">⚠️ Equip a Roller</span>
+                                <span id="roll-cooldown-bar" class="roll-cooldown-bar"></span>
+                            </button>
+                            <button id="auto-roll-button" class="auto-roll-button" disabled>
+                                🤖 Auto-Roll: Locked
+                            </button>
+                        </div>
+                        <p id="roll-status" class="status-text">Equip your Basic Roller from the Items tab to start rolling!</p>
+                    </div>
+                </section>
+
                 <div id="view-cards" class="view-section">
-                    <section class="panel roll-panel">
-                        <div class="roll-stage-wrap" id="roll-stage-wrap">
-                            <div class="roll-starburst" id="roll-starburst"></div>
-                            <div id="roll-batch-banner" class="roll-batch-banner hidden"></div>
-                            <div id="rolled-card-display" class="roll-showcase empty">
-                                <div class="roll-image-frame">
-                                    <img id="rolled-card-image" src="Assets/Cards/Cards.png" alt="Card Preview" draggable="false">
-                                    <div class="card-holo-glare"></div>
-                                    <div class="card-shine"></div>
-                                    <div id="rolled-mutation-tag" class="card-front-tags-overlay hidden"></div>
-                                    <div class="card-title-overlay">
-                                        <h2 id="rolled-card-name">Ready to Roll!</h2>
-                                    </div>
-                                    <div class="hold-progress"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="roller-equipment-bar" id="roller-equipment-bar" role="region" aria-label="Equipped Rollers">
-                            <div class="roller-equipment-header">
-                                <div class="roller-equipment-title-wrap">
-                                    <span class="roller-equipment-title">⚙️ Equipped Rollers</span>
-                                    <span id="roller-slots-badge" class="roller-slots-badge">0 / 1 Equipped</span>
-                                </div>
-                                <span class="roller-equipment-hint">Drag a Roller here to equip • Drag an Autoroller onto an equipped roller to automate</span>
-                            </div>
-                            <div id="equipped-rollers-slots" class="equipped-rollers-slots"></div>
-                        </div>
-
-                        <div class="roll-actions">
-                            <div id="roll-buttons-row" class="roll-buttons-row">
-                                <button id="roll-button" class="roll-button" disabled>
-                                    <span class="btn-gloss"></span>
-                                    <span id="roll-button-text" class="roll-button-text">⚠️ Equip a Roller</span>
-                                    <span id="roll-cooldown-bar" class="roll-cooldown-bar"></span>
-                                </button>
-                                <button id="auto-roll-button" class="auto-roll-button" disabled>
-                                    🤖 Auto-Roll: Locked
-                                </button>
-                            </div>
-                            <p id="roll-status" class="status-text">Equip your Basic Roller from the Items tab to start rolling!</p>
-                        </div>
-                    </section>
-
                     <section id="inventory-cards-section" class="panel inventory-panel">
                         <div class="inventory-header">
                             <div class="inventory-title-group">
                                 <h2>🃏 Card Inventory</h2>
-                                <p class="inventory-hint">Scroll horizontally • Hover or tap to flip • Hold a card to inspect details!</p>
+                                <p class="inventory-hint">5 Layers • Hold middle mouse button to scroll horizontally • Hover or tap to flip • Hold to inspect!</p>
                             </div>
                             <div class="inventory-summary">
                                 <span id="unique-count" class="summary-badge">🃏 Discovered: 0</span>
@@ -208,8 +212,10 @@
 
                         <div id="inventory-grid" class="inventory-grid horizontal-inventory"></div>
                     </section>
+                </div>
 
-                    <section id="inventory-items-section" class="panel inventory-panel hidden">
+                <div id="view-items" class="view-section hidden">
+                    <section id="inventory-items-section" class="panel inventory-panel">
                         <div class="inventory-header">
                             <div class="inventory-title-group">
                                 <h2>🎒 Items Inventory</h2>
@@ -255,6 +261,22 @@
 
                         <div id="press-tabs" class="press-tabs"></div>
                         <div id="press-content" class="press-content"></div>
+                    </section>
+                </div>
+
+                <div id="view-crafting" class="view-section hidden">
+                    <section class="panel crafting-panel">
+                        <div class="crafting-header">
+                            <div>
+                                <h2>🔨 Crafting Bench</h2>
+                                <p class="inventory-hint">Combine materials, cards, and components to craft special rollers and upgrades!</p>
+                            </div>
+                        </div>
+                        <div class="crafting-placeholder">
+                            <div class="crafting-empty-icon">🔨</div>
+                            <h3>Crafting System Coming Soon</h3>
+                            <p>Crafting recipes and workbench blueprints are in development. Stay tuned!</p>
+                        </div>
                     </section>
                 </div>
 

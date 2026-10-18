@@ -410,6 +410,7 @@ function SaveGame() {
             xp: PlayerData.xp,
             totalRolls: PlayerData.totalRolls,
             autoRollEnabled: PlayerData.autoRollEnabled,
+            activeView: PlayerData.activeView,
             inventoryTab: PlayerData.inventoryTab,
             activePressId: PlayerData.activePressId,
             pressPercent: PlayerData.pressPercent,
@@ -483,6 +484,9 @@ function LoadGame() {
         }
         if (typeof saved.sortBy === "string") {
             PlayerData.sortBy = saved.sortBy
+        }
+        if (typeof saved.activeView === "string") {
+            PlayerData.activeView = saved.activeView
         }
 
         if (saved.settings && typeof saved.settings === "object") {
@@ -1123,6 +1127,27 @@ function Roll(list, luck, maxCards) {
     return rolledCards
 }
 
+function RollSingleRoller(rollerInst, list) {
+    let targetList = Array.isArray(list) && list.length > 0 ? list : CardsList
+    if (!rollerInst) return []
+    let rollerDef = GetRollerDefinition(rollerInst.itemId)
+    let luckMult = (rollerDef && typeof rollerDef.luckMultiplier === "number" && rollerDef.luckMultiplier > 0)
+        ? rollerDef.luckMultiplier
+        : 1
+    let maxCards = (rollerDef && typeof rollerDef.maxCardsPerRoll === "number" && rollerDef.maxCardsPerRoll > 0)
+        ? rollerDef.maxCardsPerRoll
+        : 1
+    let basePlayerLuck = GetEffectiveLuck()
+    let effectiveRollerLuck = basePlayerLuck * luckMult
+    let pull = Roll(targetList, effectiveRollerLuck, maxCards)
+    if (Array.isArray(pull)) {
+        return pull
+    } else if (pull) {
+        return [pull]
+    }
+    return []
+}
+
 function RollWithEquippedRollers(list, isAutoRoll) {
     let targetList = Array.isArray(list) && list.length > 0 ? list : CardsList
     let equippedRollers = GetEquippedRollers()
@@ -1144,24 +1169,11 @@ function RollWithEquippedRollers(list, isAutoRoll) {
     }
 
     let combinedCards = []
-    let basePlayerLuck = GetEffectiveLuck()
 
     for (let [i, rollerInst] of pairs(activeRollers)) {
-        let rollerDef = GetRollerDefinition(rollerInst.itemId)
-        let luckMult = (rollerDef && typeof rollerDef.luckMultiplier === "number" && rollerDef.luckMultiplier > 0)
-            ? rollerDef.luckMultiplier
-            : 1
-        let maxCards = (rollerDef && typeof rollerDef.maxCardsPerRoll === "number" && rollerDef.maxCardsPerRoll > 0)
-            ? rollerDef.maxCardsPerRoll
-            : 1
-        let effectiveRollerLuck = basePlayerLuck * luckMult
-        let pull = Roll(targetList, effectiveRollerLuck, maxCards)
-        if (Array.isArray(pull)) {
-            for (let [j, c] of pairs(pull)) {
-                if (c) table.insert(combinedCards, c)
-            }
-        } else if (pull) {
-            table.insert(combinedCards, pull)
+        let pull = RollSingleRoller(rollerInst, targetList)
+        for (let [j, c] of pairs(pull)) {
+            if (c) table.insert(combinedCards, c)
         }
     }
 
@@ -1507,22 +1519,99 @@ function UpdateTokenGeneration(delta) {
     }
 }
 
-function StartRollCooldown() {
-    PlayerData.isCooldown = true
-    let effectiveCooldown = GetEffectiveRollCooldown()
-    document.documentElement.style.setProperty("--roll-cooldown", effectiveCooldown + "s")
+function IsRollerSlotOnCooldown(slotIndex) {
+    let slotIdx = Number(slotIndex)
+    let state = RollerCooldownState[slotIdx]
+    if (!state) return false
+    return Date.now() < state.endTime
+}
 
-    let rollButton = document.getElementById("roll-button")
-    rollButton.classList.remove("cooling-down")
-    void rollButton.offsetWidth
-    rollButton.classList.add("cooling-down")
-    UpdateTopBarUI()
+function GetRollerSlotRemainingDuration(slotIndex) {
+    let slotIdx = Number(slotIndex)
+    let state = RollerCooldownState[slotIdx]
+    if (!state) return 0
+    let remainingMs = state.endTime - Date.now()
+    return remainingMs > 0 ? (remainingMs / 1000) : 0
+}
 
-    setTimeout(function() {
+function SyncGlobalCooldownState() {
+    let equipped = GetEquippedRollers()
+    if (equipped.length === 0) {
         PlayerData.isCooldown = false
-        rollButton.classList.remove("cooling-down")
+        return
+    }
+    let allOnCooldown = true
+    EnsureRollerSlotsNormalized()
+    for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
+        let roller = PlayerData.equippedRollers[slotIndex]
+        if (roller && !IsRollerSlotOnCooldown(slotIndex)) {
+            allOnCooldown = false
+            break
+        }
+    }
+    PlayerData.isCooldown = allOnCooldown
+}
+
+function StartRollerSlotCooldown(slotIndex, customDurationSec) {
+    let slotIdx = Number(slotIndex)
+    EnsureRollerSlotsNormalized()
+    let rollerInst = PlayerData.equippedRollers && PlayerData.equippedRollers[slotIdx]
+    let duration = customDurationSec !== undefined ? customDurationSec : GetEffectiveRollerDuration(rollerInst)
+    duration = math.max(0.1, Number(duration) || 2)
+
+    if (RollerCooldownState[slotIdx] && RollerCooldownState[slotIdx].timerId) {
+        clearTimeout(RollerCooldownState[slotIdx].timerId)
+    }
+
+    let endTime = Date.now() + (duration * 1000)
+
+    let timerId = setTimeout(function() {
+        if (RollerCooldownState[slotIdx]) {
+            delete RollerCooldownState[slotIdx]
+        }
+        SyncGlobalCooldownState()
+        let slotBtn = document.querySelector(`[data-roller-roll-slot="${slotIdx}"]`)
+        if (slotBtn) {
+            slotBtn.classList.remove("cooling-down")
+        }
         UpdateTopBarUI()
-    }, effectiveCooldown * 1000)
+    }, duration * 1000)
+
+    RollerCooldownState[slotIdx] = {
+        endTime: endTime,
+        duration: duration,
+        timerId: timerId,
+    }
+
+    SyncGlobalCooldownState()
+
+    let slotBtn = document.querySelector(`[data-roller-roll-slot="${slotIdx}"]`)
+    if (slotBtn) {
+        slotBtn.style.setProperty("--roller-cooldown", duration + "s")
+        slotBtn.classList.remove("cooling-down")
+        void slotBtn.offsetWidth
+        slotBtn.classList.add("cooling-down")
+    }
+
+    let fallbackBtn = document.getElementById("roll-button")
+    if (fallbackBtn) {
+        fallbackBtn.style.setProperty("--roller-cooldown", duration + "s")
+        fallbackBtn.classList.remove("cooling-down")
+        void fallbackBtn.offsetWidth
+        fallbackBtn.classList.add("cooling-down")
+    }
+
+    UpdateTopBarUI()
+}
+
+function StartRollCooldown() {
+    EnsureRollerSlotsNormalized()
+    for (let slotIdx = 0; slotIdx < PlayerData.maxRollerSlots; slotIdx++) {
+        let rollerInst = PlayerData.equippedRollers[slotIdx]
+        if (rollerInst) {
+            StartRollerSlotCooldown(slotIdx)
+        }
+    }
 }
 
 function SetRollStatusMessage(message, isWarn) {
@@ -1736,36 +1825,39 @@ function BuyAutoroller(triggerEl) {
     return true
 }
 
-function HandleRollClick(eventOrIsAuto) {
-    let isAutoRoll = eventOrIsAuto === true
-    if (PlayerData.isCooldown) return
-
-    let equippedRollers = GetEquippedRollers()
-    if (equippedRollers.length <= 0) {
+function HandleRollerSlotRoll(slotIndex, isAutoRoll) {
+    let slotIdx = Number(slotIndex)
+    EnsureRollerSlotsNormalized()
+    let rollerInst = PlayerData.equippedRollers && PlayerData.equippedRollers[slotIdx]
+    if (!rollerInst || rollerInst.type !== "roller") {
         if (!isAutoRoll) {
-            SetRollStatusMessage("⚠️ You cannot roll without an equipped roller! Open the Items Inventory tab and drag your Basic Roller into a Roller Slot.", true)
+            SetRollStatusMessage("⚠️ Slot #" + (slotIdx + 1) + " has no equipped roller!", true)
         }
-        return
+        return false
     }
 
-    if (isAutoRoll && !HasActiveAutomatedRoller()) {
-        return
+    if (IsRollerSlotOnCooldown(slotIdx)) {
+        return false
     }
 
-    let rollCost = coreValues.roll.cost
-    if (PlayerData.tokens < rollCost) {
+    if (isAutoRoll === true && (!rollerInst.hasAutoroller || !rollerInst.autoEnabled)) {
+        return false
+    }
+
+    let rollerCost = GetRollerCost(rollerInst)
+    if (PlayerData.tokens < rollerCost) {
         if (!isAutoRoll) {
-            SetRollStatusMessage("Not enough tokens! Waiting for token drop...", true)
+            SetRollStatusMessage("Not enough tokens for Slot #" + (slotIdx + 1) + "! Waiting for token drop...", true)
         }
-        return
+        return false
     }
 
-    let rolledCards = RollWithEquippedRollers(CardsList, isAutoRoll)
+    let rolledCards = RollSingleRoller(rollerInst, CardsList)
     if (!Array.isArray(rolledCards) || rolledCards.length <= 0) {
-        return
+        return false
     }
 
-    PlayerData.tokens -= rollCost
+    PlayerData.tokens -= rollerCost
     PlayerData.totalRolls += 1
 
     PlayerData.lastRolledCards = rolledCards
@@ -1788,12 +1880,54 @@ function HandleRollClick(eventOrIsAuto) {
     AddXp(totalGainedXp)
 
     PlayGameSound(hasRareOrMutated ? "rare" : "roll")
-    SpawnParticleBurst(document.getElementById("rolled-card-display"), hasRareOrMutated ? "rare" : "normal")
+    let displayEl = document.getElementById("rolled-card-display")
+    if (displayEl) {
+        SpawnParticleBurst(displayEl, hasRareOrMutated ? "rare" : "normal")
+    }
 
     RenderRolledCards(rolledCards, totalGainedXp)
-    StartRollCooldown()
+
+    let rollerDef = GetRollerDefinition(rollerInst.itemId)
+    let rollDuration = GetEffectiveRollerDuration(rollerInst)
+    StartRollerSlotCooldown(slotIdx, rollDuration)
+
     SaveGame()
     UpdateUI()
+    return true
+}
+
+function HandleRollClick(eventOrIsAuto) {
+    let isAutoRoll = eventOrIsAuto === true
+    EnsureRollerSlotsNormalized()
+    let equippedRollers = GetEquippedRollers()
+    if (equippedRollers.length <= 0) {
+        if (!isAutoRoll) {
+            SetRollStatusMessage("⚠️ You cannot roll without an equipped roller! Open the Items Inventory tab and drag your Basic Roller into a Roller Slot.", true)
+        }
+        return
+    }
+
+    let rolledAny = false
+    for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
+        let roller = PlayerData.equippedRollers[slotIndex]
+        if (!roller || roller.type !== "roller") continue
+        if (isAutoRoll && (!roller.hasAutoroller || !roller.autoEnabled)) continue
+        if (!IsRollerSlotOnCooldown(slotIndex)) {
+            let cost = GetRollerCost(roller)
+            if (PlayerData.tokens >= cost) {
+                let didRoll = HandleRollerSlotRoll(slotIndex, isAutoRoll)
+                if (didRoll) rolledAny = true
+            }
+        }
+    }
+
+    if (!rolledAny && !isAutoRoll) {
+        if (PlayerData.isCooldown) {
+            SetRollStatusMessage("⏳ All equipped rollers are currently cooling down...", false)
+        } else {
+            SetRollStatusMessage("Not enough tokens! Waiting for token drop...", true)
+        }
+    }
 }
 
 function ToggleAutoRoll() {
@@ -1925,52 +2059,82 @@ function RenderRolledCard(cardData, gainedXp) {
 
 function SwitchView(viewName) {
     PlayerData.activeView = viewName
+    PlayerData.inventoryTab = (viewName === "items" ? "items" : "cards")
+    let rollPanel = document.getElementById("roll-panel")
     let viewCards = document.getElementById("view-cards")
+    let viewItems = document.getElementById("view-items")
     let viewPresses = document.getElementById("view-presses")
     let viewShop = document.getElementById("view-shop")
     let viewSettings = document.getElementById("view-settings")
+    let viewCrafting = document.getElementById("view-crafting")
     let navCards = document.getElementById("nav-cards")
+    let navItems = document.getElementById("nav-items")
     let navPresses = document.getElementById("nav-presses")
     let navShop = document.getElementById("nav-shop")
     let navSettings = document.getElementById("nav-settings")
+    let navCrafting = document.getElementById("nav-crafting")
     let sidebarPressSection = document.getElementById("sidebar-press-section")
     let viewTitle = document.getElementById("view-title")
 
-    viewCards.classList.toggle("hidden", viewName !== "cards")
-    viewPresses.classList.toggle("hidden", viewName !== "presses")
-    if (viewShop) {
-        viewShop.classList.toggle("hidden", viewName !== "shop")
-    }
-    if (viewSettings) {
-        viewSettings.classList.toggle("hidden", viewName !== "settings")
+    let isCards = (viewName === "cards")
+    let isItems = (viewName === "items")
+    let showRollPanel = (isCards || isItems)
+
+    if (rollPanel) {
+        rollPanel.classList.toggle("hidden", !showRollPanel)
     }
 
-    navCards.classList.toggle("active", viewName === "cards")
-    navPresses.classList.toggle("active", viewName === "presses")
-    if (navShop) {
-        navShop.classList.toggle("active", viewName === "shop")
-    }
-    if (navSettings) {
-        navSettings.classList.toggle("active", viewName === "settings")
-    }
+    if (viewCards) viewCards.classList.toggle("hidden", !isCards)
+    if (viewItems) viewItems.classList.toggle("hidden", !isItems)
+    if (viewPresses) viewPresses.classList.toggle("hidden", viewName !== "presses")
+    if (viewShop) viewShop.classList.toggle("hidden", viewName !== "shop")
+    if (viewSettings) viewSettings.classList.toggle("hidden", viewName !== "settings")
+    if (viewCrafting) viewCrafting.classList.toggle("hidden", viewName !== "crafting")
+
+    if (navCards) navCards.classList.toggle("active", isCards)
+    if (navItems) navItems.classList.toggle("active", isItems)
+    if (navPresses) navPresses.classList.toggle("active", viewName === "presses")
+    if (navShop) navShop.classList.toggle("active", viewName === "shop")
+    if (navSettings) navSettings.classList.toggle("active", viewName === "settings")
+    if (navCrafting) navCrafting.classList.toggle("active", viewName === "crafting")
 
     if (sidebarPressSection) {
         sidebarPressSection.classList.toggle("hidden", viewName !== "presses")
     }
 
-    if (viewName === "presses") {
-        viewTitle.textContent = "Presses"
-    } else if (viewName === "shop") {
-        viewTitle.textContent = "Upgrade Shop"
-    } else if (viewName === "settings") {
-        viewTitle.textContent = "Settings"
-    } else {
-        viewTitle.textContent = "Roll & Inventory"
+    if (viewTitle) {
+        if (viewName === "presses") {
+            viewTitle.textContent = "Presses"
+        } else if (viewName === "shop") {
+            viewTitle.textContent = "Upgrade Shop"
+        } else if (viewName === "settings") {
+            viewTitle.textContent = "Settings / Parameters"
+        } else if (viewName === "crafting") {
+            viewTitle.textContent = "Crafting Bench"
+        } else if (viewName === "items") {
+            viewTitle.textContent = "Items Inventory"
+        } else {
+            viewTitle.textContent = "Cards Inventory"
+        }
     }
 
-    RenderSidebarPresses()
-    RenderPressMenu()
-    RenderShop()
+    if (isCards) {
+        RenderInventory()
+    } else if (isItems) {
+        RenderItemsInventory()
+    } else if (viewName === "presses") {
+        RenderSidebarPresses()
+        RenderPressMenu()
+    } else if (viewName === "shop") {
+        RenderShop()
+    }
+
+    if (showRollPanel) {
+        RenderEquippedRollers()
+        RenderRollerButtons()
+    }
+
+    SaveGame()
 }
 
 function ToggleSidebar() {
@@ -3161,33 +3325,67 @@ function SetupRollerDragAndDropInteractions() {
     document.addEventListener("pointercancel", finishPointerDrag)
 }
 
+function SetupMiddleMouseScroll(containerEl) {
+    if (!containerEl) return
+    let isMiddleDragging = false
+    let startX = 0
+    let startScrollLeft = 0
+
+    containerEl.addEventListener("mousedown", function(e) {
+        if (e.button === 1) { // Mouse middle button
+            e.preventDefault()
+            e.stopPropagation()
+            isMiddleDragging = true
+            startX = e.clientX
+            startScrollLeft = containerEl.scrollLeft
+            containerEl.classList.add("middle-dragging")
+            document.body.classList.add("inventory-middle-scrolling")
+        }
+    })
+
+    containerEl.addEventListener("auxclick", function(e) {
+        if (e.button === 1) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+    })
+
+    window.addEventListener("mousemove", function(e) {
+        if (!isMiddleDragging) return
+        e.preventDefault()
+        let dx = e.clientX - startX
+        containerEl.scrollLeft = startScrollLeft - dx
+    })
+
+    function endMiddleDrag(e) {
+        if (isMiddleDragging) {
+            isMiddleDragging = false
+            containerEl.classList.remove("middle-dragging")
+            document.body.classList.remove("inventory-middle-scrolling")
+            if (e && e.button === 1) {
+                e.preventDefault()
+            }
+        }
+    }
+
+    window.addEventListener("mouseup", function(e) {
+        if (e.button === 1 || isMiddleDragging) {
+            endMiddleDrag(e)
+        }
+    })
+    window.addEventListener("blur", endMiddleDrag)
+
+    containerEl.addEventListener("wheel", function(e) {
+        if (!e.ctrlKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+            containerEl.scrollLeft += e.deltaY
+            e.preventDefault()
+        }
+    }, { passive: false })
+}
+
 function SwitchInventoryTab(tabName) {
     let targetTab = tabName === "items" ? "items" : "cards"
-    PlayerData.inventoryTab = targetTab
-
-    let tabCardsBtn = document.getElementById("inv-tab-cards")
-    let tabItemsBtn = document.getElementById("inv-tab-items")
-    let cardsSection = document.getElementById("inventory-cards-section")
-    let itemsSection = document.getElementById("inventory-items-section")
-
-    if (tabCardsBtn) {
-        let isCards = targetTab === "cards"
-        tabCardsBtn.classList.toggle("active", isCards)
-        tabCardsBtn.setAttribute("aria-selected", isCards ? "true" : "false")
-    }
-    if (tabItemsBtn) {
-        let isItems = targetTab === "items"
-        tabItemsBtn.classList.toggle("active", isItems)
-        tabItemsBtn.setAttribute("aria-selected", isItems ? "true" : "false")
-    }
-    if (cardsSection) {
-        cardsSection.classList.toggle("hidden", targetTab !== "cards")
-    }
-    if (itemsSection) {
-        itemsSection.classList.toggle("hidden", targetTab !== "items")
-    }
-
-    SaveGame()
+    SwitchView(targetTab)
 }
 
 function RenderEquippedRollers() {
@@ -3449,11 +3647,13 @@ function RenderInventory() {
     }
 
     if (ownedCardsData.length > 0) {
+        grid.classList.remove("is-empty")
         let rarestOwned = GetRarest(ownedCardsData)
         if (rarestOwnedEl) {
             rarestOwnedEl.textContent = "👑 Rarest: " + rarestOwned.name + " (" + FormatRarityText(rarestOwned.rarity) + ")"
         }
     } else {
+        grid.classList.add("is-empty")
         if (rarestOwnedEl) {
             rarestOwnedEl.textContent = "👑 Rarest: None"
         }
@@ -3516,18 +3716,20 @@ function UpdateTopBarUI() {
 
     let equippedRollers = GetEquippedRollers()
     let hasRoller = equippedRollers.length > 0
+    SyncGlobalCooldownState()
 
     let rollButton = document.getElementById("roll-button")
     let rollButtonText = document.getElementById("roll-button-text")
-    let canRoll = hasRoller && PlayerData.tokens >= rollCost && !PlayerData.isCooldown
-
-    rollButton.disabled = !canRoll
-    if (!hasRoller) {
-        rollButtonText.textContent = "⚠️ Equip a Roller"
-    } else if (PlayerData.isCooldown) {
-        rollButtonText.textContent = "⏳ Recharging..."
-    } else {
-        rollButtonText.textContent = "🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")"
+    if (rollButton && rollButtonText) {
+        let canRoll = hasRoller && PlayerData.tokens >= rollCost && !PlayerData.isCooldown
+        rollButton.disabled = !canRoll
+        if (!hasRoller) {
+            rollButtonText.textContent = "⚠️ Equip a Roller"
+        } else if (PlayerData.isCooldown) {
+            rollButtonText.textContent = "⏳ Recharging..."
+        } else {
+            rollButtonText.textContent = "🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")"
+        }
     }
 
     let autoRollBtn = document.getElementById("auto-roll-button")
@@ -3535,14 +3737,163 @@ function UpdateTopBarUI() {
     let isAutoActive = HasActiveAutomatedRoller()
     SyncAutoRollStateFromRollers()
 
-    if (!hasAutomated) {
-        autoRollBtn.disabled = true
-        autoRollBtn.classList.remove("active")
-        autoRollBtn.textContent = "🤖 Auto-Roll: No Autoroller"
-    } else {
-        autoRollBtn.disabled = false
-        autoRollBtn.classList.toggle("active", isAutoActive)
-        autoRollBtn.textContent = "🤖 Auto-Roll: " + (isAutoActive ? "ON" : "OFF")
+    if (autoRollBtn) {
+        if (!hasAutomated) {
+            autoRollBtn.disabled = true
+            autoRollBtn.classList.remove("active")
+            autoRollBtn.textContent = "🤖 Auto-Roll: No Autoroller"
+        } else {
+            autoRollBtn.disabled = false
+            autoRollBtn.classList.toggle("active", isAutoActive)
+            autoRollBtn.textContent = "🤖 Auto-Roll: " + (isAutoActive ? "ON" : "OFF")
+        }
+    }
+
+    RenderRollerButtons()
+}
+
+function RenderRollerButtons() {
+    let container = document.getElementById("roll-buttons-row")
+    if (!container) return
+
+    EnsureRollerSlotsNormalized()
+    let equippedList = []
+    for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
+        let rollerInst = PlayerData.equippedRollers[slotIndex]
+        if (rollerInst && rollerInst.type === "roller") {
+            table.insert(equippedList, { slotIndex: slotIndex, inst: rollerInst })
+        }
+    }
+
+    if (equippedList.length === 0) {
+        if (container.getAttribute("data-mode") !== "empty") {
+            container.setAttribute("data-mode", "empty")
+            container.removeAttribute("data-signature")
+            container.innerHTML = `
+                <button id="roll-button" type="button" class="roll-button empty-fallback-btn">
+                    <span class="btn-gloss"></span>
+                    <span id="roll-button-text" class="roll-button-text">⚠️ Equip a Roller from Items</span>
+                    <span id="roll-cooldown-bar" class="roll-cooldown-bar"></span>
+                </button>
+                <button id="auto-roll-button" type="button" class="auto-roll-button" disabled>
+                    🤖 Auto-Roll: Locked
+                </button>
+            `
+            let emptyRollBtn = container.querySelector("#roll-button")
+            if (emptyRollBtn) {
+                emptyRollBtn.addEventListener("click", function() {
+                    SwitchView("items")
+                    PlayGameSound("pop")
+                })
+            }
+        }
+        return
+    }
+
+    let currentSignature = equippedList.map(function(e) {
+        return e.slotIndex + ":" + e.inst.instanceId + ":" + (e.inst.hasAutoroller ? "1" : "0")
+    }).join("|")
+
+    let existingSignature = container.getAttribute("data-signature")
+
+    if (existingSignature !== currentSignature) {
+        container.setAttribute("data-mode", "rollers")
+        container.setAttribute("data-signature", currentSignature)
+        container.innerHTML = ""
+
+        for (let [idx, entry] of pairs(equippedList)) {
+            let slotIndex = entry.slotIndex
+            let rollerInst = entry.inst
+            let rollerDef = GetRollerDefinition(rollerInst.itemId)
+            let luckMult = rollerDef.luckMultiplier !== undefined ? rollerDef.luckMultiplier : 1
+            let maxCards = rollerDef.maxCardsPerRoll !== undefined ? rollerDef.maxCardsPerRoll : 1
+            let rollCost = GetRollerCost(rollerInst)
+            let duration = GetEffectiveRollerDuration(rollerInst)
+
+            let unitEl = document.createElement("div")
+            unitEl.className = "roller-action-unit"
+            unitEl.setAttribute("data-slot-index", String(slotIndex))
+
+            unitEl.innerHTML = `
+                <div class="roller-action-header">
+                    <span class="roller-action-title">${rollerDef.icon || "🎲"} Slot #${slotIndex + 1}: ${rollerDef.name}</span>
+                    <span class="roller-action-meta">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} • ⏱️ ${FormatNumber(duration)}s</span>
+                </div>
+                <div class="roller-action-buttons">
+                    <button type="button" class="roll-button roller-roll-btn" data-roller-roll-slot="${slotIndex}">
+                        <span class="btn-gloss"></span>
+                        <span class="roll-button-text">🎲 Roll (${rollCost} Token${rollCost > 1 ? "s" : ""})</span>
+                        <span class="roll-cooldown-bar"></span>
+                    </button>
+                    <button type="button" class="auto-roll-button roller-auto-btn" data-roller-auto-slot="${slotIndex}">
+                        ${rollerInst.hasAutoroller ? (rollerInst.autoEnabled ? "🤖 Auto: ON" : "🤖 Auto: OFF") : "🤖 No Autoroller"}
+                    </button>
+                </div>
+            `
+
+            let rollBtn = unitEl.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
+            if (rollBtn) {
+                rollBtn.addEventListener("click", function() {
+                    HandleRollerSlotRoll(slotIndex)
+                })
+            }
+
+            let autoBtn = unitEl.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
+            if (autoBtn) {
+                autoBtn.addEventListener("click", function() {
+                    if (!rollerInst.hasAutoroller) {
+                        SetRollStatusMessage("⚠️ Drag an Autoroller from Items onto Slot #" + (slotIndex + 1) + " to automate it!", true)
+                        return
+                    }
+                    ToggleRollerAutomation(slotIndex)
+                })
+            }
+
+            container.appendChild(unitEl)
+        }
+    }
+
+    for (let [idx, entry] of pairs(equippedList)) {
+        let slotIndex = entry.slotIndex
+        let rollerInst = entry.inst
+        let rollCost = GetRollerCost(rollerInst)
+        let onCooldown = IsRollerSlotOnCooldown(slotIndex)
+        let canAfford = PlayerData.tokens >= rollCost
+        let rollBtn = container.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
+        let autoBtn = container.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
+
+        if (rollBtn) {
+            rollBtn.disabled = !canAfford || onCooldown
+            let btnText = rollBtn.querySelector(".roll-button-text")
+            if (btnText) {
+                if (onCooldown) {
+                    btnText.textContent = "⏳ Recharging..."
+                } else if (!canAfford) {
+                    btnText.textContent = "🎲 Need " + rollCost + " Token" + (rollCost > 1 ? "s" : "")
+                } else {
+                    btnText.textContent = "🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")"
+                }
+            }
+            if (onCooldown && !rollBtn.classList.contains("cooling-down")) {
+                let remaining = GetRollerSlotRemainingDuration(slotIndex)
+                rollBtn.style.setProperty("--roller-cooldown", remaining + "s")
+                rollBtn.classList.add("cooling-down")
+            } else if (!onCooldown && rollBtn.classList.contains("cooling-down")) {
+                rollBtn.classList.remove("cooling-down")
+            }
+        }
+
+        if (autoBtn) {
+            if (!rollerInst.hasAutoroller) {
+                autoBtn.disabled = true
+                autoBtn.classList.remove("active")
+                autoBtn.textContent = "🤖 No Autoroller"
+            } else {
+                autoBtn.disabled = false
+                autoBtn.classList.toggle("active", Boolean(rollerInst.autoEnabled))
+                autoBtn.textContent = rollerInst.autoEnabled ? "🤖 Auto: ON" : "🤖 Auto: OFF"
+            }
+        }
     }
 }
 
@@ -3586,13 +3937,25 @@ function SetCardSort(sortMode) {
 function UpdateUI() {
     UpdateTopBarUI()
     UpdateSortControlsUI()
-    SwitchInventoryTab(PlayerData.inventoryTab || "cards")
-    RenderEquippedRollers()
-    RenderItemsInventory()
-    RenderSidebarPresses()
-    RenderPressMenu()
-    RenderShop()
-    RenderInventory()
+    let isCards = (PlayerData.activeView === "cards")
+    let isItems = (PlayerData.activeView === "items")
+    if (isCards || isItems) {
+        RenderEquippedRollers()
+        RenderRollerButtons()
+    }
+    if (isItems) {
+        RenderItemsInventory()
+    }
+    if (PlayerData.activeView === "presses") {
+        RenderSidebarPresses()
+        RenderPressMenu()
+    }
+    if (PlayerData.activeView === "shop") {
+        RenderShop()
+    }
+    if (isCards) {
+        RenderInventory()
+    }
     if (TagModalState.isOpen && TagModalState.currentTagId) {
         PopulateTagModal(TagModalState.currentTagId)
     }
@@ -3621,6 +3984,18 @@ function ResetGameProgress() {
         pressRevenue: 0,
     }
     InitializeDefaultRollerSystem()
+
+    for (let key in RollerCooldownState) {
+        if (RollerCooldownState[key] && RollerCooldownState[key].timerId) {
+            clearTimeout(RollerCooldownState[key].timerId)
+        }
+        delete RollerCooldownState[key]
+    }
+    let buttonsRow = document.getElementById("roll-buttons-row")
+    if (buttonsRow) {
+        buttonsRow.removeAttribute("data-signature")
+        buttonsRow.removeAttribute("data-mode")
+    }
 
     let stageWrap = document.getElementById("roll-stage-wrap")
     let display = document.getElementById("rolled-card-display")
@@ -3674,6 +4049,8 @@ function Init() {
     RenderSidebarMutationsLegend()
     SetupTagLongPressInteractions()
     SetupRollerDragAndDropInteractions()
+    SetupMiddleMouseScroll(document.getElementById("inventory-grid"))
+    SetupMiddleMouseScroll(document.getElementById("items-inventory-grid"))
 
     let invTabCards = document.getElementById("inv-tab-cards")
     let invTabItems = document.getElementById("inv-tab-items")
@@ -3702,26 +4079,48 @@ function Init() {
     }
 
     let rollButton = document.getElementById("roll-button")
-    rollButton.addEventListener("click", HandleRollClick)
+    if (rollButton) {
+        rollButton.addEventListener("click", HandleRollClick)
+    }
 
     let autoRollButton = document.getElementById("auto-roll-button")
-    autoRollButton.addEventListener("click", ToggleAutoRoll)
+    if (autoRollButton) {
+        autoRollButton.addEventListener("click", ToggleAutoRoll)
+    }
 
     let navCards = document.getElementById("nav-cards")
+    let navItems = document.getElementById("nav-items")
     let navPresses = document.getElementById("nav-presses")
+    let navCrafting = document.getElementById("nav-crafting")
     let navShop = document.getElementById("nav-shop")
     let navSettings = document.getElementById("nav-settings")
     let sidebarCollapseBtn = document.getElementById("sidebar-collapse-btn")
     let sidebarOpenBtn = document.getElementById("sidebar-open-btn")
     let sidebarBackdrop = document.getElementById("sidebar-backdrop")
 
-    navCards.addEventListener("click", function() {
-        SwitchView("cards")
-        CloseMobileSidebar()
-    })
-    navPresses.addEventListener("click", function() {
-        SwitchView("presses")
-    })
+    if (navCards) {
+        navCards.addEventListener("click", function() {
+            SwitchView("cards")
+            CloseMobileSidebar()
+        })
+    }
+    if (navItems) {
+        navItems.addEventListener("click", function() {
+            SwitchView("items")
+            CloseMobileSidebar()
+        })
+    }
+    if (navPresses) {
+        navPresses.addEventListener("click", function() {
+            SwitchView("presses")
+        })
+    }
+    if (navCrafting) {
+        navCrafting.addEventListener("click", function() {
+            SwitchView("crafting")
+            CloseMobileSidebar()
+        })
+    }
     if (navShop) {
         navShop.addEventListener("click", function() {
             SwitchView("shop")
@@ -3922,6 +4321,7 @@ function Init() {
 
     window.addEventListener("beforeunload", SaveGame)
 
+    SwitchView(PlayerData.activeView || "cards")
     UpdateUI()
 
     setInterval(function() {
@@ -3930,14 +4330,23 @@ function Init() {
     }, coreValues.tokens.drop.interval * 1000)
 
     setInterval(function() {
-        if (
-            HasActiveAutomatedRoller() &&
-            !PlayerData.isCooldown &&
-            PlayerData.tokens >= coreValues.roll.cost
-        ) {
-            HandleRollClick(true)
+        EnsureRollerSlotsNormalized()
+        for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
+            let rollerInst = PlayerData.equippedRollers[slotIndex]
+            if (
+                rollerInst &&
+                rollerInst.type === "roller" &&
+                rollerInst.hasAutoroller &&
+                rollerInst.autoEnabled &&
+                !IsRollerSlotOnCooldown(slotIndex)
+            ) {
+                let cost = GetRollerCost(rollerInst)
+                if (PlayerData.tokens >= cost) {
+                    HandleRollerSlotRoll(slotIndex, true)
+                }
+            }
         }
-    }, coreValues.roll.autoRoll.checkInterval * 1000)
+    }, ((coreValues.roll && coreValues.roll.autoRoll && coreValues.roll.autoRoll.checkInterval) || 0.25) * 1000)
 }
 
 window.addEventListener("DOMContentLoaded", Init)

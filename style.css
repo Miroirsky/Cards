@@ -750,8 +750,12 @@ body:not(.no-bouncy) .stat-pill:hover {
     animation: viewPopIn 0.3s var(--smooth-out);
 }
 
-.view-section.hidden {
-    display: none;
+.view-section.hidden,
+#roll-panel.hidden,
+.roll-panel.hidden,
+.panel.hidden,
+.hidden {
+    display: none !important;
 }
 
 @keyframes viewPopIn {
@@ -785,6 +789,7 @@ body:not(.no-bouncy) .stat-pill:hover {
     text-align: center;
     position: relative;
     overflow: hidden;
+    margin-bottom: 28px;
 }
 
 .roll-stage-wrap {
@@ -1292,10 +1297,57 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 
 .roll-buttons-row {
     width: 100%;
-    max-width: 530px;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.roll-buttons-row[data-mode="empty"] {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 230px;
     gap: 14px;
+}
+
+.roller-action-unit {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 20px;
+    background: var(--bg-panel-inner);
+    border: 2px solid var(--border-chunky);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12);
+}
+
+.roller-action-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 4px;
+}
+
+.roller-action-title {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.96rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.roller-action-meta {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-soft);
+}
+
+.roller-action-buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 12px;
     align-items: stretch;
 }
 
@@ -1360,7 +1412,7 @@ body:not(.no-bouncy) .rolled-card-item.is-best-pull:hover {
 
 .roll-button.cooling-down .roll-cooldown-bar {
     width: 100%;
-    transition: width var(--roll-cooldown) linear;
+    transition: width var(--roller-cooldown, var(--roll-cooldown)) linear;
 }
 
 .roll-button:hover:not(:disabled) {
@@ -2432,6 +2484,95 @@ body:not(.no-bouncy) .settings-card:hover {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 22px;
+}
+
+/* Horizontal Inventory Layout */
+.horizontal-inventory {
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    padding: 10px 4px 22px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) var(--bg-panel-inner);
+    -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-inventory::-webkit-scrollbar {
+    height: 10px;
+}
+
+.horizontal-inventory::-webkit-scrollbar-track {
+    background: var(--bg-panel-inner);
+    border-radius: 999px;
+    border: 1.5px solid var(--border-chunky);
+}
+
+.horizontal-inventory::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--accent), var(--pink-pop));
+    border-radius: 999px;
+    border: 2px solid var(--bg-panel-inner);
+}
+
+/* Card Inventory: 5 Rows / Layers Grid flowing horizontally */
+#inventory-grid.horizontal-inventory {
+    display: grid !important;
+    grid-template-rows: repeat(5, 140px);
+    grid-auto-flow: column;
+    grid-auto-columns: 280px;
+    column-gap: 20px;
+    row-gap: 16px;
+    align-content: start;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#inventory-grid.horizontal-inventory.is-empty {
+    display: block !important;
+}
+
+#inventory-grid.horizontal-inventory .inventory-card {
+    width: 280px;
+    height: 140px;
+    aspect-ratio: 2 / 1;
+    flex: none;
+}
+
+#inventory-grid.horizontal-inventory .inventory-empty {
+    width: 100%;
+    min-width: 100%;
+}
+
+/* Items Inventory: Horizontal Flex */
+#items-inventory-grid.horizontal-inventory {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 20px;
+    align-items: stretch;
+}
+
+#items-inventory-grid.horizontal-inventory .item-inventory-card {
+    flex: 0 0 340px;
+    width: 340px;
+    min-width: 300px;
+}
+
+#items-inventory-grid.horizontal-inventory .inventory-empty {
+    flex: 1 1 100%;
+    min-width: 100%;
+}
+
+/* Middle-button drag-to-scroll cursor states */
+body.inventory-middle-scrolling,
+body.inventory-middle-scrolling * {
+    cursor: grabbing !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+#inventory-grid.middle-dragging,
+#items-inventory-grid.middle-dragging {
+    cursor: grabbing !important;
+    scroll-behavior: auto !important;
 }
 
 /* 3D Flip Card (Exact 2:1 Aspect Ratio, Title on Image, Mutation-Styled Back) */
@@ -3773,6 +3914,10 @@ html[data-theme="light"] .roller-slot.empty {
         grid-template-columns: 1fr;
     }
 
+    .roller-action-buttons {
+        grid-template-columns: 1fr;
+    }
+
     .auto-roll-button {
         width: 100%;
     }
@@ -3821,6 +3966,18 @@ html[data-theme="light"] .roller-slot.empty {
     .inventory-grid {
         grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
         gap: 16px;
+    }
+
+    #inventory-grid.horizontal-inventory {
+        grid-template-rows: repeat(5, 120px);
+        grid-auto-columns: 240px;
+        column-gap: 14px;
+        row-gap: 12px;
+    }
+
+    #inventory-grid.horizontal-inventory .inventory-card {
+        width: 240px;
+        height: 120px;
     }
 
     .modal-wrapper {
@@ -3873,3 +4030,44 @@ html[data-theme="light"] .roller-slot.empty {
         width: 100%;
     }
 }
+
+/* Crafting View Styling */
+.crafting-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.crafting-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 24px;
+    text-align: center;
+    gap: 12px;
+    background: var(--bg-panel-inner);
+    border-radius: 20px;
+    border: 2px dashed var(--border-subtle);
+    color: var(--text-soft);
+}
+
+.crafting-placeholder h3 {
+    font-family: "Fredoka", sans-serif;
+    color: var(--text-main);
+    font-size: 1.35rem;
+    margin: 0;
+}
+
+.crafting-placeholder p {
+    font-size: 0.95rem;
+    max-width: 460px;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.crafting-empty-icon {
+    font-size: 3.2rem;
+    animation: gentleBounce 2s ease-in-out infinite;
+}
+
