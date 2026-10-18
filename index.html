@@ -67,6 +67,11 @@
                 <div id="sidebar-press-list" class="sidebar-subnav"></div>
             </div>
 
+            <div id="sidebar-shop-section" class="sidebar-shop-section hidden">
+                <div class="sidebar-section-label">Shop Menu</div>
+                <div id="sidebar-shop-list" class="sidebar-subnav"></div>
+            </div>
+
             <div class="sidebar-footer">
                 <div class="sidebar-mutations-legend">
                     <div class="sidebar-section-label">✨ Mutation Multipliers</div>
@@ -106,6 +111,12 @@
                         <span class="stat-label">Diamonds</span>
                         <span id="diamond-count" class="stat-value">0</span>
                         <span id="diamond-popup" class="token-popup diamond-popup"></span>
+                    </div>
+                    <div class="stat-pill bark-pill" id="bark-pill" title="Barks (Earned by converting Resigns in the Resign Press)">
+                        <img class="stat-icon-img" src="Assets/Barks.png" alt="Bark">
+                        <span class="stat-label">Barks</span>
+                        <span id="bark-count" class="stat-value">0</span>
+                        <span id="bark-popup" class="token-popup bark-popup"></span>
                     </div>
                     <div class="stat-pill rolls-pill">
                         <span class="stat-emoji">🎰</span>
@@ -218,7 +229,6 @@
                             </div>
                         </div>
 
-                        <div id="items-shop-bar" class="items-shop-bar"></div>
                         <div id="items-inventory-grid" class="items-inventory-grid horizontal-inventory" aria-label="Items Inventory Drop Zone"></div>
                     </section>
                 </div>
@@ -227,17 +237,18 @@
                     <section class="panel shop-panel">
                         <div class="shop-header">
                             <div>
-                                <h2>🛒 Upgrade Shop</h2>
-                                <p class="inventory-hint">Spend Diamonds to supercharge your Luck, Token Rate, Token Capacity, and XP Multiplier!</p>
+                                <h2 id="active-shop-heading">Upgrade Shop</h2>
+                                <p id="active-shop-description" class="inventory-hint">Select a shop category to browse upgrades, permanent automation, and roller boosters!</p>
                             </div>
-                            <div class="shop-balance-badge">
-                                <span>💎 Balance:</span>
-                                <strong id="shop-diamond-balance">0</strong>
+                            <div id="shop-balance-badge" class="shop-balance-badge">
+                                <span id="shop-balance-icon">💎</span>
+                                <span id="shop-balance-label">Balance:</span>
+                                <strong id="shop-balance-value">0</strong>
                             </div>
                         </div>
 
-                        <div id="shop-stats-overview" class="shop-stats-overview"></div>
-                        <div id="shop-upgrades-grid" class="shop-upgrades-grid"></div>
+                        <div id="shop-tabs" class="shop-tabs press-tabs"></div>
+                        <div id="shop-content" class="shop-content"></div>
                     </section>
                 </div>
 

@@ -333,25 +333,62 @@ const CardTagConfig = {
 
 const PressesList = [
     {
+        id: "diamondPress",
+        name: "Diamond Press",
+        icon: "💎",
+        description: "Crush owned cards into pure diamonds based on card rarity.",
+        comingSoon: false,
+        rarityExponent: 0.5,
+    },
+    {
+        id: "resignPress",
+        name: "Resign Press",
+        icon: "🏆",
+        description: "Convert your prestigious Resigns into Barks using Diamonds.",
+        comingSoon: false,
+    },
+    {
         id: "compressor",
         name: "Compressor",
+        icon: "📦",
         description: "Compress multiple common cards into higher-rarity variants.",
         comingSoon: true,
     },
     {
         id: "decompressor",
         name: "Decompressor",
+        icon: "🔨",
         description: "Break down rare cards into multiple lower-rarity cards.",
         comingSoon: true,
     },
+]
+
+const ShopCategoriesList = [
     {
-        id: "diamondPress",
-        name: "Diamond Press",
-        description: "Crush owned cards into pure diamonds based on card rarity.",
-        comingSoon: false,
-        rarityExponent: 0.5,
+        id: "upgrades",
+        name: "Stat Upgrades",
+        icon: "⚡",
+        currency: "diamonds",
+        description: "Spend Diamonds to boost your Luck, Token Rate, Token Capacity, XP Multiplier, and Press Revenue.",
+    },
+    {
+        id: "autoroller",
+        name: "Autoroller",
+        icon: "🤖",
+        currency: "barks",
+        description: "Purchase permanent Autorollers using Barks to automate your equipped rollers.",
+        itemId: "autoroller",
+    },
+    {
+        id: "boosters",
+        name: "Roller Boosters",
+        icon: "🚀",
+        currency: "barks",
+        description: "Purchase stackable Roll Boosters using Barks to increase cards rolled per roll.",
+        itemId: "rollBooster",
     },
 ]
+
 
 const ShopUpgradesList = [
     {
@@ -434,11 +471,21 @@ const ItemsList = [
         name: "Autoroller",
         type: "attachment",
         icon: "🤖",
-        price: 1000,
-        currency: "diamonds",
+        price: 1,
+        currency: "barks",
         purchasable: true,
         removable: false,
         description: "Drag onto an equipped roller to automate it! Automation can be toggled ON/OFF, but the Autoroller cannot be removed or recovered once attached.",
+    },
+    {
+        id: "rollBooster",
+        name: "Roll Booster",
+        type: "booster",
+        icon: "🚀",
+        price: 1,
+        currency: "barks",
+        purchasable: true,
+        description: "Drag onto an equipped roller to increase cards rolled per roll! Stacks cumulatively: 1 booster = +1 card, 3 total = +2 cards, 7 total = +3 cards (each level doubles the required boosters).",
     },
 ]
 
@@ -452,16 +499,29 @@ const CraftingRecipes = [
         description: "A reliable standard roller with ×1 luck, 2s roll time, and rolls up to 3 cards per roll.",
         craftTime: 60, // 1 minute in seconds
         materials: [
-            { cardName: "Grass", amount: 100 },
-            { cardName: "Tree", amount: 50 },
-            { cardName: "Sugar", amount: 20 },
+            { cardName: "Grass", amount: 500 },
+            { cardName: "Tree", amount: 200 },
+            { cardName: "Sugar", amount: 50 },
             { cardName: "Earth", amount: 5 },
+            { type: "bark", name: "Bark", amount: 1 },
         ],
     },
 ]
 
 const coreValues = {
     luck: 1,
+    prestige: {
+        levelsPerResign: 5,
+        diamondsPerBark: 1000,
+        resignsPerBark: 1,
+        barksPerConversion: 1,
+        icon: "Assets/Barks.png",
+    },
+    boosters: {
+        id: "rollBooster",
+        price: 1,
+        currency: "barks",
+    },
     crafting: {
         maxActiveCrafts: 1,
         recipes: CraftingRecipes,
@@ -479,8 +539,8 @@ const coreValues = {
         maxSlots: 4,
         startingRollerId: "basicRoller",
         autorollerId: "autoroller",
-        autorollerPrice: 1000,
-        autorollerCurrency: "diamonds",
+        autorollerPrice: 1,
+        autorollerCurrency: "barks",
         startingItems: [
             { itemId: "basicRoller", count: 1 },
         ],
@@ -517,6 +577,8 @@ const coreValues = {
         basePrice: 50,
         pricePower: 1.05,
         compoundRate: 0.2,
+        categories: ShopCategoriesList,
+        defaultCategory: "upgrades",
     },
     interaction: {
         longPressDuration: 0.5,

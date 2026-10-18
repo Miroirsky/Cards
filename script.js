@@ -28,6 +28,9 @@ function pairs(list) {
 let PlayerData = {
     tokens: coreValues.tokens.starting,
     diamonds: coreValues.diamonds.starting,
+    resigns: 0,
+    barks: 0,
+    lastResignLevelClaimed: 0,
     level: coreValues.level.starting,
     xp: 0,
     totalRolls: 0,
@@ -36,6 +39,7 @@ let PlayerData = {
     activeView: "cards",
     inventoryTab: "cards",
     activePressId: "diamondPress",
+    activeShopCategory: (coreValues.shop && coreValues.shop.defaultCategory) || "upgrades",
     pressPercent: (coreValues.presses && coreValues.presses.defaultPercentage) || 100,
     pressKeepOne: Boolean(coreValues.presses && coreValues.presses.defaultKeepOne),
     sortBy: "default",
@@ -162,12 +166,14 @@ function CreateItemInstance(itemId, options) {
 
     if (def.type === "roller") {
         let hasAuto = Boolean(opts.hasAutoroller)
+        let boosterCount = math.max(0, math.floor(Number(opts.boosters) || 0))
         return {
             instanceId: instId,
             itemId: def.id,
             type: "roller",
             hasAutoroller: hasAuto,
             autoEnabled: hasAuto ? (opts.autoEnabled !== undefined ? Boolean(opts.autoEnabled) : true) : false,
+            boosters: boosterCount,
         }
     }
 
@@ -177,6 +183,104 @@ function CreateItemInstance(itemId, options) {
         type: def.type || "attachment",
     }
 }
+
+function GetBoosterBonusCards(boostersCount) {
+    let count = math.max(0, math.floor(Number(boostersCount) || 0))
+    if (count <= 0) return 0
+    return math.floor(Math.log2(count + 1))
+}
+
+function GetBoostersRequiredForBonus(bonusLevel) {
+    let lvl = math.max(0, math.floor(Number(bonusLevel) || 0))
+    if (lvl <= 0) return 0
+    return Math.pow(2, lvl) - 1
+}
+
+function GetEffectiveRollerMaxCards(rollerInst) {
+    if (!rollerInst) return 1
+    let rollerDef = GetRollerDefinition(rollerInst.itemId)
+    let baseMax = (rollerDef && typeof rollerDef.maxCardsPerRoll === "number" && rollerDef.maxCardsPerRoll > 0)
+        ? rollerDef.maxCardsPerRoll
+        : 1
+    let bonus = GetBoosterBonusCards(rollerInst.boosters)
+    return baseMax + bonus
+}
+
+function GetBoosterPrice() {
+    if (coreValues.boosters && typeof coreValues.boosters.price === "number") {
+        return coreValues.boosters.price
+    }
+    let def = GetItemDefinition("rollBooster")
+    return (def && typeof def.price === "number") ? def.price : 1
+}
+
+function CheckAndGrantResigns() {
+    let levelsPerResign = (coreValues.prestige && coreValues.prestige.levelsPerResign) || 10
+    let eligibleMilestones = math.floor(PlayerData.level / levelsPerResign)
+    let lastClaimedLevel = typeof PlayerData.lastResignLevelClaimed === "number" ? PlayerData.lastResignLevelClaimed : 0
+    let claimedMilestones = math.floor(lastClaimedLevel / levelsPerResign)
+
+    if (eligibleMilestones > claimedMilestones) {
+        let granted = eligibleMilestones - claimedMilestones
+        PlayerData.resigns = (PlayerData.resigns || 0) + granted
+        PlayerData.lastResignLevelClaimed = PlayerData.level
+        return granted
+    }
+    return 0
+}
+
+function ConvertResignToBark(count = 1) {
+    let numToConvert = math.max(1, math.floor(Number(count) || 1))
+    let resignsAvailable = PlayerData.resigns || 0
+    let diamondsPerBark = (coreValues.prestige && coreValues.prestige.diamondsPerBark) || 1000
+    let barksPerConversion = (coreValues.prestige && coreValues.prestige.barksPerConversion) || 1
+
+    if (resignsAvailable < numToConvert) {
+        SetRollStatusMessage("❌ You don't have enough Resigns! Need " + numToConvert + ", but only have " + resignsAvailable + ". Earn 1 Resign every 10 levels!", true)
+        return false
+    }
+
+    let diamondsNeeded = diamondsPerBark * numToConvert
+    if (PlayerData.diamonds < diamondsNeeded) {
+        SetRollStatusMessage("❌ Need " + FormatNumber(diamondsNeeded) + " Diamonds to convert " + numToConvert + " Resign" + (numToConvert > 1 ? "s" : "") + " into Barks!", true)
+        return false
+    }
+
+    PlayerData.resigns = math.max(0, resignsAvailable - numToConvert)
+    PlayerData.diamonds = math.max(0, PlayerData.diamonds - diamondsNeeded)
+    let barksGained = numToConvert * barksPerConversion
+    PlayerData.barks = (PlayerData.barks || 0) + barksGained
+
+    ShowPopup("diamond-popup", "-" + FormatNumber(diamondsNeeded))
+    ShowPopup("bark-popup", "+" + FormatNumber(barksGained))
+    BumpPill("bark-pill")
+    BumpPill("diamond-pill")
+    let resignPill = document.getElementById("resign-pill")
+    if (resignPill) BumpPill("resign-pill")
+
+    PlayGameSound("sparkle")
+    SetRollStatusMessage("✨ Converted " + numToConvert + " Resign" + (numToConvert > 1 ? "s" : "") + " into " + FormatNumber(barksGained) + " Bark" + (barksGained > 1 ? "s" : "") + "!", false)
+    SaveGame()
+    UpdateUI()
+    return true
+}
+
+function ConvertMaxResignsToBark() {
+    let resignsAvailable = PlayerData.resigns || 0
+    let diamondsPerBark = (coreValues.prestige && coreValues.prestige.diamondsPerBark) || 1000
+    let maxAffordable = math.floor(PlayerData.diamonds / diamondsPerBark)
+    let canConvert = math.min(resignsAvailable, maxAffordable)
+    if (canConvert <= 0) {
+        if (resignsAvailable <= 0) {
+            SetRollStatusMessage("❌ No Resigns available to convert! Reach level milestones (every 10 levels) to earn Resigns.", true)
+        } else {
+            SetRollStatusMessage("❌ Need at least " + FormatNumber(diamondsPerBark) + " Diamonds to convert a Resign into Bark!", true)
+        }
+        return false
+    }
+    return ConvertResignToBark(canConvert)
+}
+
 
 function EnsureRollerSlotsNormalized() {
     let minSlots = (coreValues.rollers && coreValues.rollers.startingSlots) || 1
@@ -407,6 +511,9 @@ function SaveGame() {
         let payload = {
             tokens: PlayerData.tokens,
             diamonds: PlayerData.diamonds,
+            resigns: PlayerData.resigns || 0,
+            barks: PlayerData.barks || 0,
+            lastResignLevelClaimed: PlayerData.lastResignLevelClaimed || 0,
             level: PlayerData.level,
             xp: PlayerData.xp,
             totalRolls: PlayerData.totalRolls,
@@ -414,6 +521,7 @@ function SaveGame() {
             activeView: PlayerData.activeView,
             inventoryTab: PlayerData.inventoryTab,
             activePressId: PlayerData.activePressId,
+            activeShopCategory: PlayerData.activeShopCategory || "upgrades",
             pressPercent: PlayerData.pressPercent,
             pressKeepOne: PlayerData.pressKeepOne,
             sortBy: PlayerData.sortBy,
@@ -463,9 +571,19 @@ function LoadGame() {
         if (typeof saved.diamonds === "number" && !isNaN(saved.diamonds)) {
             PlayerData.diamonds = math.max(0, saved.diamonds)
         }
+        if (typeof saved.resigns === "number" && !isNaN(saved.resigns)) {
+            PlayerData.resigns = math.max(0, math.floor(saved.resigns))
+        }
+        if (typeof saved.barks === "number" && !isNaN(saved.barks)) {
+            PlayerData.barks = math.max(0, math.floor(saved.barks))
+        }
+        if (typeof saved.lastResignLevelClaimed === "number" && !isNaN(saved.lastResignLevelClaimed)) {
+            PlayerData.lastResignLevelClaimed = math.max(0, math.floor(saved.lastResignLevelClaimed))
+        }
         if (typeof saved.level === "number" && saved.level >= 1) {
             PlayerData.level = math.floor(saved.level)
         }
+        CheckAndGrantResigns()
         if (typeof saved.xp === "number" && !isNaN(saved.xp)) {
             PlayerData.xp = math.max(0, saved.xp)
         }
@@ -477,6 +595,9 @@ function LoadGame() {
         }
         if (typeof saved.activePressId === "string") {
             PlayerData.activePressId = saved.activePressId
+        }
+        if (typeof saved.activeShopCategory === "string") {
+            PlayerData.activeShopCategory = saved.activeShopCategory
         }
         if (typeof saved.pressPercent === "number" && coreValues.presses && coreValues.presses.percentages.includes(saved.pressPercent)) {
             PlayerData.pressPercent = saved.pressPercent
@@ -1169,9 +1290,7 @@ function RollSingleRoller(rollerInst, list) {
     let luckMult = (rollerDef && typeof rollerDef.luckMultiplier === "number" && rollerDef.luckMultiplier > 0)
         ? rollerDef.luckMultiplier
         : 1
-    let maxCards = (rollerDef && typeof rollerDef.maxCardsPerRoll === "number" && rollerDef.maxCardsPerRoll > 0)
-        ? rollerDef.maxCardsPerRoll
-        : 1
+    let maxCards = GetEffectiveRollerMaxCards(rollerInst)
     let basePlayerLuck = GetEffectiveLuck()
     let effectiveRollerLuck = basePlayerLuck * luckMult
     let pull = Roll(targetList, effectiveRollerLuck, maxCards)
@@ -1444,10 +1563,18 @@ function AddXp(amount) {
         totalDiamondsGained += coreValues.diamonds.perLevelMultiplier * PlayerData.level
     }
 
-    if (leveledUp && totalDiamondsGained > 0) {
-        AddDiamonds(totalDiamondsGained)
+    if (leveledUp) {
+        let resignsGained = CheckAndGrantResigns()
+
+        if (totalDiamondsGained > 0) {
+            AddDiamonds(totalDiamondsGained)
+        }
         PlayGameSound("levelup")
         SpawnParticleBurst(document.getElementById("level-badge"), "rare")
+
+        if (resignsGained > 0) {
+            SetRollStatusMessage(`🌟 Milestone Reached! Level ${PlayerData.level} granted you ${resignsGained} Resign! Visit the Resign Press in the Presses tab to convert into Barks!`, false)
+        }
     }
 }
 
@@ -1881,36 +2008,149 @@ function ToggleRollerAutomation(slotIndex) {
     return true
 }
 
+function GetAutorollerCurrency() {
+    if (coreValues.rollers && coreValues.rollers.autorollerCurrency) {
+        return coreValues.rollers.autorollerCurrency
+    }
+    let def = GetItemDefinition("autoroller")
+    return (def && def.currency) ? def.currency : "barks"
+}
+
 function GetAutorollerPrice() {
     if (coreValues.rollers && typeof coreValues.rollers.autorollerPrice === "number") {
         return coreValues.rollers.autorollerPrice
     }
     let def = GetItemDefinition("autoroller")
-    return (def && typeof def.price === "number") ? def.price : 1000
+    return (def && typeof def.price === "number") ? def.price : 1
 }
 
 function BuyAutoroller(triggerEl) {
     let price = GetAutorollerPrice()
-    if (PlayerData.diamonds < price) {
-        SetRollStatusMessage("⚠️ Need " + FormatNumber(price) + " Diamonds to buy an Autoroller!", true)
-        return false
+    let currency = GetAutorollerCurrency()
+
+    if (currency === "barks") {
+        let barksOwned = PlayerData.barks || 0
+        if (barksOwned < price) {
+            SetRollStatusMessage("❌ Need " + FormatNumber(price) + " Bark" + (price > 1 ? "s" : "") + " to buy an Autoroller! Convert Resigns in the Shop or Items tab.", true)
+            return false
+        }
+    } else {
+        if (PlayerData.diamonds < price) {
+            SetRollStatusMessage("⚠️ Need " + FormatNumber(price) + " Diamonds to buy an Autoroller!", true)
+            return false
+        }
     }
 
     let autorollerId = (coreValues.rollers && coreValues.rollers.autorollerId) || "autoroller"
     let inst = CreateItemInstance(autorollerId)
     if (!inst) return false
 
-    PlayerData.diamonds = math.max(0, PlayerData.diamonds - price)
+    if (currency === "barks") {
+        PlayerData.barks = math.max(0, (PlayerData.barks || 0) - price)
+        ShowPopup("bark-popup", "-" + FormatNumber(price))
+        BumpPill("bark-pill")
+    } else {
+        PlayerData.diamonds = math.max(0, PlayerData.diamonds - price)
+        ShowPopup("diamond-popup", "-" + FormatNumber(price))
+        BumpPill("diamond-pill")
+    }
     table.insert(PlayerData.itemsInventory, inst)
 
-    ShowPopup("diamond-popup", "-" + FormatNumber(price))
-    BumpPill("diamond-pill")
     PlayGameSound("levelup")
     if (triggerEl) {
-        SpawnParticleBurst(triggerEl, "diamond")
+        SpawnParticleBurst(triggerEl, "rare")
     }
 
     SetRollStatusMessage("🤖 Purchased an Autoroller! Drag it from your Items Inventory onto an equipped roller to automate it.", false)
+    SaveGame()
+    UpdateUI()
+    return true
+}
+
+function BuyRollBooster(triggerEl) {
+    let price = GetBoosterPrice()
+    let barksOwned = PlayerData.barks || 0
+    if (barksOwned < price) {
+        SetRollStatusMessage("❌ Need " + FormatNumber(price) + " Bark" + (price > 1 ? "s" : "") + " to buy a Roll Booster! Convert Resigns in the Shop or Items tab.", true)
+        return false
+    }
+
+    let boosterId = (coreValues.boosters && coreValues.boosters.id) || "rollBooster"
+    let inst = CreateItemInstance(boosterId)
+    if (!inst) return false
+
+    PlayerData.barks = math.max(0, barksOwned - price)
+    table.insert(PlayerData.itemsInventory, inst)
+
+    ShowPopup("bark-popup", "-" + FormatNumber(price))
+    BumpPill("bark-pill")
+    PlayGameSound("sparkle")
+    if (triggerEl) {
+        SpawnParticleBurst(triggerEl, "special")
+    }
+
+    SetRollStatusMessage("🚀 Purchased a Roll Booster! Drag it from your Items Inventory onto an equipped roller to boost its cards per roll.", false)
+    SaveGame()
+    UpdateUI()
+    return true
+}
+
+function AttachBoosterToSlot(boosterInstanceId, slotIndex, triggerEl) {
+    EnsureRollerSlotsNormalized()
+    let targetSlot = Number(slotIndex)
+    if (isNaN(targetSlot) || targetSlot < 0 || targetSlot >= PlayerData.maxRollerSlots) {
+        return false
+    }
+
+    let equippedRoller = PlayerData.equippedRollers[targetSlot]
+    if (!equippedRoller || equippedRoller.type !== "roller") {
+        SetRollStatusMessage("❌ Equip a roller in Slot #" + (targetSlot + 1) + " first before equipping a Roll Booster!", true)
+        return false
+    }
+
+    let boosterId = (coreValues.boosters && coreValues.boosters.id) || "rollBooster"
+    let foundIndex = -1
+    for (let i = 0; i < PlayerData.itemsInventory.length; i++) {
+        let candidate = PlayerData.itemsInventory[i]
+        if (!candidate) continue
+        if (boosterInstanceId && candidate.instanceId === boosterInstanceId && (candidate.itemId === boosterId || candidate.type === "booster")) {
+            foundIndex = i
+            break
+        }
+        if (!boosterInstanceId && (candidate.itemId === boosterId || candidate.type === "booster")) {
+            foundIndex = i
+            break
+        }
+    }
+
+    if (foundIndex === -1) {
+        SetRollStatusMessage("❌ No Roll Booster found in Items Inventory!", true)
+        return false
+    }
+
+    PlayerData.itemsInventory.splice(foundIndex, 1)
+
+    let oldBoosters = Number(equippedRoller.boosters) || 0
+    let newBoosters = oldBoosters + 1
+    equippedRoller.boosters = newBoosters
+
+    let oldBonus = GetBoosterBonusCards(oldBoosters)
+    let newBonus = GetBoosterBonusCards(newBoosters)
+    let rollerDef = GetRollerDefinition(equippedRoller.itemId)
+
+    PlayGameSound("sparkle")
+    if (triggerEl) {
+        SpawnParticleBurst(triggerEl, "special")
+    }
+
+    if (newBonus > oldBonus) {
+        SetRollStatusMessage("🚀 Upgraded " + rollerDef.name + " (Slot #" + (targetSlot + 1) + ") with Roll Booster! Now rolls +" + newBonus + " extra cards (" + newBoosters + " total boosters)!", false)
+    } else {
+        let nextReq = GetBoostersRequiredForBonus(newBonus + 1)
+        let needMore = nextReq - newBoosters
+        SetRollStatusMessage("🚀 Added Roll Booster to " + rollerDef.name + " (" + newBoosters + " total). Need " + needMore + " more booster" + (needMore > 1 ? "s" : "") + " for +" + (newBonus + 1) + " cards/roll!", false)
+    }
+
     SaveGame()
     UpdateUI()
     return true
@@ -2201,6 +2441,7 @@ function SwitchView(viewName) {
     let navSettings = document.getElementById("nav-settings")
     let navCrafting = document.getElementById("nav-crafting")
     let sidebarPressSection = document.getElementById("sidebar-press-section")
+    let sidebarShopSection = document.getElementById("sidebar-shop-section")
     let viewTitle = document.getElementById("view-title")
 
     let isCards = (viewName === "cards")
@@ -2228,6 +2469,9 @@ function SwitchView(viewName) {
     if (sidebarPressSection) {
         sidebarPressSection.classList.toggle("hidden", viewName !== "presses")
     }
+    if (sidebarShopSection) {
+        sidebarShopSection.classList.toggle("hidden", viewName !== "shop")
+    }
 
     if (viewTitle) {
         if (viewName === "presses") {
@@ -2253,6 +2497,7 @@ function SwitchView(viewName) {
         RenderSidebarPresses()
         RenderPressMenu()
     } else if (viewName === "shop") {
+        RenderSidebarShop()
         RenderShop()
     } else if (viewName === "crafting") {
         RenderCrafting()
@@ -2333,6 +2578,165 @@ function RenderSidebarPresses() {
     }
 }
 
+function GetShopCategories() {
+    return (coreValues.shop && coreValues.shop.categories) || ShopCategoriesList || []
+}
+
+function RenderSidebarShop() {
+    let listEl = document.getElementById("sidebar-shop-list")
+    if (!listEl) return
+    listEl.innerHTML = ""
+
+    let categories = GetShopCategories()
+    for (let [i, catData] of pairs(categories)) {
+        let btn = document.createElement("button")
+        let isActive = PlayerData.activeView === "shop" && PlayerData.activeShopCategory === catData.id
+        btn.className = "sidebar-subitem" + (isActive ? " active" : "")
+        btn.innerHTML = `
+            <span>${catData.name}</span>
+            <span class="category-icon">${catData.icon || ""}</span>
+        `
+        btn.addEventListener("click", function() {
+            PlayerData.activeShopCategory = catData.id
+            SaveGame()
+            SwitchView("shop")
+            CloseMobileSidebar()
+        })
+        listEl.appendChild(btn)
+    }
+}
+
+function RenderResignPress(contentContainer, activePress) {
+    let resignsOwned = PlayerData.resigns || 0
+    let diamondsOwned = PlayerData.diamonds || 0
+    let barksOwned = PlayerData.barks || 0
+
+    let diamondsPerBark = (coreValues.prestige && coreValues.prestige.diamondsPerBark) || 1000
+    let levelsPerResign = (coreValues.prestige && coreValues.prestige.levelsPerResign) || 10
+    let nextResignLevel = (math.floor(PlayerData.level / levelsPerResign) + 1) * levelsPerResign
+    let levelsToGo = math.max(0, nextResignLevel - PlayerData.level)
+    let currentMilestoneBase = math.floor(PlayerData.level / levelsPerResign) * levelsPerResign
+    let progressInMilestone = PlayerData.level - currentMilestoneBase
+    let progressPct = math.min(100, math.max(0, (progressInMilestone / levelsPerResign) * 100))
+
+    let maxAffordable = math.floor(diamondsOwned / diamondsPerBark)
+    let maxConvertPossible = math.min(resignsOwned, maxAffordable)
+    let canConvertOne = resignsOwned >= 1 && diamondsOwned >= diamondsPerBark
+
+    let pressCard = document.createElement("div")
+    pressCard.className = "resign-press-card"
+
+    pressCard.innerHTML = `
+        <div class="resign-press-header">
+            <div class="resign-press-header-titles">
+                <span class="resign-press-badge">🏆 Prestige Sanctuary</span>
+                <h3>${activePress.name}</h3>
+                <p>${activePress.description}</p>
+            </div>
+        </div>
+
+        <div class="resign-press-currencies">
+            <div class="resign-currency-box resign-box-highlight">
+                <div class="resign-box-icon">🏆</div>
+                <div class="resign-box-info">
+                    <span class="resign-box-label">Resigns Available</span>
+                    <strong class="resign-box-val">${FormatNumber(resignsOwned)}</strong>
+                    <span class="resign-box-sub">Earned every 10 levels</span>
+                </div>
+            </div>
+
+            <div class="resign-currency-box">
+                <div class="resign-box-icon">💎</div>
+                <div class="resign-box-info">
+                    <span class="resign-box-label">Diamonds Stored</span>
+                    <strong class="resign-box-val">${FormatNumber(diamondsOwned)}</strong>
+                    <span class="resign-box-sub">${FormatNumber(diamondsPerBark)} 💎 per Bark</span>
+                </div>
+            </div>
+
+            <div class="resign-currency-box">
+                <div class="resign-box-icon"><img src="Assets/Barks.png" class="stat-icon-img" alt="Bark"></div>
+                <div class="resign-box-info">
+                    <span class="resign-box-label">Barks Produced</span>
+                    <strong class="resign-box-val">${FormatNumber(barksOwned)}</strong>
+                    <span class="resign-box-sub">Used in Upgrade Shop</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="resign-milestone-section">
+            <div class="resign-milestone-header">
+                <span class="milestone-current-lvl">⭐ Current Level: <strong>Lv. ${PlayerData.level}</strong></span>
+                <span class="milestone-next-lvl">Next Resign at: <strong>Lv. ${nextResignLevel}</strong> (${levelsToGo} level${levelsToGo === 1 ? '' : 's'} to go)</span>
+            </div>
+            <div class="resign-progress-track">
+                <div class="resign-progress-fill" style="width: ${progressPct}%"></div>
+            </div>
+            <div class="resign-progress-caption">
+                <span>Progress: ${progressInMilestone} / ${levelsPerResign} Levels</span>
+                <span>${progressPct.toFixed(0)}%</span>
+            </div>
+        </div>
+
+        <div class="resign-converter-chamber">
+            <div class="chamber-formula-display">
+                <div class="formula-node">
+                    <span class="formula-icon">🏆</span>
+                    <span class="formula-text">1 Resign</span>
+                </div>
+                <div class="formula-op">+</div>
+                <div class="formula-node">
+                    <span class="formula-icon">💎</span>
+                    <span class="formula-text">${FormatNumber(diamondsPerBark)}</span>
+                </div>
+                <div class="formula-arrow">➔</div>
+                <div class="formula-node result-node">
+                    <img src="Assets/Barks.png" class="stat-icon-img formula-bark-img" alt="Bark">
+                    <span class="formula-text">1 Bark</span>
+                </div>
+            </div>
+
+            <div class="chamber-status-box">
+                ${canConvertOne 
+                    ? `<span class="chamber-status-ok">⚡ Press is powered and ready to convert!</span>`
+                    : (resignsOwned <= 0 
+                        ? `<span class="chamber-status-warn">⚠️ No Resigns available! Level up ${levelsToGo} more time${levelsToGo === 1 ? '' : 's'} to claim your next Resign.</span>`
+                        : `<span class="chamber-status-warn">⚠️ Need ${FormatNumber(diamondsPerBark - diamondsOwned)} more Diamonds to press a Resign. Sell cards in the Diamond Press!</span>`
+                    )
+                }
+            </div>
+
+            <div class="chamber-actions">
+                <button type="button" id="press-convert-one-btn" class="resign-action-btn ${canConvertOne ? 'can-afford' : ''}" ${canConvertOne ? '' : 'disabled'}>
+                    <span>✨ Press 1 Resign</span>
+                    <small>Cost: 1 Resign + ${FormatNumber(diamondsPerBark)} 💎 ➔ +1 Bark</small>
+                </button>
+                ${maxConvertPossible > 1 ? `
+                    <button type="button" id="press-convert-max-btn" class="resign-action-btn max-btn can-afford">
+                        <span>🌟 Press All (${maxConvertPossible} Resigns)</span>
+                        <small>Yields +${maxConvertPossible} Barks for ${FormatNumber(maxConvertPossible * diamondsPerBark)} 💎</small>
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `
+
+    let btnOne = pressCard.querySelector("#press-convert-one-btn")
+    if (btnOne) {
+        btnOne.addEventListener("click", function() {
+            ConvertResignToBark(1)
+        })
+    }
+    let btnMax = pressCard.querySelector("#press-convert-max-btn")
+    if (btnMax) {
+        btnMax.addEventListener("click", function() {
+            ConvertMaxResignsToBark()
+        })
+    }
+
+    contentContainer.appendChild(pressCard)
+}
+
 function RenderPressMenu() {
     let tabsContainer = document.getElementById("press-tabs")
     let contentContainer = document.getElementById("press-content")
@@ -2366,6 +2770,11 @@ function RenderPressMenu() {
 
     if (headingEl) {
         headingEl.textContent = activePress.name
+    }
+
+    if (activePress.id === "resignPress") {
+        RenderResignPress(contentContainer, activePress)
+        return
     }
 
     if (activePress.comingSoon) {
@@ -2608,29 +3017,79 @@ function BuyShopUpgrade(upgradeId, triggerEl) {
 }
 
 function RenderShop() {
-    let balanceEl = document.getElementById("shop-diamond-balance")
-    let overviewEl = document.getElementById("shop-stats-overview")
-    let gridEl = document.getElementById("shop-upgrades-grid")
+    let tabsContainer = document.getElementById("shop-tabs")
+    let contentContainer = document.getElementById("shop-content")
+    let headingEl = document.getElementById("active-shop-heading")
+    let descEl = document.getElementById("active-shop-description")
+    let balanceIconEl = document.getElementById("shop-balance-icon")
+    let balanceLabelEl = document.getElementById("shop-balance-label")
+    let balanceValueEl = document.getElementById("shop-balance-value")
 
-    if (!gridEl) return
+    if (!tabsContainer || !contentContainer) return
 
-    if (balanceEl) {
-        balanceEl.textContent = FormatNumber(PlayerData.diamonds)
+    tabsContainer.innerHTML = ""
+    contentContainer.innerHTML = ""
+
+    let categories = GetShopCategories()
+    let activeCat = categories[0]
+    for (let [i, catData] of pairs(categories)) {
+        if (catData.id === PlayerData.activeShopCategory) {
+            activeCat = catData
+        }
+
+        let tabBtn = document.createElement("button")
+        tabBtn.className = "press-tab shop-tab" + (catData.id === PlayerData.activeShopCategory ? " active" : "")
+        tabBtn.innerHTML = `
+            <span>${catData.icon || ""} ${catData.name}</span>
+        `
+        tabBtn.addEventListener("click", function() {
+            PlayerData.activeShopCategory = catData.id
+            SaveGame()
+            RenderSidebarShop()
+            RenderShop()
+        })
+        tabsContainer.appendChild(tabBtn)
     }
 
-    if (overviewEl) {
-        overviewEl.innerHTML = ""
-        for (let [i, upg] of pairs(ShopUpgradesList)) {
-            let lvl = GetUpgradeLevel(upg.id)
-            let stats = GetUpgradeDisplayStats(upg.id, lvl)
-            let chip = document.createElement("div")
-            chip.className = "shop-stat-chip"
-            chip.innerHTML = `<span>${stats.chipText}</span>`
-            overviewEl.appendChild(chip)
+    if (headingEl) headingEl.textContent = activeCat.name
+    if (descEl) descEl.textContent = activeCat.description
+
+    if (balanceIconEl && balanceLabelEl && balanceValueEl) {
+        if (activeCat.currency === "barks") {
+            balanceIconEl.innerHTML = `<img src="Assets/Barks.png" class="stat-icon-img" alt="Bark">`
+            balanceLabelEl.textContent = "Barks:"
+            balanceValueEl.textContent = FormatNumber(PlayerData.barks || 0)
+        } else {
+            balanceIconEl.textContent = "💎"
+            balanceLabelEl.textContent = "Diamonds:"
+            balanceValueEl.textContent = FormatNumber(PlayerData.diamonds || 0)
         }
     }
 
-    gridEl.innerHTML = ""
+    if (activeCat.id === "autoroller") {
+        RenderShopAutorollerCategory(contentContainer)
+    } else if (activeCat.id === "boosters") {
+        RenderShopBoostersCategory(contentContainer)
+    } else {
+        RenderShopUpgradesCategory(contentContainer)
+    }
+}
+
+function RenderShopUpgradesCategory(container) {
+    let overviewEl = document.createElement("div")
+    overviewEl.className = "shop-stats-overview"
+    for (let [i, upg] of pairs(ShopUpgradesList)) {
+        let lvl = GetUpgradeLevel(upg.id)
+        let stats = GetUpgradeDisplayStats(upg.id, lvl)
+        let chip = document.createElement("div")
+        chip.className = "shop-stat-chip"
+        chip.innerHTML = `<span>${stats.chipText}</span>`
+        overviewEl.appendChild(chip)
+    }
+    container.appendChild(overviewEl)
+
+    let gridEl = document.createElement("div")
+    gridEl.className = "shop-upgrades-grid"
 
     for (let [i, upg] of pairs(ShopUpgradesList)) {
         let level = GetUpgradeLevel(upg.id)
@@ -2671,69 +3130,252 @@ function RenderShop() {
         `
 
         let buyBtn = card.querySelector(".shop-buy-btn")
-        buyBtn.addEventListener("click", function() {
-            BuyShopUpgrade(upg.id, buyBtn)
-        })
+        if (buyBtn) {
+            buyBtn.addEventListener("click", function() {
+                BuyShopUpgrade(upg.id, buyBtn)
+            })
+        }
 
         gridEl.appendChild(card)
     }
 
-    let autorollerDef = GetItemDefinition((coreValues.rollers && coreValues.rollers.autorollerId) || "autoroller")
-    if (autorollerDef) {
-        let autoPrice = GetAutorollerPrice()
-        let canAffordAuto = PlayerData.diamonds >= autoPrice
-        let ownedAutoCount = 0
-        for (let [i, it] of pairs(PlayerData.itemsInventory)) {
-            if (it && it.itemId === autorollerDef.id) {
-                ownedAutoCount += 1
-            }
-        }
-        let attachedAutoCount = 0
-        for (let [i, r] of pairs(GetEquippedRollers())) {
-            if (r && r.hasAutoroller) attachedAutoCount += 1
-        }
-        for (let [i, it] of pairs(PlayerData.itemsInventory)) {
-            if (it && it.type === "roller" && it.hasAutoroller) attachedAutoCount += 1
-        }
+    container.appendChild(gridEl)
+}
 
-        let autoCard = document.createElement("div")
-        autoCard.className = "shop-upgrade-card shop-item-card"
-        autoCard.innerHTML = `
-            <div class="shop-card-top">
-                <div class="shop-card-title-group">
-                    <div class="shop-card-icon">${autorollerDef.icon || "🤖"}</div>
-                    <div class="shop-card-titles">
-                        <h3>${autorollerDef.name}</h3>
-                        <span class="shop-card-compound">Roller Attachment • Permanent</span>
+function RenderShopAutorollerCategory(container) {
+    let autorollerDef = GetItemDefinition((coreValues.rollers && coreValues.rollers.autorollerId) || "autoroller")
+    let autoId = autorollerDef ? autorollerDef.id : "autoroller"
+    let autoPrice = GetAutorollerPrice()
+    let barksOwned = PlayerData.barks || 0
+    let canAfford = barksOwned >= autoPrice
+
+    let ownedAutoCount = 0
+    for (let [i, it] of pairs(PlayerData.itemsInventory)) {
+        if (it && it.itemId === autoId) {
+            ownedAutoCount += 1
+        }
+    }
+    let attachedAutoCount = 0
+    for (let [i, r] of pairs(GetEquippedRollers())) {
+        if (r && r.hasAutoroller) attachedAutoCount += 1
+    }
+    for (let [i, it] of pairs(PlayerData.itemsInventory)) {
+        if (it && it.type === "roller" && it.hasAutoroller) attachedAutoCount += 1
+    }
+
+    let wrap = document.createElement("div")
+    wrap.className = "shop-exclusive-category autoroller-category"
+
+    wrap.innerHTML = `
+        <div class="shop-exclusive-hero">
+            <div class="shop-exclusive-icon-box">🤖</div>
+            <div class="shop-exclusive-hero-info">
+                <span class="exclusive-badge">🤖 Exclusive Permanent Automation</span>
+                <h3>${(autorollerDef && autorollerDef.name) || "Autoroller"}</h3>
+                <p>${(autorollerDef && autorollerDef.description) || "Attach to any equipped roller to enable hands-free automatic rolling."}</p>
+            </div>
+            <div class="shop-exclusive-stats">
+                <div class="exclusive-stat-pill">
+                    <span class="exclusive-stat-num">${ownedAutoCount}</span>
+                    <span class="exclusive-stat-lbl">In Items Bag</span>
+                </div>
+                <div class="exclusive-stat-pill">
+                    <span class="exclusive-stat-num">${attachedAutoCount}</span>
+                    <span class="exclusive-stat-lbl">Attached to Rollers</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="shop-exclusive-main-card">
+            <div class="exclusive-card-content">
+                <div class="exclusive-perks-list">
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">⚡</span>
+                        <div>
+                            <strong>Continuous Autonomous Rolls</strong>
+                            <p>Equipped rollers with an attached Autoroller trigger rolls automatically according to their roll duration.</p>
+                        </div>
+                    </div>
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">🎛️</span>
+                        <div>
+                            <strong>Independent Toggle Switch</strong>
+                            <p>Each roller has its own on-card AUTO switch, allowing you to automate specific rollers while manually controlling others.</p>
+                        </div>
+                    </div>
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">🔒</span>
+                        <div>
+                            <strong>Permanent &amp; Reusable</strong>
+                            <p>Autorollers are permanent assets that persist across game sessions and can be unequipped with rollers.</p>
+                        </div>
                     </div>
                 </div>
-                <span class="shop-level-badge">In Bag: ${ownedAutoCount}</span>
-            </div>
-            <p class="shop-card-desc">${autorollerDef.description}</p>
-            <div class="shop-stat-progression">
-                <div class="shop-stat-box">
-                    <span class="shop-stat-label">Automated Rollers</span>
-                    <span class="shop-stat-val">${attachedAutoCount} Attached</span>
-                </div>
-                <span class="shop-stat-arrow">➜</span>
-                <div class="shop-stat-box next">
-                    <span class="shop-stat-label">Effect</span>
-                    <span class="shop-stat-val">Toggleable Auto-Roll</span>
-                </div>
-            </div>
-            <button class="shop-buy-btn ${canAffordAuto ? "can-afford" : ""}" ${canAffordAuto ? "" : "disabled"}>
-                <span class="shop-buy-label">Buy ${autorollerDef.name}</span>
-                <span class="shop-buy-price">💎 ${FormatNumber(autoPrice)}</span>
-            </button>
-        `
 
-        let buyAutoBtn = autoCard.querySelector(".shop-buy-btn")
-        buyAutoBtn.addEventListener("click", function() {
-            BuyAutoroller(buyAutoBtn)
+                <div class="exclusive-purchase-box">
+                    <div class="exclusive-price-tag">
+                        <span class="price-label">Price:</span>
+                        <span class="price-val"><img src="Assets/Barks.png" class="stat-icon-img" alt="Bark"> ${FormatNumber(autoPrice)} Bark</span>
+                    </div>
+                    <button type="button" id="buy-exclusive-autoroller-btn" class="shop-exclusive-buy-btn ${canAfford ? 'can-afford' : ''}" ${canAfford ? '' : 'disabled'}>
+                        <span>🤖 Buy Autoroller</span>
+                        <span class="btn-sub"><img src="Assets/Barks.png" class="stat-icon-img" alt="Bark"> 1 Bark</span>
+                    </button>
+                    ${!canAfford ? `<p class="exclusive-afford-hint">⚠️ Need ${FormatNumber(autoPrice - barksOwned)} more Bark! Convert Resigns in the <button type="button" class="inline-press-link" id="goto-resign-press-auto">Resign Press</button>.</p>` : ''}
+                </div>
+            </div>
+        </div>
+    `
+
+    let buyBtn = wrap.querySelector("#buy-exclusive-autoroller-btn")
+    if (buyBtn) {
+        buyBtn.addEventListener("click", function() {
+            BuyAutoroller(buyBtn)
         })
-
-        gridEl.appendChild(autoCard)
     }
+
+    let linkBtn = wrap.querySelector("#goto-resign-press-auto")
+    if (linkBtn) {
+        linkBtn.addEventListener("click", function() {
+            PlayerData.activePressId = "resignPress"
+            SwitchView("presses")
+        })
+    }
+
+    container.appendChild(wrap)
+}
+
+function RenderShopBoostersCategory(container) {
+    let boosterDef = GetItemDefinition((coreValues.boosters && coreValues.boosters.id) || "rollBooster")
+    let boosterPrice = GetBoosterPrice()
+    let barksOwned = PlayerData.barks || 0
+    let canAfford = barksOwned >= boosterPrice
+    let boosterId = (coreValues.boosters && coreValues.boosters.id) || "rollBooster"
+
+    let ownedBoostersInBag = 0
+    for (let [i, it] of pairs(PlayerData.itemsInventory)) {
+        if (it && (it.itemId === boosterId || it.type === "booster")) {
+            ownedBoostersInBag += 1
+        }
+    }
+    let totalEquippedBoosters = 0
+    for (let [i, r] of pairs(GetEquippedRollers())) {
+        if (r && r.boosters) {
+            totalEquippedBoosters += Number(r.boosters) || 0
+        }
+    }
+
+    let wrap = document.createElement("div")
+    wrap.className = "shop-exclusive-category boosters-category"
+
+    wrap.innerHTML = `
+        <div class="shop-exclusive-hero">
+            <div class="shop-exclusive-icon-box booster-box">🚀</div>
+            <div class="shop-exclusive-hero-info">
+                <span class="exclusive-badge">🚀 Exclusive Roller Boosters</span>
+                <h3>${(boosterDef && boosterDef.name) || "Roller Booster"}</h3>
+                <p>${(boosterDef && boosterDef.description) || "Attach to any equipped roller to increase cards rolled per action. Boosters stack cumulatively on the same roller!"}</p>
+            </div>
+            <div class="shop-exclusive-stats">
+                <div class="exclusive-stat-pill">
+                    <span class="exclusive-stat-num">${ownedBoostersInBag}</span>
+                    <span class="exclusive-stat-lbl">In Items Bag</span>
+                </div>
+                <div class="exclusive-stat-pill">
+                    <span class="exclusive-stat-num">${totalEquippedBoosters}</span>
+                    <span class="exclusive-stat-lbl">Equipped on Rollers</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="shop-exclusive-main-card">
+            <div class="exclusive-card-content">
+                <div class="exclusive-perks-list">
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">🃏</span>
+                        <div>
+                            <strong>Cumulative Extra Cards</strong>
+                            <p>Equip multiple boosters onto a single roller to multiply your card draws on every roll cycle.</p>
+                        </div>
+                    </div>
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">📈</span>
+                        <div>
+                            <strong>Doubling Thresholds</strong>
+                            <p>1 booster = +1 card, 3 total = +2 cards, 7 total = +3 cards, 15 total = +4 cards. Each extra card level doubles the requirement!</p>
+                        </div>
+                    </div>
+                    <div class="exclusive-perk-item">
+                        <span class="perk-bullet">🎒</span>
+                        <div>
+                            <strong>Simple Drag &amp; Drop</strong>
+                            <p>Drag boosters directly onto equipped rollers in your Items Inventory. The roller UI will instantly show updated card draws.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="exclusive-purchase-box">
+                    <div class="exclusive-price-tag">
+                        <span class="price-label">Price:</span>
+                        <span class="price-val"><img src="Assets/Barks.png" class="stat-icon-img" alt="Bark"> ${FormatNumber(boosterPrice)} Bark</span>
+                    </div>
+                    <button type="button" id="buy-exclusive-booster-btn" class="shop-exclusive-buy-btn ${canAfford ? 'can-afford' : ''}" ${canAfford ? '' : 'disabled'}>
+                        <span>🚀 Buy Roller Booster</span>
+                        <span class="btn-sub"><img src="Assets/Barks.png" class="stat-icon-img" alt="Bark"> 1 Bark</span>
+                    </button>
+                    ${!canAfford ? `<p class="exclusive-afford-hint">⚠️ Need ${FormatNumber(boosterPrice - barksOwned)} more Bark! Convert Resigns in the <button type="button" class="inline-press-link" id="goto-resign-press-booster">Resign Press</button>.</p>` : ''}
+                </div>
+            </div>
+        </div>
+
+        <div class="booster-progression-card">
+            <h4>📊 Booster Cumulative Scaling Table</h4>
+            <div class="booster-tiers-grid">
+                <div class="booster-tier-step">
+                    <span class="tier-boosters">1 Booster</span>
+                    <span class="tier-arrow">➔</span>
+                    <span class="tier-bonus">+1 Card / roll</span>
+                </div>
+                <div class="booster-tier-step">
+                    <span class="tier-boosters">3 Boosters</span>
+                    <span class="tier-arrow">➔</span>
+                    <span class="tier-bonus">+2 Cards / roll</span>
+                </div>
+                <div class="booster-tier-step">
+                    <span class="tier-boosters">7 Boosters</span>
+                    <span class="tier-arrow">➔</span>
+                    <span class="tier-bonus">+3 Cards / roll</span>
+                </div>
+                <div class="booster-tier-step">
+                    <span class="tier-boosters">15 Boosters</span>
+                    <span class="tier-arrow">➔</span>
+                    <span class="tier-bonus">+4 Cards / roll</span>
+                </div>
+                <div class="booster-tier-step">
+                    <span class="tier-boosters">31 Boosters</span>
+                    <span class="tier-arrow">➔</span>
+                    <span class="tier-bonus">+5 Cards / roll</span>
+                </div>
+            </div>
+        </div>
+    `
+
+    let buyBtn = wrap.querySelector("#buy-exclusive-booster-btn")
+    if (buyBtn) {
+        buyBtn.addEventListener("click", function() {
+            BuyRollBooster(buyBtn)
+        })
+    }
+
+    let linkBtn = wrap.querySelector("#goto-resign-press-booster")
+    if (linkBtn) {
+        linkBtn.addEventListener("click", function() {
+            PlayerData.activePressId = "resignPress"
+            SwitchView("presses")
+        })
+    }
+
+    container.appendChild(wrap)
 }
 
 function FormatCraftCountdown(totalSeconds) {
@@ -2839,9 +3481,14 @@ function RenderCrafting() {
                     <div class="active-craft-materials">
                         <span class="active-materials-label">Committed Materials:</span>
                         <div class="active-materials-pills">
-                            ${activeCraft.materials.map(m => `
-                                <span class="committed-mat-pill">🃏 ${m.amount}× ${m.cardName}</span>
-                            `).join("")}
+                            ${activeCraft.materials.map(m => {
+                                let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+                                let iconHtml = isBark
+                                    ? `<img src="Assets/Barks.png" class="recipe-mat-bark-icon" alt="Bark"> `
+                                    : `🃏 `
+                                let label = isBark ? "Bark" : (m.cardName || m.name)
+                                return `<span class="committed-mat-pill">${iconHtml}${m.amount}× ${label}</span>`
+                            }).join("")}
                         </div>
                     </div>
                 </div>
@@ -2865,15 +3512,22 @@ function RenderCrafting() {
         for (let [i, recipe] of pairs(recipes)) {
             let canCraft = true
             let materialsHtml = recipe.materials.map(function(m) {
-                let owned = (PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0
+                let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+                let owned = isBark
+                    ? (PlayerData.barks || 0)
+                    : ((PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0)
                 let hasEnough = owned >= m.amount
                 if (!hasEnough) {
                     canCraft = false
                 }
+                let iconHtml = isBark
+                    ? `<img src="Assets/Barks.png" class="recipe-mat-bark-icon" alt="Bark"> `
+                    : ""
+                let nameLabel = isBark ? "Bark" : m.cardName
                 return `
                     <div class="recipe-mat-item ${hasEnough ? 'satisfied' : 'missing'}">
                         <span class="recipe-mat-check">${hasEnough ? '✓' : '✗'}</span>
-                        <span class="recipe-mat-name">${m.cardName}</span>
+                        <span class="recipe-mat-name">${iconHtml}${nameLabel}</span>
                         <span class="recipe-mat-count">${FormatNumber(owned)} / ${FormatNumber(m.amount)}</span>
                     </div>
                 `
@@ -2948,17 +3602,26 @@ function HandleStartCraft(recipeId) {
     if (!recipe) return
 
     for (let [i, m] of pairs(recipe.materials)) {
-        let owned = (PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0
+        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        let owned = isBark
+            ? (PlayerData.barks || 0)
+            : ((PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0)
+        let label = isBark ? "Bark" : m.cardName
         if (owned < m.amount) {
-            SetRollStatusMessage("⚠️ Not enough " + m.cardName + "! Need " + (m.amount - owned) + " more.", true)
+            SetRollStatusMessage("⚠️ Not enough " + label + "! Need " + (m.amount - owned) + " more.", true)
             return
         }
     }
 
     for (let [i, m] of pairs(recipe.materials)) {
-        PlayerData.inventory[m.cardName].count -= m.amount
-        if (PlayerData.inventory[m.cardName].count <= 0) {
-            delete PlayerData.inventory[m.cardName]
+        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        if (isBark) {
+            PlayerData.barks = math.max(0, (PlayerData.barks || 0) - m.amount)
+        } else {
+            PlayerData.inventory[m.cardName].count -= m.amount
+            if (PlayerData.inventory[m.cardName].count <= 0) {
+                delete PlayerData.inventory[m.cardName]
+            }
         }
     }
 
@@ -2973,7 +3636,13 @@ function HandleStartCraft(recipeId) {
         startTime: Date.now(),
         endTime: Date.now() + (craftDuration * 1000),
         materials: recipe.materials.map(function(m) {
-            return { cardName: m.cardName, amount: m.amount }
+            let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+            return {
+                type: isBark ? "bark" : "card",
+                name: isBark ? "Bark" : m.cardName,
+                cardName: isBark ? null : m.cardName,
+                amount: m.amount,
+            }
         }),
     }
 
@@ -2987,7 +3656,10 @@ function HandleRefundCraft() {
     if (!activeCraft) return
 
     for (let [i, m] of pairs(activeCraft.materials)) {
-        if (PlayerData.inventory[m.cardName]) {
+        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        if (isBark) {
+            PlayerData.barks = (PlayerData.barks || 0) + m.amount
+        } else if (PlayerData.inventory[m.cardName]) {
             PlayerData.inventory[m.cardName].count += m.amount
         } else {
             let baseCard = null
@@ -3529,6 +4201,11 @@ function CanDropPayloadOnSlot(payload, slotIndex) {
         return Boolean(equipped && equipped.type === "roller" && !equipped.hasAutoroller)
     }
 
+    if (payload.itemType === "booster") {
+        let equipped = PlayerData.equippedRollers[idx]
+        return Boolean(equipped && equipped.type === "roller")
+    }
+
     return false
 }
 
@@ -3544,6 +4221,8 @@ function ExecuteDropPayloadOnSlot(payload, slotIndex, slotEl) {
         }
     } else if (payload.itemType === "attachment") {
         return AttachAutorollerToSlot(payload.instanceId, idx, slotEl)
+    } else if (payload.itemType === "booster") {
+        return AttachBoosterToSlot(payload.instanceId, idx, slotEl)
     }
     return false
 }
@@ -3851,7 +4530,9 @@ function RenderEquippedRollers() {
         if (equippedInst && equippedInst.type === "roller") {
             let rollerDef = GetRollerDefinition(equippedInst.itemId)
             let luckMult = rollerDef.luckMultiplier !== undefined ? rollerDef.luckMultiplier : 1
-            let maxCards = rollerDef.maxCardsPerRoll !== undefined ? rollerDef.maxCardsPerRoll : 1
+            let boosterCount = Number(equippedInst.boosters) || 0
+            let bonusCards = GetBoosterBonusCards(boosterCount)
+            let maxCards = GetEffectiveRollerMaxCards(equippedInst)
             let hasAuto = Boolean(equippedInst.hasAutoroller)
             let autoOn = Boolean(equippedInst.autoEnabled)
             let rollCost = GetRollerCost(equippedInst)
@@ -3872,13 +4553,17 @@ function RenderEquippedRollers() {
                             ? `<span class="roller-auto-attached-badge" title="Autoroller attached">🔒 🤖 Auto</span>`
                             : `<span class="roller-auto-drop-hint" title="Drag an Autoroller onto this roller to automate">Drop 🤖 Auto</span>`
                         }
+                        ${boosterCount > 0
+                            ? `<span class="roller-booster-badge" title="${boosterCount} Booster${boosterCount > 1 ? 's' : ''} equipped (+${bonusCards} cards/roll)">🚀 +${bonusCards} (${boosterCount})</span>`
+                            : `<span class="roller-booster-drop-hint" title="Drag a Roll Booster onto this roller to boost cards rolled">Drop 🚀 Booster</span>`
+                        }
                         <button type="button" class="roller-slot-unequip-btn" title="Unequip roller to Items Inventory">✕ Unequip</button>
                     </div>
                 </div>
                 <div class="roller-slot-main">
                     <div class="roller-slot-icon">${rollerDef.icon || "🎲"}</div>
                     <div class="roller-slot-info">
-                        <div class="roller-slot-stats">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} Cards</div>
+                        <div class="roller-slot-stats">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} Cards${bonusCards > 0 ? ` (+${bonusCards} 🚀)` : ""}</div>
                         <div class="roller-slot-stats">⏱️ ${FormatNumber(duration)}s cooldown • 🪙 ${rollCost} Token${rollCost > 1 ? "s" : ""}</div>
                     </div>
                 </div>
@@ -3973,7 +4658,6 @@ function RenderEquippedRollers() {
 
 function RenderItemsInventory() {
     let grid = document.getElementById("items-inventory-grid")
-    let shopBar = document.getElementById("items-shop-bar")
     let itemsOwnedBadge = document.getElementById("items-owned-badge")
     let tabItemsCount = document.getElementById("inv-tab-items-count")
 
@@ -3985,40 +4669,13 @@ function RenderItemsInventory() {
         tabItemsCount.textContent = String(storedCount)
     }
 
-    if (shopBar) {
-        let autorollerDef = GetItemDefinition((coreValues.rollers && coreValues.rollers.autorollerId) || "autoroller")
-        let autoPrice = GetAutorollerPrice()
-        let canAfford = PlayerData.diamonds >= autoPrice
-        shopBar.innerHTML = `
-            <div class="items-shop-banner">
-                <div class="items-shop-banner-left">
-                    <div class="items-shop-icon">${(autorollerDef && autorollerDef.icon) || "🤖"}</div>
-                    <div class="items-shop-details">
-                        <h3>Buy ${(autorollerDef && autorollerDef.name) || "Autoroller"} <span class="items-shop-perm-pill">Permanent Attachment</span></h3>
-                        <p>${(autorollerDef && autorollerDef.description) || "Drag onto an equipped roller to automate it! Automation can be toggled ON/OFF, but cannot be removed once attached."}</p>
-                    </div>
-                </div>
-                <button type="button" id="buy-autoroller-btn" class="items-buy-autoroller-btn ${canAfford ? "can-afford" : ""}" ${canAfford ? "" : "disabled"}>
-                    <span>🤖 Buy Autoroller</span>
-                    <span class="items-buy-price">💎 ${FormatNumber(autoPrice)}</span>
-                </button>
-            </div>
-        `
-        let buyBtn = shopBar.querySelector("#buy-autoroller-btn")
-        if (buyBtn) {
-            buyBtn.addEventListener("click", function() {
-                BuyAutoroller(buyBtn)
-            })
-        }
-    }
-
     if (!grid) return
     grid.innerHTML = ""
 
     if (storedCount <= 0) {
         let emptyEl = document.createElement("div")
         emptyEl.className = "inventory-empty items-inventory-empty"
-        emptyEl.textContent = "🎒 Your Items Inventory is empty! Equipped rollers are active in the Roller Slots above. Drag an equipped roller here to unequip it, or buy an Autoroller for 1,000 💎."
+        emptyEl.textContent = "🎒 Your Items Inventory is empty! Equipped rollers are active in the Roller Slots above. Drag an equipped roller here to unequip it, or purchase an Autoroller or Roll Booster in the Shop using Barks."
         grid.appendChild(emptyEl)
         return
     }
@@ -4029,13 +4686,16 @@ function RenderItemsInventory() {
         if (!def) continue
 
         let itemEl = document.createElement("div")
-        itemEl.className = "item-inventory-card item-type-" + (itemInst.type || "roller")
+        let itemType = itemInst.type || def.type || "roller"
+        itemEl.className = "item-inventory-card item-type-" + itemType
         itemEl.setAttribute("data-instance-id", itemInst.instanceId)
 
-        if (itemInst.type === "roller") {
+        if (itemType === "roller") {
             let rollerDef = GetRollerDefinition(itemInst.itemId)
             let luckMult = rollerDef.luckMultiplier !== undefined ? rollerDef.luckMultiplier : 1
-            let maxCards = rollerDef.maxCardsPerRoll !== undefined ? rollerDef.maxCardsPerRoll : 1
+            let boosterCount = Number(itemInst.boosters) || 0
+            let bonusCards = GetBoosterBonusCards(boosterCount)
+            let maxCards = GetEffectiveRollerMaxCards(itemInst)
             let hasAuto = Boolean(itemInst.hasAutoroller)
 
             itemEl.innerHTML = `
@@ -4051,6 +4711,7 @@ function RenderItemsInventory() {
                 <div class="item-card-stats-row">
                     <span class="item-stat-pill">🍀 ×${FormatNumber(luckMult)} Luck</span>
                     <span class="item-stat-pill">🃏 Max ${maxCards} ${maxCards === 1 ? "Card" : "Cards"} / Roll</span>
+                    ${boosterCount > 0 ? `<span class="item-stat-pill booster-pill">🚀 ${boosterCount} Boosters (+${bonusCards} Cards)</span>` : ""}
                     ${hasAuto ? `<span class="item-stat-pill auto-pill">🔒 🤖 Autoroller Attached</span>` : ""}
                 </div>
             `
@@ -4060,6 +4721,29 @@ function RenderItemsInventory() {
                 instanceId: itemInst.instanceId,
                 itemId: itemInst.itemId,
                 itemType: "roller",
+            })
+        } else if (itemType === "booster") {
+            itemEl.innerHTML = `
+                <div class="item-card-top">
+                    <div class="item-card-icon-wrap booster-icon">${def.icon || "🚀"}</div>
+                    <div class="item-card-title-wrap">
+                        <span class="item-card-type-label">Roller Upgrade</span>
+                        <h3 class="item-card-name">${def.name}</h3>
+                    </div>
+                    <span class="item-drag-badge booster-drag">✋ Drag onto Roller</span>
+                </div>
+                <p class="item-card-desc">${def.description}</p>
+                <div class="item-card-stats-row">
+                    <span class="item-stat-pill booster-pill">⚡ +Cards Per Roll</span>
+                    <span class="item-stat-pill">📈 Stacks: 1=+1, 3=+2, 7=+3</span>
+                </div>
+            `
+
+            AttachDraggableItemEvents(itemEl, {
+                source: "inventory",
+                instanceId: itemInst.instanceId,
+                itemId: itemInst.itemId,
+                itemType: "booster",
             })
         } else {
             itemEl.innerHTML = `
@@ -4168,6 +4852,10 @@ function UpdateTopBarUI() {
     let rollCost = coreValues.roll.cost
     document.getElementById("token-count").textContent = FormatNumber(PlayerData.tokens) + " / " + FormatNumber(GetEffectiveTokenCapacity())
     document.getElementById("diamond-count").textContent = FormatNumber(PlayerData.diamonds)
+    let barkEl = document.getElementById("bark-count")
+    if (barkEl) {
+        barkEl.textContent = FormatNumber(PlayerData.barks || 0)
+    }
     document.getElementById("rolls-count").textContent = PlayerData.totalRolls
 
     let reqXp = GetRequiredXp(PlayerData.level)
@@ -4322,6 +5010,7 @@ function UpdateUI() {
         RenderPressMenu()
     }
     if (PlayerData.activeView === "shop") {
+        RenderSidebarShop()
         RenderShop()
     }
     if (PlayerData.activeView === "crafting") {
@@ -4339,12 +5028,17 @@ function ResetGameProgress() {
     localStorage.removeItem(SAVE_STORAGE_KEY)
     PlayerData.tokens = coreValues.tokens.starting
     PlayerData.diamonds = coreValues.diamonds.starting
+    PlayerData.resigns = 0
+    PlayerData.barks = 0
+    PlayerData.lastResignLevelClaimed = 0
     PlayerData.level = coreValues.level.starting
     PlayerData.xp = 0
     PlayerData.totalRolls = 0
     PlayerData.autoRollEnabled = false
     PlayerData.activeCraft = null
     PlayerData.inventoryTab = "cards"
+    PlayerData.activePressId = "diamondPress"
+    PlayerData.activeShopCategory = (coreValues.shop && coreValues.shop.defaultCategory) || "upgrades"
     PlayerData.pressPercent = (coreValues.presses && coreValues.presses.defaultPercentage) || 100
     PlayerData.pressKeepOne = Boolean(coreValues.presses && coreValues.presses.defaultKeepOne)
     PlayerData.lastRolledCard = null
