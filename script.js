@@ -3428,42 +3428,68 @@ function RenderEquippedRollers() {
             let maxCards = rollerDef.maxCardsPerRoll !== undefined ? rollerDef.maxCardsPerRoll : 1
             let hasAuto = Boolean(equippedInst.hasAutoroller)
             let autoOn = Boolean(equippedInst.autoEnabled)
+            let rollCost = GetRollerCost(equippedInst)
+            let duration = GetEffectiveRollerDuration(equippedInst)
+            let onCooldown = IsRollerSlotOnCooldown(slotIndex)
+            let canAfford = PlayerData.tokens >= rollCost
+            let remaining = GetRollerSlotRemainingDuration(slotIndex)
 
             slotEl.className = "roller-slot equipped" + (hasAuto ? (" has-autoroller" + (autoOn ? " auto-active" : " auto-paused")) : "")
             slotEl.innerHTML = `
                 <div class="roller-slot-top">
-                    <span class="roller-slot-number">Slot #${slotIndex + 1}</span>
+                    <div class="roller-slot-header-left">
+                        <span class="roller-slot-number">Slot #${slotIndex + 1}</span>
+                        <span class="roller-slot-name">${rollerDef.name}</span>
+                    </div>
                     <div class="roller-slot-badges">
                         ${hasAuto
-                            ? `<span class="roller-auto-attached-badge" title="Autoroller permanently attached (cannot be removed)">🔒 🤖 Attached</span>`
-                            : `<span class="roller-auto-drop-hint" title="Drag an Autoroller item here to automate this roller">Drop 🤖 Autoroller</span>`
+                            ? `<span class="roller-auto-attached-badge" title="Autoroller attached">🔒 🤖 Auto</span>`
+                            : `<span class="roller-auto-drop-hint" title="Drag an Autoroller onto this roller to automate">Drop 🤖 Auto</span>`
                         }
+                        <button type="button" class="roller-slot-unequip-btn" title="Unequip roller to Items Inventory">✕ Unequip</button>
                     </div>
                 </div>
                 <div class="roller-slot-main">
                     <div class="roller-slot-icon">${rollerDef.icon || "🎲"}</div>
                     <div class="roller-slot-info">
-                        <div class="roller-slot-name">${rollerDef.name}</div>
-                        <div class="roller-slot-stats">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} ${maxCards === 1 ? "Card" : "Cards"}</div>
+                        <div class="roller-slot-stats">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} Cards</div>
+                        <div class="roller-slot-stats">⏱️ ${FormatNumber(duration)}s cooldown • 🪙 ${rollCost} Token${rollCost > 1 ? "s" : ""}</div>
                     </div>
                 </div>
-                <div class="roller-slot-actions">
-                    ${hasAuto
-                        ? `<button type="button" class="roller-slot-auto-toggle ${autoOn ? "active" : ""}" title="Toggle Autoroller ON/OFF">
-                            🤖 Auto: ${autoOn ? "ON" : "OFF"}
-                        </button>`
-                        : `<span class="roller-slot-manual-tag">🖐️ Manual Roll</span>`
-                    }
-                    <button type="button" class="roller-slot-unequip-btn" title="Unequip roller to Items Inventory">
-                        Unequip
+                <div class="roller-slot-controls">
+                    <button type="button" class="roll-button roller-slot-roll-btn ${onCooldown ? "cooling-down" : ""}" data-roller-roll-slot="${slotIndex}" ${(!canAfford || onCooldown) ? "disabled" : ""}>
+                        <span class="btn-gloss"></span>
+                        <span class="roll-button-text">${onCooldown ? "⏳ Recharging..." : (canAfford ? ("🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")") : ("🎲 Need " + rollCost + " Tokens"))}</span>
+                        <span class="roll-cooldown-bar"></span>
+                    </button>
+                    <button type="button" class="auto-roll-button roller-slot-auto-btn ${hasAuto ? (autoOn ? "active" : "") : "locked"}" data-roller-auto-slot="${slotIndex}" ${!hasAuto ? "disabled" : ""}>
+                        ${hasAuto
+                            ? (autoOn ? "🤖 Auto: ON" : "🤖 Auto: OFF")
+                            : "🤖 No Autoroller"
+                        }
                     </button>
                 </div>
             `
 
-            let autoToggleBtn = slotEl.querySelector(".roller-slot-auto-toggle")
-            if (autoToggleBtn) {
-                autoToggleBtn.addEventListener("click", function(e) {
+            let rollBtn = slotEl.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
+            if (rollBtn) {
+                if (onCooldown) {
+                    rollBtn.style.setProperty("--roller-cooldown", remaining + "s")
+                }
+                rollBtn.addEventListener("click", function(e) {
                     e.stopPropagation()
+                    HandleRollerSlotRoll(slotIndex)
+                })
+            }
+
+            let autoBtn = slotEl.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
+            if (autoBtn) {
+                autoBtn.addEventListener("click", function(e) {
+                    e.stopPropagation()
+                    if (!equippedInst.hasAutoroller) {
+                        SetRollStatusMessage("⚠️ Drag an Autoroller from Items onto Slot #" + (slotIndex + 1) + " to automate it!", true)
+                        return
+                    }
                     ToggleRollerAutomation(slotIndex)
                 })
             }
@@ -3497,9 +3523,9 @@ function RenderEquippedRollers() {
                         <div class="roller-slot-stats">Drag a Roller from Items Inventory here</div>
                     </div>
                 </div>
-                <div class="roller-slot-actions">
+                <div class="roller-slot-controls">
                     <button type="button" class="roller-slot-open-items-btn">
-                        🎒 Open Items Tab
+                        🎒 Equip from Items Tab
                     </button>
                 </div>
             `
@@ -3763,114 +3789,23 @@ function UpdateTopBarUI() {
 }
 
 function RenderRollerButtons() {
-    let container = document.getElementById("roll-buttons-row")
-    if (!container) return
+    let slotsContainer = document.getElementById("equipped-rollers-slots")
+    if (!slotsContainer) return
 
     EnsureRollerSlotsNormalized()
-    let equippedList = []
+
     for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
         let rollerInst = PlayerData.equippedRollers[slotIndex]
-        if (rollerInst && rollerInst.type === "roller") {
-            table.insert(equippedList, { slotIndex: slotIndex, inst: rollerInst })
-        }
-    }
+        let slotEl = slotsContainer.querySelector(`[data-slot-index="${slotIndex}"]`)
+        if (!slotEl) continue
 
-    if (equippedList.length === 0) {
-        if (container.getAttribute("data-mode") !== "empty") {
-            container.setAttribute("data-mode", "empty")
-            container.removeAttribute("data-signature")
-            container.innerHTML = `
-                <button id="roll-button" type="button" class="roll-button empty-fallback-btn">
-                    <span class="btn-gloss"></span>
-                    <span id="roll-button-text" class="roll-button-text">⚠️ Equip a Roller from Items</span>
-                    <span id="roll-cooldown-bar" class="roll-cooldown-bar"></span>
-                </button>
-                <button id="auto-roll-button" type="button" class="auto-roll-button" disabled>
-                    🤖 Auto-Roll: Locked
-                </button>
-            `
-            let emptyRollBtn = container.querySelector("#roll-button")
-            if (emptyRollBtn) {
-                emptyRollBtn.addEventListener("click", function() {
-                    SwitchView("items")
-                    PlayGameSound("pop")
-                })
-            }
-        }
-        return
-    }
+        if (!rollerInst || rollerInst.type !== "roller") continue
 
-    let currentSignature = equippedList.map(function(e) {
-        return e.slotIndex + ":" + e.inst.instanceId + ":" + (e.inst.hasAutoroller ? "1" : "0")
-    }).join("|")
-
-    let existingSignature = container.getAttribute("data-signature")
-
-    if (existingSignature !== currentSignature) {
-        container.setAttribute("data-mode", "rollers")
-        container.setAttribute("data-signature", currentSignature)
-        container.innerHTML = ""
-
-        for (let [idx, entry] of pairs(equippedList)) {
-            let slotIndex = entry.slotIndex
-            let rollerInst = entry.inst
-            let rollerDef = GetRollerDefinition(rollerInst.itemId)
-            let luckMult = rollerDef.luckMultiplier !== undefined ? rollerDef.luckMultiplier : 1
-            let maxCards = rollerDef.maxCardsPerRoll !== undefined ? rollerDef.maxCardsPerRoll : 1
-            let rollCost = GetRollerCost(rollerInst)
-            let duration = GetEffectiveRollerDuration(rollerInst)
-
-            let unitEl = document.createElement("div")
-            unitEl.className = "roller-action-unit"
-            unitEl.setAttribute("data-slot-index", String(slotIndex))
-
-            unitEl.innerHTML = `
-                <div class="roller-action-header">
-                    <span class="roller-action-title">${rollerDef.icon || "🎲"} Slot #${slotIndex + 1}: ${rollerDef.name}</span>
-                    <span class="roller-action-meta">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} • ⏱️ ${FormatNumber(duration)}s</span>
-                </div>
-                <div class="roller-action-buttons">
-                    <button type="button" class="roll-button roller-roll-btn" data-roller-roll-slot="${slotIndex}">
-                        <span class="btn-gloss"></span>
-                        <span class="roll-button-text">🎲 Roll (${rollCost} Token${rollCost > 1 ? "s" : ""})</span>
-                        <span class="roll-cooldown-bar"></span>
-                    </button>
-                    <button type="button" class="auto-roll-button roller-auto-btn" data-roller-auto-slot="${slotIndex}">
-                        ${rollerInst.hasAutoroller ? (rollerInst.autoEnabled ? "🤖 Auto: ON" : "🤖 Auto: OFF") : "🤖 No Autoroller"}
-                    </button>
-                </div>
-            `
-
-            let rollBtn = unitEl.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
-            if (rollBtn) {
-                rollBtn.addEventListener("click", function() {
-                    HandleRollerSlotRoll(slotIndex)
-                })
-            }
-
-            let autoBtn = unitEl.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
-            if (autoBtn) {
-                autoBtn.addEventListener("click", function() {
-                    if (!rollerInst.hasAutoroller) {
-                        SetRollStatusMessage("⚠️ Drag an Autoroller from Items onto Slot #" + (slotIndex + 1) + " to automate it!", true)
-                        return
-                    }
-                    ToggleRollerAutomation(slotIndex)
-                })
-            }
-
-            container.appendChild(unitEl)
-        }
-    }
-
-    for (let [idx, entry] of pairs(equippedList)) {
-        let slotIndex = entry.slotIndex
-        let rollerInst = entry.inst
         let rollCost = GetRollerCost(rollerInst)
         let onCooldown = IsRollerSlotOnCooldown(slotIndex)
         let canAfford = PlayerData.tokens >= rollCost
-        let rollBtn = container.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
-        let autoBtn = container.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
+        let rollBtn = slotEl.querySelector(`[data-roller-roll-slot="${slotIndex}"]`)
+        let autoBtn = slotEl.querySelector(`[data-roller-auto-slot="${slotIndex}"]`)
 
         if (rollBtn) {
             rollBtn.disabled = !canAfford || onCooldown
@@ -3896,11 +3831,11 @@ function RenderRollerButtons() {
         if (autoBtn) {
             if (!rollerInst.hasAutoroller) {
                 autoBtn.disabled = true
-                autoBtn.classList.remove("active")
+                autoBtn.className = "auto-roll-button roller-slot-auto-btn locked"
                 autoBtn.textContent = "🤖 No Autoroller"
             } else {
                 autoBtn.disabled = false
-                autoBtn.classList.toggle("active", Boolean(rollerInst.autoEnabled))
+                autoBtn.className = "auto-roll-button roller-slot-auto-btn" + (rollerInst.autoEnabled ? " active" : "")
                 autoBtn.textContent = rollerInst.autoEnabled ? "🤖 Auto: ON" : "🤖 Auto: OFF"
             }
         }
