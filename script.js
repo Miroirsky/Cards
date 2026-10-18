@@ -3512,12 +3512,18 @@ function RenderCrafting() {
             let progressPct = math.min(100, math.max(0, ((totalDuration - (remainingMs / 1000)) / totalDuration) * 100))
             let isReady = remainingMs <= 0
 
+            let activeIconHtml = activeCraft.image
+                ? `<img src="${activeCraft.image}" alt="${activeCraft.name}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">`
+                : (activeCraft.icon || "🎲")
+            let activeTitleText = (activeCraft.resultAmount && activeCraft.resultAmount > 1 ? activeCraft.resultAmount + "× " : "") + activeCraft.name
+            let claimButtonText = `✨ Claim ${activeTitleText}!`
+
             workbenchContent.innerHTML = `
                 <div class="active-craft-card ${isReady ? 'ready' : 'in-progress'}">
                     <div class="active-craft-top">
-                        <div class="active-craft-icon">${activeCraft.icon || "🎲"}</div>
+                        <div class="active-craft-icon">${activeIconHtml}</div>
                         <div class="active-craft-details">
-                            <div class="active-craft-title">${activeCraft.name}</div>
+                            <div class="active-craft-title">${activeTitleText}</div>
                             <div class="active-craft-meta">
                                 ${isReady
                                     ? '<span class="craft-ready-tag">✨ Crafting Complete! Ready to Claim</span>'
@@ -3528,7 +3534,7 @@ function RenderCrafting() {
                         <div class="active-craft-actions">
                             ${isReady
                                 ? `<button type="button" id="craft-claim-btn" class="craft-claim-btn">
-                                    ✨ Claim ${activeCraft.name}!
+                                    ${claimButtonText}
                                 </button>`
                                 : `<button type="button" id="craft-refund-btn" class="craft-refund-btn" title="Cancel crafting and return all materials">
                                     ↩️ Refund &amp; Cancel
@@ -3574,9 +3580,10 @@ function RenderCrafting() {
             let canCraft = true
             let materialsHtml = recipe.materials.map(function(m) {
                 let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+                let cardName = m.cardName || m.name
                 let owned = isBark
                     ? (PlayerData.barks || 0)
-                    : ((PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0)
+                    : ((PlayerData.inventory[cardName] && PlayerData.inventory[cardName].count) || 0)
                 let hasEnough = owned >= m.amount
                 if (!hasEnough) {
                     canCraft = false
@@ -3584,7 +3591,7 @@ function RenderCrafting() {
                 let iconHtml = isBark
                     ? `<img src="Assets/Barks.png" class="recipe-mat-bark-icon" alt="Bark"> `
                     : ""
-                let nameLabel = isBark ? "Bark" : m.cardName
+                let nameLabel = isBark ? "Bark" : cardName
                 return `
                     <div class="recipe-mat-item ${hasEnough ? 'satisfied' : 'missing'}">
                         <span class="recipe-mat-check">${hasEnough ? '✓' : '✗'}</span>
@@ -3594,6 +3601,7 @@ function RenderCrafting() {
                 `
             }).join("")
 
+            let resultLabel = (recipe.resultAmount && recipe.resultAmount > 1 ? recipe.resultAmount + "× " : "") + recipe.name
             let buttonText = ""
             let buttonDisabled = false
             let buttonClass = "recipe-craft-btn"
@@ -3605,18 +3613,22 @@ function RenderCrafting() {
                 buttonText = "⚠️ Missing Materials"
                 buttonDisabled = true
             } else {
-                buttonText = "🔨 Craft " + recipe.name + " (" + FormatCraftTime(recipe.craftTime) + ")"
+                buttonText = "🔨 Craft " + resultLabel + " (" + FormatCraftTime(recipe.craftTime) + ")"
                 buttonDisabled = false
                 buttonClass += " ready-to-craft"
             }
+
+            let recipeIconHtml = recipe.image
+                ? `<img src="${recipe.image}" alt="${recipe.name}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">`
+                : (recipe.icon || (recipe.resultType === "card" ? "🃏" : "🎲"))
 
             let cardEl = document.createElement("div")
             cardEl.className = "crafting-recipe-card" + (canCraft && !isBusy ? " can-craft" : "")
             cardEl.innerHTML = `
                 <div class="recipe-card-header">
-                    <div class="recipe-card-icon">${recipe.icon || "🎲"}</div>
+                    <div class="recipe-card-icon">${recipeIconHtml}</div>
                     <div class="recipe-card-title-wrap">
-                        <h4 class="recipe-card-title">${recipe.name}</h4>
+                        <h4 class="recipe-card-title">${resultLabel}</h4>
                         <span class="recipe-card-time">⏱️ Craft Time: ${FormatCraftTime(recipe.craftTime)}</span>
                     </div>
                 </div>
@@ -3664,10 +3676,11 @@ function HandleStartCraft(recipeId) {
 
     for (let [i, m] of pairs(recipe.materials)) {
         let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        let cardName = m.cardName || m.name
         let owned = isBark
             ? (PlayerData.barks || 0)
-            : ((PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0)
-        let label = isBark ? "Bark" : m.cardName
+            : ((PlayerData.inventory[cardName] && PlayerData.inventory[cardName].count) || 0)
+        let label = isBark ? "Bark" : cardName
         if (owned < m.amount) {
             SetRollStatusMessage("⚠️ Not enough " + label + "! Need " + (m.amount - owned) + " more.", true)
             return
@@ -3676,12 +3689,13 @@ function HandleStartCraft(recipeId) {
 
     for (let [i, m] of pairs(recipe.materials)) {
         let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        let cardName = m.cardName || m.name
         if (isBark) {
             PlayerData.barks = math.max(0, (PlayerData.barks || 0) - m.amount)
         } else {
-            PlayerData.inventory[m.cardName].count -= m.amount
-            if (PlayerData.inventory[m.cardName].count <= 0) {
-                delete PlayerData.inventory[m.cardName]
+            PlayerData.inventory[cardName].count -= m.amount
+            if (PlayerData.inventory[cardName].count <= 0) {
+                delete PlayerData.inventory[cardName]
             }
         }
     }
@@ -3692,16 +3706,20 @@ function HandleStartCraft(recipeId) {
         name: recipe.name,
         resultItemId: recipe.resultItemId,
         resultType: recipe.resultType || "roller",
-        icon: recipe.icon || "🎲",
+        resultCardName: recipe.resultCardName,
+        resultAmount: recipe.resultAmount || 1,
+        image: recipe.image,
+        icon: recipe.icon || (recipe.resultType === "card" ? "🃏" : "🎲"),
         duration: craftDuration,
         startTime: Date.now(),
         endTime: Date.now() + (craftDuration * 1000),
         materials: recipe.materials.map(function(m) {
             let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+            let cName = m.cardName || m.name
             return {
                 type: isBark ? "bark" : "card",
-                name: isBark ? "Bark" : m.cardName,
-                cardName: isBark ? null : m.cardName,
+                name: isBark ? "Bark" : cName,
+                cardName: isBark ? null : cName,
                 amount: m.amount,
             }
         }),
@@ -3718,20 +3736,21 @@ function HandleRefundCraft() {
 
     for (let [i, m] of pairs(activeCraft.materials)) {
         let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
+        let cardName = m.cardName || m.name
         if (isBark) {
             PlayerData.barks = (PlayerData.barks || 0) + m.amount
-        } else if (PlayerData.inventory[m.cardName]) {
-            PlayerData.inventory[m.cardName].count += m.amount
+        } else if (PlayerData.inventory[cardName]) {
+            PlayerData.inventory[cardName].count += m.amount
         } else {
             let baseCard = null
             for (let [k, c] of pairs(CardsList)) {
-                if (c.name === m.cardName) {
+                if (c.name === cardName) {
                     baseCard = c
                     break
                 }
             }
             if (baseCard) {
-                PlayerData.inventory[m.cardName] = {
+                PlayerData.inventory[cardName] = {
                     cardData: baseCard,
                     count: m.amount,
                     firstObtained: new Date(),
@@ -3753,9 +3772,32 @@ function HandleClaimCraft() {
         return
     }
 
-    let newItem = CreateItemInstance(activeCraft.resultItemId)
-    if (newItem) {
-        table.insert(PlayerData.itemsInventory, newItem)
+    if (activeCraft.resultType === "card" || activeCraft.resultCardName) {
+        let cardName = activeCraft.resultCardName || activeCraft.name
+        let cardData = null
+        for (let [k, c] of pairs(CardsList)) {
+            if (c.name === cardName) {
+                cardData = c
+                break
+            }
+        }
+
+        let amount = activeCraft.resultAmount || 1
+        if (cardData) {
+            for (let i = 0; i < amount; i++) {
+                AddCardToInventory(cardData)
+            }
+            let label = amount > 1 ? (amount + "× " + cardData.name) : cardData.name
+            SetRollStatusMessage(`🎉 Crafted ${label}! Added to your inventory.`, false)
+        } else {
+            console.error("Crafted card not found in CardsList:", cardName)
+        }
+    } else {
+        let newItem = CreateItemInstance(activeCraft.resultItemId)
+        if (newItem) {
+            table.insert(PlayerData.itemsInventory, newItem)
+            SetRollStatusMessage(`🎉 Crafted ${newItem.name || activeCraft.name}!`, false)
+        }
     }
 
     PlayerData.activeCraft = null
