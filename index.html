@@ -149,16 +149,7 @@
                     </div>
 
                     <div class="roll-actions">
-                        <div id="roll-buttons-row" class="roll-buttons-row">
-                            <button id="roll-button" class="roll-button" disabled>
-                                <span class="btn-gloss"></span>
-                                <span id="roll-button-text" class="roll-button-text">⚠️ Equip a Roller</span>
-                                <span id="roll-cooldown-bar" class="roll-cooldown-bar"></span>
-                            </button>
-                            <button id="auto-roll-button" class="auto-roll-button" disabled>
-                                🤖 Auto-Roll: Locked
-                            </button>
-                        </div>
+                        <div id="roll-buttons-row" class="roll-buttons-row hidden"></div>
                         <p id="roll-status" class="status-text">Equip your Basic Roller from the Items tab to start rolling!</p>
                     </div>
                 </section>
@@ -269,13 +260,26 @@
                         <div class="crafting-header">
                             <div>
                                 <h2>🔨 Crafting Bench</h2>
-                                <p class="inventory-hint">Combine materials, cards, and components to craft special rollers and upgrades!</p>
+                                <p class="inventory-hint">Combine duplicate cards to forge powerful new rollers and items! (1 active craft at a time)</p>
                             </div>
                         </div>
-                        <div class="crafting-placeholder">
-                            <div class="crafting-empty-icon">🔨</div>
-                            <h3>Crafting System Coming Soon</h3>
-                            <p>Crafting recipes and workbench blueprints are in development. Stay tuned!</p>
+
+                        <!-- Active Workbench -->
+                        <div id="crafting-workbench" class="crafting-workbench" role="region" aria-label="Active Crafting Workbench">
+                            <div class="crafting-bench-header">
+                                <span class="bench-badge">⚡ Active Workbench</span>
+                                <span id="crafting-status-pill" class="crafting-status-pill idle">Idle</span>
+                            </div>
+                            <div id="crafting-bench-content" class="crafting-bench-content"></div>
+                        </div>
+
+                        <!-- Recipes Catalog -->
+                        <div class="crafting-recipes-section">
+                            <div class="crafting-section-title-wrap">
+                                <h3>📜 Blueprints &amp; Recipes</h3>
+                                <span class="recipe-count-badge" id="recipe-count-badge">1 Recipe</span>
+                            </div>
+                            <div id="crafting-recipes-grid" class="crafting-recipes-grid"></div>
                         </div>
                     </section>
                 </div>

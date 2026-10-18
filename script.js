@@ -42,6 +42,7 @@ let PlayerData = {
     lastRolledCard: null,
     lastRolledCards: [],
     inventory: {},
+    activeCraft: null,
     maxRollerSlots: (coreValues.rollers && coreValues.rollers.startingSlots) || 1,
     equippedRollers: [],
     itemsInventory: [],
@@ -424,6 +425,7 @@ function SaveGame() {
             itemsInventory: PlayerData.itemsInventory,
             nextItemInstanceId: PlayerData.nextItemInstanceId,
             upgrades: PlayerData.upgrades,
+            activeCraft: PlayerData.activeCraft,
             settings: PlayerData.settings,
         }
 
@@ -596,6 +598,12 @@ function LoadGame() {
 
         if (PlayerData.lastRolledCards.length > 0) {
             PlayerData.lastRolledCard = GetRarest(PlayerData.lastRolledCards)
+        }
+
+        if (saved.activeCraft && typeof saved.activeCraft === "object" && saved.activeCraft.recipeId) {
+            PlayerData.activeCraft = saved.activeCraft
+        } else {
+            PlayerData.activeCraft = null
         }
     } catch (e) {
         // Ignore malformed save data
@@ -2204,6 +2212,8 @@ function RenderPressMenu() {
     let tabsContainer = document.getElementById("press-tabs")
     let contentContainer = document.getElementById("press-content")
     let headingEl = document.getElementById("active-press-heading")
+
+    if (!tabsContainer || !contentContainer) return
 
     tabsContainer.innerHTML = ""
     contentContainer.innerHTML = ""
@@ -4258,19 +4268,27 @@ function Init() {
     let modalNext = document.getElementById("modal-next")
     let modalViewport = document.getElementById("modal-slide-viewport")
 
-    modalClose.addEventListener("click", CloseCardModal)
-    modalPrev.addEventListener("click", function() {
-        NavigateModal(-1)
-    })
-    modalNext.addEventListener("click", function() {
-        NavigateModal(1)
-    })
+    if (modalClose) {
+        modalClose.addEventListener("click", CloseCardModal)
+    }
+    if (modalPrev) {
+        modalPrev.addEventListener("click", function() {
+            NavigateModal(-1)
+        })
+    }
+    if (modalNext) {
+        modalNext.addEventListener("click", function() {
+            NavigateModal(1)
+        })
+    }
 
-    modalOverlay.addEventListener("click", function(e) {
-        if (e.target === modalOverlay || e.target.classList.contains("modal-wrapper")) {
-            CloseCardModal()
-        }
-    })
+    if (modalOverlay) {
+        modalOverlay.addEventListener("click", function(e) {
+            if (e.target === modalOverlay || (e.target.classList && e.target.classList.contains("modal-wrapper"))) {
+                CloseCardModal()
+            }
+        })
+    }
 
     let tagModalClose = document.getElementById("tag-modal-close")
     let tagModalOverlay = document.getElementById("tag-modal")
@@ -4286,21 +4304,23 @@ function Init() {
     }
 
     let swipeStartX = 0
-    modalViewport.addEventListener("pointerdown", function(e) {
-        if (e.target && typeof e.target.closest === "function" && e.target.closest('.card-tag-pill:not([data-tag-type="mutation"])')) {
-            return
-        }
-        swipeStartX = e.clientX
-    })
-    modalViewport.addEventListener("pointerup", function(e) {
-        if (e.target && typeof e.target.closest === "function" && e.target.closest('.card-tag-pill:not([data-tag-type="mutation"])')) {
-            return
-        }
-        let diffX = e.clientX - swipeStartX
-        if (Math.abs(diffX) > 45) {
-            NavigateModal(diffX < 0 ? 1 : -1)
-        }
-    })
+    if (modalViewport) {
+        modalViewport.addEventListener("pointerdown", function(e) {
+            if (e.target && typeof e.target.closest === "function" && e.target.closest('.card-tag-pill:not([data-tag-type="mutation"])')) {
+                return
+            }
+            swipeStartX = e.clientX
+        })
+        modalViewport.addEventListener("pointerup", function(e) {
+            if (e.target && typeof e.target.closest === "function" && e.target.closest('.card-tag-pill:not([data-tag-type="mutation"])')) {
+                return
+            }
+            let diffX = e.clientX - swipeStartX
+            if (Math.abs(diffX) > 45) {
+                NavigateModal(diffX < 0 ? 1 : -1)
+            }
+        })
+    }
 
     window.addEventListener("keydown", function(e) {
         if (TagModalState.isOpen) {

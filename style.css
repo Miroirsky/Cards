@@ -3310,18 +3310,17 @@ body:not(.no-bouncy) .tag-modal-card-item:hover {
 }
 
 .roller-slot {
-    width: 240px;
-    min-width: 240px;
-    max-width: 240px;
-    height: 144px;
-    min-height: 144px;
-    max-height: 144px;
+    width: 290px;
+    min-width: 270px;
+    max-width: 320px;
+    min-height: 204px;
     box-sizing: border-box;
-    padding: 10px 12px;
-    border-radius: 16px;
+    padding: 12px 14px;
+    border-radius: 18px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    gap: 10px;
     text-align: left;
     background: var(--bg-panel);
     border: 2.5px solid var(--border-chunky);
@@ -4035,39 +4034,456 @@ html[data-theme="light"] .roller-slot.empty {
 .crafting-panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 24px;
 }
 
-.crafting-placeholder {
+.crafting-workbench {
+    background: var(--bg-panel-inner);
+    border: 2px solid var(--border-chunky);
+    border-radius: 20px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+
+.crafting-bench-header {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 56px 24px;
-    text-align: center;
+    justify-content: space-between;
     gap: 12px;
-    background: var(--bg-panel-inner);
-    border-radius: 20px;
+}
+
+.bench-badge {
+    font-family: "Fredoka", sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.crafting-status-pill {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.crafting-status-pill.idle {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-soft);
+    border: 1px solid var(--border-subtle);
+}
+
+.crafting-status-pill.active {
+    background: rgba(56, 189, 248, 0.18);
+    color: var(--diamond-cyan);
+    border: 1px solid rgba(56, 189, 248, 0.55);
+    animation: pulseGlow 1.8s ease-in-out infinite;
+}
+
+.crafting-status-pill.ready {
+    background: rgba(16, 185, 129, 0.22);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.6);
+    animation: gentleBounce 1.5s ease-in-out infinite;
+}
+
+.workbench-idle-state {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 20px;
+    border-radius: 16px;
     border: 2px dashed var(--border-subtle);
+    background: var(--bg-panel);
+}
+
+.workbench-idle-icon {
+    font-size: 2.2rem;
+    opacity: 0.8;
+}
+
+.workbench-idle-text h4 {
+    margin: 0 0 4px 0;
+    font-family: "Fredoka", sans-serif;
+    font-size: 1.05rem;
+    color: var(--text-main);
+}
+
+.workbench-idle-text p {
+    margin: 0;
+    font-size: 0.85rem;
     color: var(--text-soft);
 }
 
-.crafting-placeholder h3 {
+.active-craft-card {
+    background: var(--bg-panel);
+    border: 2px solid var(--border-chunky);
+    border-radius: 18px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.active-craft-card.ready {
+    border-color: #10b981;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+}
+
+.active-craft-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.active-craft-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: var(--bg-panel-inner);
+    border: 2px solid var(--border-chunky);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+}
+
+.active-craft-details {
+    flex: 1;
+    min-width: 160px;
+}
+
+.active-craft-title {
     font-family: "Fredoka", sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
     color: var(--text-main);
-    font-size: 1.35rem;
-    margin: 0;
 }
 
-.crafting-placeholder p {
+.active-craft-meta {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-bright);
+    margin-top: 2px;
+}
+
+.craft-progress-track {
+    width: 100%;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--bg-panel-inner);
+    border: 1.5px solid var(--border-chunky);
+    overflow: hidden;
+    position: relative;
+}
+
+.craft-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #38bdf8, #818cf8, #34d399);
+    transition: width 0.25s linear;
+}
+
+.active-craft-card.ready .craft-progress-fill {
+    background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.active-craft-materials {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: var(--text-soft);
+    font-weight: 700;
+}
+
+.active-materials-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.committed-mat-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--bg-panel-inner);
+    border: 1px solid var(--border-subtle);
+    font-size: 0.75rem;
+    color: var(--text-main);
+}
+
+.craft-refund-btn {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 12px;
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.86rem;
+    font-weight: 700;
+    background: rgba(239, 68, 68, 0.16);
+    border: 2px solid rgba(239, 68, 68, 0.55);
+    color: #f87171;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease, filter 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.craft-refund-btn:hover {
+    background: rgba(239, 68, 68, 0.28);
+    transform: translateY(-1px);
+}
+
+.craft-claim-btn {
+    height: 42px;
+    padding: 0 20px;
+    border-radius: 14px;
+    font-family: "Fredoka", sans-serif;
     font-size: 0.95rem;
-    max-width: 460px;
-    margin: 0;
-    line-height: 1.5;
-}
-
-.crafting-empty-icon {
-    font-size: 3.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: 2px solid #6ee7b7;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+    transition: transform 0.15s var(--spring-bounce), filter 0.15s ease;
     animation: gentleBounce 2s ease-in-out infinite;
 }
+
+.craft-claim-btn:hover {
+    transform: translateY(-2px) scale(1.03);
+    filter: brightness(1.1);
+}
+
+/* Recipes Section */
+.crafting-recipes-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.crafting-section-title-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.crafting-section-title-wrap h3 {
+    margin: 0;
+    font-family: "Fredoka", sans-serif;
+    font-size: 1.15rem;
+    color: var(--text-main);
+}
+
+.recipe-count-badge {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bg-panel-inner);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-soft);
+}
+
+.crafting-recipes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+.crafting-recipe-card {
+    background: var(--bg-panel-inner);
+    border: 2px solid var(--border-chunky);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    transition: border-color 0.2s ease, transform 0.2s var(--spring-bounce);
+}
+
+.crafting-recipe-card.can-craft {
+    border-color: rgba(99, 102, 241, 0.7);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+}
+
+.recipe-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.recipe-card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--bg-panel);
+    border: 2px solid var(--border-chunky);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.recipe-card-title-wrap {
+    flex: 1;
+}
+
+.recipe-card-title {
+    margin: 0 0 2px 0;
+    font-family: "Fredoka", sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.recipe-card-time {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-soft);
+}
+
+.recipe-card-desc {
+    margin: 0;
+    font-size: 0.84rem;
+    color: var(--text-soft);
+    line-height: 1.4;
+}
+
+.recipe-materials-box {
+    background: var(--bg-panel);
+    border: 1.5px solid var(--border-subtle);
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.recipe-materials-title {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-soft);
+}
+
+.recipe-materials-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.recipe-mat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.recipe-mat-item.satisfied {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+}
+
+.recipe-mat-item.missing {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+}
+
+.recipe-mat-check {
+    margin-right: 6px;
+    font-weight: 900;
+}
+
+.recipe-mat-name {
+    flex: 1;
+}
+
+.recipe-mat-count {
+    font-variant-numeric: tabular-nums;
+}
+
+.recipe-craft-btn {
+    width: 100%;
+    height: 44px;
+    border-radius: 14px;
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s var(--spring-bounce), filter 0.15s ease;
+}
+
+.recipe-craft-btn.ready-to-craft {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-color: #6ee7b7;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.recipe-craft-btn.ready-to-craft:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.recipe-craft-btn:disabled {
+    background: var(--bg-panel);
+    border-color: var(--border-subtle);
+    color: var(--text-soft);
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+/* Roller Slot Controls */
+.roller-slot-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.roller-slot .roller-slot-roll-btn {
+    width: 100%;
+    height: 38px;
+    font-size: 0.88rem;
+    padding: 0 10px;
+}
+
+.roller-slot .roller-slot-auto-btn {
+    width: 100%;
+    height: 28px;
+    font-size: 0.76rem;
+    padding: 0 8px;
+}
+
+.roller-slot .roller-slot-auto-btn.locked {
+    opacity: 0.65;
+    cursor: not-allowed;
+    background: var(--bg-panel-inner);
+    border-color: var(--border-subtle);
+    color: var(--text-soft);
+}
+
 

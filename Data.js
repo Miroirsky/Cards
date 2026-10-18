@@ -442,8 +442,30 @@ const ItemsList = [
     },
 ]
 
+const CraftingRecipes = [
+    {
+        id: "craftBasicRoller",
+        name: "Basic Roller",
+        resultItemId: "basicRoller",
+        resultType: "roller",
+        icon: "🎲",
+        description: "A reliable standard roller with ×1 luck, 2s roll time, and rolls up to 3 cards per roll.",
+        craftTime: 60, // 1 minute in seconds
+        materials: [
+            { cardName: "Grass", amount: 500 },
+            { cardName: "Tree", amount: 200 },
+            { cardName: "Sugar", amount: 50 },
+            { cardName: "Earth", amount: 5 },
+        ],
+    },
+]
+
 const coreValues = {
     luck: 1,
+    crafting: {
+        maxActiveCrafts: 1,
+        recipes: CraftingRecipes,
+    },
     roll: {
         cost: 1,
         staggerDelay: 0.06,
