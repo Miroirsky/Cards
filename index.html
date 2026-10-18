@@ -56,6 +56,10 @@
                     <span class="nav-icon-bubble">🔨</span>
                     <span>Crafting</span>
                 </button>
+                <button id="nav-wiki" class="sidebar-nav-item">
+                    <span class="nav-icon-bubble">📖</span>
+                    <span>Wiki</span>
+                </button>
                 <button id="nav-settings" class="sidebar-nav-item" title="Settings / Parameters">
                     <span class="nav-icon-bubble">🛠️</span>
                     <span>Settings</span>
@@ -295,6 +299,43 @@
                     </section>
                 </div>
 
+                <div id="view-wiki" class="view-section hidden">
+                    <section class="panel wiki-panel">
+                        <div class="wiki-header">
+                            <div class="wiki-header-title-wrap">
+                                <div class="wiki-icon-circle">📖</div>
+                                <div>
+                                    <h2>Game Encyclopedia &amp; Wiki</h2>
+                                    <p class="inventory-hint">Detailed guides, drop rate mathematics, card catalog, equipment, and mechanics.</p>
+                                </div>
+                            </div>
+                            <div class="wiki-search-box">
+                                <span class="wiki-search-icon">🔍</span>
+                                <input type="text" id="wiki-search-input" class="wiki-search-input" placeholder="Search cards, mutations, tags, rollers, mechanics..." autocomplete="off" spellcheck="false">
+                                <button type="button" id="wiki-search-clear" class="wiki-search-clear hidden" title="Clear search">&times;</button>
+                            </div>
+                        </div>
+
+                        <div class="wiki-categories-nav" id="wiki-categories-nav" role="tablist">
+                            <button type="button" class="wiki-category-pill active" data-wiki-cat="all">🌟 All</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="mutations">✨ Mutations</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="tags">🏷️ Tags</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="cards">🃏 Cards &amp; Catalog</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="rollers">🎲 Rollers &amp; Boosters</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="progression">⭐ Progression &amp; Barks</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="crafting">🔨 Crafting &amp; Presses</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="shop">🛒 Shop</button>
+                            <button type="button" class="wiki-category-pill" data-wiki-cat="guides">💡 Tutorials &amp; Tips</button>
+                        </div>
+
+                        <div class="wiki-status-bar" id="wiki-status-bar">
+                            <span id="wiki-search-count-badge" class="wiki-count-badge">Displaying all topics</span>
+                        </div>
+
+                        <div id="wiki-content" class="wiki-content"></div>
+                    </section>
+                </div>
+
                 <div id="view-settings" class="view-section hidden">
                     <section class="panel settings-panel">
                         <div class="settings-header">
@@ -463,6 +504,75 @@
 
                 <div class="tag-modal-body">
                     <div id="tag-modal-cards-list" class="tag-modal-cards-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mutation-modal" class="modal-overlay mutation-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="mutation-modal-title">
+        <div class="modal-wrapper mutation-modal-wrapper">
+            <div class="modal-card mutation-modal-card">
+                <button id="mutation-modal-close" class="modal-close" aria-label="Close mutation info">&times;</button>
+
+                <div class="mutation-modal-header">
+                    <div id="mutation-modal-badge-slot" class="mutation-modal-badge-slot"></div>
+                    <div class="mutation-modal-title-group">
+                        <div class="mutation-modal-title-row">
+                            <h3 id="mutation-modal-title">Gold Mutation</h3>
+                            <span id="mutation-modal-mult-pill" class="mutation-multiplier-pill">×10</span>
+                        </div>
+                        <p id="mutation-modal-subtitle" class="mutation-modal-subtitle">Tier 3 / 9 Mutation</p>
+                    </div>
+                </div>
+
+                <div class="mutation-modal-metrics">
+                    <div class="mutation-metric-card">
+                        <span class="metric-icon">⚡</span>
+                        <div class="metric-details">
+                            <span class="metric-label">Multiplier</span>
+                            <span id="mutation-metric-mult" class="metric-value">×10</span>
+                        </div>
+                    </div>
+                    <div class="mutation-metric-card">
+                        <span class="metric-icon">🧬</span>
+                        <div class="metric-details">
+                            <span class="metric-label">Tier Level</span>
+                            <span id="mutation-metric-tier" class="metric-value">Tier 3 / 9</span>
+                        </div>
+                    </div>
+                    <div class="mutation-metric-card">
+                        <span class="metric-icon">🔄</span>
+                        <div class="metric-details">
+                            <span class="metric-label">Compressor</span>
+                            <span id="mutation-metric-compress" class="metric-value">3 Silver → 1 Gold</span>
+                        </div>
+                    </div>
+                    <div class="mutation-metric-card">
+                        <span class="metric-icon">✨</span>
+                        <div class="metric-details">
+                            <span class="metric-label">Decompressor</span>
+                            <span id="mutation-metric-decompress" class="metric-value">1 Gold → 5 Silver</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mutation-modal-appearance-box" class="mutation-appearance-box">
+                    <span class="appearance-title">🎨 Appearance &amp; Style:</span>
+                    <span id="mutation-appearance-text" class="appearance-desc">Gold metallic gradient with amber borders</span>
+                </div>
+
+                <div class="mutation-modal-summary">
+                    <span id="mutation-modal-unique-count" class="summary-badge">🃏 Discovered: 0 Cards</span>
+                    <span id="mutation-modal-total-copies" class="summary-badge">📦 Total Copies: 0</span>
+                    <span id="mutation-modal-rarest" class="summary-badge accent-badge">👑 Rarest: None</span>
+                </div>
+
+                <div class="mutation-modal-body">
+                    <div class="mutation-cards-header">
+                        <h4>Owned Cards with this Mutation</h4>
+                        <span class="mutation-cards-hint">Click any card to inspect full details</span>
+                    </div>
+                    <div id="mutation-modal-cards-list" class="mutation-modal-cards-list"></div>
                 </div>
             </div>
         </div>

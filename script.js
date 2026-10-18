@@ -64,7 +64,7 @@ let PlayerData = {
         theme: "dark",
         particles: true,
         bouncy: true,
-        sfx: true,
+        sfx: (typeof coreValues !== "undefined" && coreValues.audio && coreValues.audio.sfxEnabled !== undefined) ? coreValues.audio.sfxEnabled : true,
     },
 }
 
@@ -81,32 +81,64 @@ let TagModalState = {
 
 let audioCtx = null
 
-const SAVE_STORAGE_KEY = "cards_game_save_v1"
+const SAVE_STORAGE_KEY = (typeof coreValues !== "undefined" && coreValues.storage && coreValues.storage.key) || "cards_game_save_v1"
+
+const RollersByIdMap = new Map()
+const ItemsByIdMap = new Map()
+let CardsByNameMap = null
+
+function BuildCardsLookupMap() {
+    CardsByNameMap = new Map()
+    if (typeof CardsList !== "undefined" && Array.isArray(CardsList)) {
+        for (let i = 0; i < CardsList.length; i++) {
+            let c = CardsList[i]
+            if (c && c.name) {
+                CardsByNameMap.set(c.name, c)
+            }
+        }
+    }
+}
 
 function GetRollerDefinition(itemId) {
     let targetId = itemId || (coreValues.rollers && coreValues.rollers.startingRollerId) || "basicRoller"
+    if (RollersByIdMap.has(targetId)) {
+        return RollersByIdMap.get(targetId)
+    }
+    let found = null
     if (typeof RollersList !== "undefined" && Array.isArray(RollersList)) {
-        for (let [i, r] of pairs(RollersList)) {
-            if (r && r.id === targetId) return r
+        for (let i = 0; i < RollersList.length; i++) {
+            let r = RollersList[i]
+            if (r && r.id === targetId) {
+                found = r
+                break
+            }
         }
     }
-    if (typeof ItemsList !== "undefined" && Array.isArray(ItemsList)) {
-        for (let [i, item] of pairs(ItemsList)) {
-            if (item && item.id === targetId && item.type === "roller") return item
+    if (!found && typeof ItemsList !== "undefined" && Array.isArray(ItemsList)) {
+        for (let i = 0; i < ItemsList.length; i++) {
+            let item = ItemsList[i]
+            if (item && item.id === targetId && item.type === "roller") {
+                found = item
+                break
+            }
         }
     }
-    return {
-        id: "basicRoller",
-        name: "Basic Roller",
-        type: "roller",
-        icon: "🎲",
-        luckMultiplier: 1,
-        maxCardsPerRoll: 1,
-        rollDuration: 2,
-        rollTime: 2,
-        rollCost: 1,
-        description: "Standard roller with ×1 luck that rolls up to 1 randomly selected card from the roll list.",
+    if (!found) {
+        found = {
+            id: "basicRoller",
+            name: "Basic Roller",
+            type: "roller",
+            icon: "🎲",
+            luckMultiplier: 1,
+            maxCardsPerRoll: 1,
+            rollDuration: 2,
+            rollTime: 2,
+            rollCost: 1,
+            description: "Standard roller with ×1 luck that rolls up to 1 randomly selected card from the roll list.",
+        }
     }
+    RollersByIdMap.set(targetId, found)
+    return found
 }
 
 function GetRollerBaseDuration(rollerOrId) {
@@ -136,17 +168,33 @@ function GetRollerCost(rollerOrId) {
 const RollerCooldownState = {}
 
 function GetItemDefinition(itemId) {
+    if (!itemId) return null
+    if (ItemsByIdMap.has(itemId)) {
+        return ItemsByIdMap.get(itemId)
+    }
+    let found = null
     if (typeof ItemsList !== "undefined" && Array.isArray(ItemsList)) {
-        for (let [i, item] of pairs(ItemsList)) {
-            if (item && item.id === itemId) return item
+        for (let i = 0; i < ItemsList.length; i++) {
+            let item = ItemsList[i]
+            if (item && item.id === itemId) {
+                found = item
+                break
+            }
         }
     }
-    if (typeof RollersList !== "undefined" && Array.isArray(RollersList)) {
-        for (let [i, r] of pairs(RollersList)) {
-            if (r && r.id === itemId) return r
+    if (!found && typeof RollersList !== "undefined" && Array.isArray(RollersList)) {
+        for (let i = 0; i < RollersList.length; i++) {
+            let r = RollersList[i]
+            if (r && r.id === itemId) {
+                found = r
+                break
+            }
         }
     }
-    return null
+    if (found) {
+        ItemsByIdMap.set(itemId, found)
+    }
+    return found
 }
 
 function AllocateItemInstanceId() {
@@ -556,11 +604,6 @@ function LoadGame() {
         let saved = JSON.parse(raw)
         if (!saved || typeof saved !== "object") return
 
-        let cardsByName = {}
-        for (let [i, cardData] of pairs(CardsList)) {
-            cardsByName[cardData.name] = cardData
-        }
-
         if (saved.upgrades && typeof saved.upgrades === "object") {
             for (let [i, upg] of pairs(ShopUpgradesList)) {
                 let savedLvl = saved.upgrades[upg.id]
@@ -635,7 +678,7 @@ function LoadGame() {
         PlayerData.inventory = {}
         if (saved.inventory && typeof saved.inventory === "object") {
             for (let [cardName, savedEntry] of pairs(saved.inventory)) {
-                let cardData = cardsByName[cardName]
+                let cardData = GetCardByName(cardName)
                 if (!cardData) continue
 
                 let count = Number(savedEntry.count) || 0
@@ -851,36 +894,63 @@ function PlayGameSound(kind) {
     }
 }
 
+const PARTICLE_PRESETS = {
+    legendary: {
+        symbols: ["👑", "🌟", "✨", "💎", "⚡", "🎉", "🔥", "★"],
+        colors: ["#f43f5e", "#fbbf24", "#38bdf8", "#ec4899", "#a855f7", "#34d399", "#f59e0b"],
+        count: 32,
+        baseDist: 75,
+        distRange: 140,
+        baseScale: 1.05,
+    },
+    rare: {
+        symbols: ["👑", "✨", "🌟", "🎉", "🔥", "💎"],
+        colors: ["#fbbf24", "#ec4899", "#38bdf8", "#a855f7", "#4ade80"],
+        count: 24,
+        baseDist: 55,
+        distRange: 100,
+        baseScale: 0.85,
+    },
+    ready: {
+        symbols: ["✨", "✦", "⚡", "★"],
+        colors: ["#34d399", "#10b981", "#6ee7b7", "#fbbf24"],
+        count: 10,
+        baseDist: 55,
+        distRange: 100,
+        baseScale: 0.85,
+    },
+    diamond: {
+        symbols: ["💎", "✦", "✨", "★"],
+        colors: ["#38bdf8", "#7dd3fc", "#e0f2fe", "#818cf8"],
+        count: 16,
+        baseDist: 55,
+        distRange: 100,
+        baseScale: 0.85,
+    },
+    normal: {
+        symbols: ["✦", "★", "✨", "🎉", "⚡"],
+        colors: ["#818cf8", "#ec4899", "#fbbf24", "#38bdf8", "#34d399"],
+        count: 14,
+        baseDist: 55,
+        distRange: 100,
+        baseScale: 0.85,
+    },
+}
+
 function SpawnParticleBurst(targetEl, preset) {
     if (!PlayerData.settings.particles || !targetEl) return
     let fxLayer = document.getElementById("fx-layer")
     if (!fxLayer) return
 
+    let config = PARTICLE_PRESETS[preset] || PARTICLE_PRESETS.normal
     let rect = targetEl.getBoundingClientRect()
     let centerX = rect.left + rect.width / 2
     let centerY = rect.top + rect.height / 2
 
-    let symbols = ["✦", "★", "✨", "🎉", "⚡"]
-    let colors = ["#818cf8", "#ec4899", "#fbbf24", "#38bdf8", "#34d399"]
-    let count = 14
-
-    if (preset === "legendary") {
-        symbols = ["👑", "🌟", "✨", "💎", "⚡", "🎉", "🔥", "★"]
-        colors = ["#f43f5e", "#fbbf24", "#38bdf8", "#ec4899", "#a855f7", "#34d399", "#f59e0b"]
-        count = 32
-    } else if (preset === "rare") {
-        symbols = ["👑", "✨", "🌟", "🎉", "🔥", "💎"]
-        colors = ["#fbbf24", "#ec4899", "#38bdf8", "#a855f7", "#4ade80"]
-        count = 24
-    } else if (preset === "ready") {
-        symbols = ["✨", "✦", "⚡", "★"]
-        colors = ["#34d399", "#10b981", "#6ee7b7", "#fbbf24"]
-        count = 10
-    } else if (preset === "diamond") {
-        symbols = ["💎", "✦", "✨", "★"]
-        colors = ["#38bdf8", "#7dd3fc", "#e0f2fe", "#818cf8"]
-        count = 16
-    }
+    let symbols = config.symbols
+    let colors = config.colors
+    let count = config.count
+    let durationMs = (coreValues.stage && coreValues.stage.particleDurationMs) || 950
 
     for (let i = 0; i < count; i++) {
         let p = document.createElement("span")
@@ -891,11 +961,11 @@ function SpawnParticleBurst(targetEl, preset) {
         p.style.top = centerY + "px"
 
         let angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.45
-        let dist = (preset === "legendary" ? 75 : 55) + Math.random() * (preset === "legendary" ? 140 : 100)
+        let dist = config.baseDist + Math.random() * config.distRange
         let tx = Math.cos(angle) * dist
         let ty = Math.sin(angle) * dist - 20
         let rot = Math.round((Math.random() - 0.5) * 360) + "deg"
-        let sc = ((preset === "legendary" ? 1.05 : 0.85) + Math.random() * 0.65).toFixed(2)
+        let sc = (config.baseScale + Math.random() * 0.65).toFixed(2)
 
         p.style.setProperty("--tx", tx + "px")
         p.style.setProperty("--ty", ty + "px")
@@ -905,7 +975,7 @@ function SpawnParticleBurst(targetEl, preset) {
         fxLayer.appendChild(p)
         setTimeout(function() {
             if (p.parentNode) p.parentNode.removeChild(p)
-        }, 950)
+        }, durationMs)
     }
 }
 
@@ -917,29 +987,66 @@ function BumpPill(pillId) {
     pill.classList.add("pill-bump")
 }
 
+const NO_MUTATION_INFO = Object.freeze({
+    name: "None",
+    multiplier: 1,
+    icon: "",
+    cssClass: "mutation-none",
+})
+
+const MutationInfoCache = new Map()
+
+function GetMutationMeta(mutationData) {
+    if (!mutationData) return NO_MUTATION_INFO
+    let cached = MutationInfoCache.get(mutationData.name)
+    if (cached) return cached
+    let meta = Object.freeze({
+        name: mutationData.name,
+        multiplier: mutationData.multiplier,
+        icon: mutationData.icon || "✨",
+        background: mutationData.background,
+        textColor: mutationData.textColor,
+        borderColor: mutationData.borderColor,
+        glowColor: mutationData.glowColor,
+        animated: Boolean(mutationData.animated),
+        cssClass: "mutation-" + mutationData.name.toLowerCase(),
+    })
+    MutationInfoCache.set(mutationData.name, meta)
+    return meta
+}
+
 function GetCardMutation(cardData) {
-    for (let [i, mutationData] of pairs(MutationsList)) {
-        let suffix = "-" + mutationData.name
-        if (cardData.name.endsWith(suffix)) {
-            return {
-                name: mutationData.name,
-                multiplier: mutationData.multiplier,
-                icon: mutationData.icon || "✨",
-                background: mutationData.background,
-                textColor: mutationData.textColor,
-                borderColor: mutationData.borderColor,
-                glowColor: mutationData.glowColor,
-                animated: Boolean(mutationData.animated),
-                cssClass: "mutation-" + mutationData.name.toLowerCase(),
+    if (!cardData || !cardData.name) return NO_MUTATION_INFO
+    if (cardData._mutationInfo !== undefined) {
+        return cardData._mutationInfo
+    }
+
+    if (typeof cardData.mutationIndex === "number") {
+        if (cardData.mutationIndex === 0) {
+            cardData._mutationInfo = NO_MUTATION_INFO
+            return NO_MUTATION_INFO
+        }
+        if (typeof MutationsList !== "undefined" && MutationsList[cardData.mutationIndex - 1]) {
+            let meta = GetMutationMeta(MutationsList[cardData.mutationIndex - 1])
+            cardData._mutationInfo = meta
+            return meta
+        }
+    }
+
+    if (typeof MutationsList !== "undefined" && Array.isArray(MutationsList)) {
+        for (let i = 0; i < MutationsList.length; i++) {
+            let mutationData = MutationsList[i]
+            let suffix = "-" + mutationData.name
+            if (cardData.name.endsWith(suffix)) {
+                let meta = GetMutationMeta(mutationData)
+                cardData._mutationInfo = meta
+                return meta
             }
         }
     }
-    return {
-        name: "None",
-        multiplier: 1,
-        icon: "",
-        cssClass: "mutation-none",
-    }
+
+    cardData._mutationInfo = NO_MUTATION_INFO
+    return NO_MUTATION_INFO
 }
 
 function GetCardRarityTier(rarity) {
@@ -1134,11 +1241,10 @@ function GetCardTags(cardData, surface) {
 
 function RenderCardTagBadgeHTML(tag) {
     if (!tag) return ""
-    let isInteractive = tag.type !== "mutation"
-    let classes = ["card-tag-pill"]
+    let isMutation = (tag.type === "mutation")
+    let classes = ["card-tag-pill", "card-tag-interactive"]
     if (tag.cssClass) classes.push(tag.cssClass)
     if (tag.animated) classes.push("card-tag-animated")
-    if (isInteractive) classes.push("card-tag-interactive")
 
     let styleVars = [
         "--tag-bg: " + tag.background,
@@ -1149,8 +1255,10 @@ function RenderCardTagBadgeHTML(tag) {
 
     let iconHtml = tag.icon ? `<span class="card-tag-icon">${tag.icon}</span>` : ""
     let suffixHtml = tag.suffix ? `<span class="card-tag-suffix">• ${tag.suffix}</span>` : ""
-    let progressHtml = isInteractive ? `<span class="tag-hold-progress"></span>` : ""
-    let titleAttr = isInteractive ? ` title="Hold to view ${tag.name} Tag Info"` : ""
+    let progressHtml = !isMutation ? `<span class="tag-hold-progress"></span>` : ""
+    let titleAttr = isMutation
+        ? ` title="Click to inspect ${tag.name} Mutation details"`
+        : ` title="Click or hold to view ${tag.name} Tag Info"`
 
     return `<span class="${classes.join(" ")}" data-tag-type="${tag.type}" data-tag-id="${tag.id}" data-tag-name="${tag.name}" style="${styleVars}"${titleAttr}>${iconHtml}<span class="card-tag-name">${tag.name}</span>${suffixHtml}${progressHtml}</span>`
 }
@@ -1204,9 +1312,21 @@ function GetCommonest(list) {
 }
 
 function GetCardByName(name, list) {
+    if (!name) return null
+    if (!list || list === CardsList) {
+        if (!CardsByNameMap) {
+            BuildCardsLookupMap()
+        }
+        if (CardsByNameMap) {
+            let cached = CardsByNameMap.get(name)
+            if (cached !== undefined) return cached
+        }
+    }
     let targetList = list || CardsList
-    for (let [i, cardData] of pairs(targetList)) {
-        if (cardData.name === name) return cardData
+    if (Array.isArray(targetList)) {
+        for (let i = 0; i < targetList.length; i++) {
+            if (targetList[i] && targetList[i].name === name) return targetList[i]
+        }
     }
     return null
 }
@@ -1438,14 +1558,23 @@ function SortCardsList(list, sortMode) {
 
 function GetDiscoveredCards() {
     let ownedCardsData = []
-    for (let [i, cardData] of pairs(CardsList)) {
-        let entry = PlayerData.inventory[cardData.name]
-        if (entry && entry.count > 0) {
-            table.insert(ownedCardsData, cardData)
+    for (let cardName in PlayerData.inventory) {
+        let entry = PlayerData.inventory[cardName]
+        if (entry && entry.count > 0 && entry.cardData) {
+            ownedCardsData.push(entry.cardData)
         }
     }
     return SortCardsList(ownedCardsData, PlayerData.sortBy)
 }
+
+const NUMBER_SUFFIXES = [
+    { threshold: 1e18, suffix: "Qi" },
+    { threshold: 1e15, suffix: "Qa" },
+    { threshold: 1e12, suffix: "T" },
+    { threshold: 1e9, suffix: "B" },
+    { threshold: 1e6, suffix: "M" },
+    { threshold: 1e3, suffix: "K" },
+]
 
 function FormatNumber(value, decimals) {
     if (value === undefined || value === null || value === "" || isNaN(Number(value))) {
@@ -1464,17 +1593,8 @@ function FormatNumber(value, decimals) {
         return (isNegative ? "-" : "") + rounded.toString()
     }
 
-    const suffixes = [
-        { threshold: 1e18, suffix: "Qi" },
-        { threshold: 1e15, suffix: "Qa" },
-        { threshold: 1e12, suffix: "T" },
-        { threshold: 1e9, suffix: "B" },
-        { threshold: 1e6, suffix: "M" },
-        { threshold: 1e3, suffix: "K" },
-    ]
-
-    for (let i = 0; i < suffixes.length; i++) {
-        let { threshold, suffix } = suffixes[i]
+    for (let i = 0; i < NUMBER_SUFFIXES.length; i++) {
+        let { threshold, suffix } = NUMBER_SUFFIXES[i]
         if (absVal >= threshold) {
             let scaled = absVal / threshold
             let decPlaces = places
@@ -1486,7 +1606,7 @@ function FormatNumber(value, decimals) {
 
             // Handle edge case where rounding pushes it up to next tier (e.g. 999.95K -> 1M)
             if (rounded >= 1000 && i > 0) {
-                let nextSuffix = suffixes[i - 1].suffix
+                let nextSuffix = NUMBER_SUFFIXES[i - 1].suffix
                 let nextScaled = rounded / 1000
                 let nextRounded = Math.round(nextScaled * 10) / 10
                 return (isNegative ? "-" : "") + nextRounded.toString() + nextSuffix
@@ -1738,10 +1858,7 @@ function IsCompressorUnlocked() {
 }
 
 function GetCardDataByName(cardName) {
-    for (let [i, c] of pairs(CardsList)) {
-        if (c.name === cardName) return c
-    }
-    return null
+    return GetCardByName(cardName)
 }
 
 function GetCardTierIndex(cardData) {
@@ -2503,15 +2620,17 @@ function HandleRollerSlotRoll(slotIndex, isAutoRoll) {
         if (hasLegendary) {
             void stageWrap.offsetWidth
             stageWrap.classList.add("shake-stage", "legendary-flash-stage")
+            let legDuration = (coreValues.stage && coreValues.stage.legendaryShakeMs) || 750
             setTimeout(function() {
                 if (stageWrap) stageWrap.classList.remove("shake-stage", "legendary-flash-stage")
-            }, 750)
+            }, legDuration)
         } else if (hasRare) {
             void stageWrap.offsetWidth
             stageWrap.classList.add("shake-stage")
+            let rareDuration = (coreValues.stage && coreValues.stage.rareShakeMs) || 450
             setTimeout(function() {
                 if (stageWrap) stageWrap.classList.remove("shake-stage")
-            }, 450)
+            }, rareDuration)
         }
     }
 
@@ -2713,30 +2832,31 @@ function SwitchView(viewName) {
     let viewShop = document.getElementById("view-shop")
     let viewSettings = document.getElementById("view-settings")
     let viewCrafting = document.getElementById("view-crafting")
+    let viewWiki = document.getElementById("view-wiki")
     let navCards = document.getElementById("nav-cards")
     let navItems = document.getElementById("nav-items")
     let navPresses = document.getElementById("nav-presses")
     let navShop = document.getElementById("nav-shop")
     let navSettings = document.getElementById("nav-settings")
     let navCrafting = document.getElementById("nav-crafting")
+    let navWiki = document.getElementById("nav-wiki")
     let sidebarPressSection = document.getElementById("sidebar-press-section")
     let sidebarShopSection = document.getElementById("sidebar-shop-section")
     let viewTitle = document.getElementById("view-title")
 
     let isCards = (viewName === "cards")
     let isItems = (viewName === "items")
+    let isWiki = (viewName === "wiki")
     let showRollPanel = (isCards || isItems)
 
-    if (rollPanel) {
-        rollPanel.classList.toggle("hidden", !showRollPanel)
-    }
-
+    if (rollPanel) rollPanel.classList.toggle("hidden", !showRollPanel)
     if (viewCards) viewCards.classList.toggle("hidden", !isCards)
     if (viewItems) viewItems.classList.toggle("hidden", !isItems)
     if (viewPresses) viewPresses.classList.toggle("hidden", viewName !== "presses")
     if (viewShop) viewShop.classList.toggle("hidden", viewName !== "shop")
     if (viewSettings) viewSettings.classList.toggle("hidden", viewName !== "settings")
     if (viewCrafting) viewCrafting.classList.toggle("hidden", viewName !== "crafting")
+    if (viewWiki) viewWiki.classList.toggle("hidden", !isWiki)
 
     if (navCards) navCards.classList.toggle("active", isCards)
     if (navItems) navItems.classList.toggle("active", isItems)
@@ -2744,6 +2864,7 @@ function SwitchView(viewName) {
     if (navShop) navShop.classList.toggle("active", viewName === "shop")
     if (navSettings) navSettings.classList.toggle("active", viewName === "settings")
     if (navCrafting) navCrafting.classList.toggle("active", viewName === "crafting")
+    if (navWiki) navWiki.classList.toggle("active", isWiki)
 
     if (sidebarPressSection) {
         sidebarPressSection.classList.toggle("hidden", viewName !== "presses")
@@ -2761,6 +2882,8 @@ function SwitchView(viewName) {
             viewTitle.textContent = "Settings / Parameters"
         } else if (viewName === "crafting") {
             viewTitle.textContent = "Crafting Bench"
+        } else if (viewName === "wiki") {
+            viewTitle.textContent = "Game Encyclopedia & Wiki"
         } else if (viewName === "items") {
             viewTitle.textContent = "Items Inventory"
         } else {
@@ -2780,6 +2903,8 @@ function SwitchView(viewName) {
         RenderShop()
     } else if (viewName === "crafting") {
         RenderCrafting()
+    } else if (isWiki) {
+        RenderWiki()
     }
 
     if (showRollPanel) {
@@ -2822,6 +2947,7 @@ function RenderSidebarMutationsLegend() {
     for (let [i, mutationData] of pairs(MutationsList)) {
         let item = document.createElement("div")
         item.className = "legend-item"
+        item.title = `Click to inspect ${mutationData.name} Mutation details`
         let swatchStyle = mutationData.background
             ? `style="background: ${mutationData.background}; border: 1px solid ${mutationData.borderColor || "transparent"};"`
             : ""
@@ -2830,6 +2956,9 @@ function RenderSidebarMutationsLegend() {
             <span class="legend-name">${mutationData.name}</span>
             <span class="legend-mult">${FormatNumber(mutationData.multiplier)}×</span>
         `
+        item.addEventListener("click", function() {
+            OpenMutationModal(mutationData.name)
+        })
         legendContainer.appendChild(item)
     }
 }
@@ -3865,6 +3994,24 @@ function FormatCraftTime(totalSeconds) {
     return m + "m" + (remS > 0 ? " " + remS + "s" : "")
 }
 
+function GetRecipeMaterialInfo(mat) {
+    let isBark = mat.type === "bark" || mat.name === "Bark" || mat.cardName === "Bark"
+    let cardName = isBark ? null : (mat.cardName || mat.name)
+    let displayName = isBark ? "Bark" : cardName
+    let owned = isBark
+        ? (PlayerData.barks || 0)
+        : ((PlayerData.inventory[cardName] && PlayerData.inventory[cardName].count) || 0)
+    let required = Number(mat.amount) || 0
+    return {
+        isBark: isBark,
+        cardName: cardName,
+        displayName: displayName,
+        owned: owned,
+        required: required,
+        hasEnough: owned >= required,
+    }
+}
+
 function GetCraftingRecipes() {
     if (coreValues.crafting && Array.isArray(coreValues.crafting.recipes)) {
         return coreValues.crafting.recipes
@@ -3989,24 +4136,18 @@ function RenderCrafting() {
         for (let [i, recipe] of pairs(recipes)) {
             let canCraft = true
             let materialsHtml = recipe.materials.map(function(m) {
-                let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
-                let cardName = m.cardName || m.name
-                let owned = isBark
-                    ? (PlayerData.barks || 0)
-                    : ((PlayerData.inventory[cardName] && PlayerData.inventory[cardName].count) || 0)
-                let hasEnough = owned >= m.amount
-                if (!hasEnough) {
+                let info = GetRecipeMaterialInfo(m)
+                if (!info.hasEnough) {
                     canCraft = false
                 }
-                let iconHtml = isBark
+                let iconHtml = info.isBark
                     ? `<img src="Assets/Barks.png" class="recipe-mat-bark-icon" alt="Bark"> `
                     : ""
-                let nameLabel = isBark ? "Bark" : cardName
                 return `
-                    <div class="recipe-mat-item ${hasEnough ? 'satisfied' : 'missing'}">
-                        <span class="recipe-mat-check">${hasEnough ? '✓' : '✗'}</span>
-                        <span class="recipe-mat-name">${iconHtml}${nameLabel}</span>
-                        <span class="recipe-mat-count">${FormatNumber(owned)} / ${FormatNumber(m.amount)}</span>
+                    <div class="recipe-mat-item ${info.hasEnough ? 'satisfied' : 'missing'}">
+                        <span class="recipe-mat-check">${info.hasEnough ? '✓' : '✗'}</span>
+                        <span class="recipe-mat-name">${iconHtml}${info.displayName}</span>
+                        <span class="recipe-mat-count">${FormatNumber(info.owned)} / ${FormatNumber(info.required)}</span>
                     </div>
                 `
             }).join("")
@@ -4085,27 +4226,21 @@ function HandleStartCraft(recipeId) {
     if (!recipe) return
 
     for (let [i, m] of pairs(recipe.materials)) {
-        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
-        let cardName = m.cardName || m.name
-        let owned = isBark
-            ? (PlayerData.barks || 0)
-            : ((PlayerData.inventory[cardName] && PlayerData.inventory[cardName].count) || 0)
-        let label = isBark ? "Bark" : cardName
-        if (owned < m.amount) {
-            SetRollStatusMessage("⚠️ Not enough " + label + "! Need " + (m.amount - owned) + " more.", true)
+        let info = GetRecipeMaterialInfo(m)
+        if (!info.hasEnough) {
+            SetRollStatusMessage("⚠️ Not enough " + info.displayName + "! Need " + (info.required - info.owned) + " more.", true)
             return
         }
     }
 
     for (let [i, m] of pairs(recipe.materials)) {
-        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
-        let cardName = m.cardName || m.name
-        if (isBark) {
-            PlayerData.barks = math.max(0, (PlayerData.barks || 0) - m.amount)
+        let info = GetRecipeMaterialInfo(m)
+        if (info.isBark) {
+            PlayerData.barks = math.max(0, (PlayerData.barks || 0) - info.required)
         } else {
-            PlayerData.inventory[cardName].count -= m.amount
-            if (PlayerData.inventory[cardName].count <= 0) {
-                delete PlayerData.inventory[cardName]
+            PlayerData.inventory[info.cardName].count -= info.required
+            if (PlayerData.inventory[info.cardName].count <= 0) {
+                delete PlayerData.inventory[info.cardName]
             }
         }
     }
@@ -4124,13 +4259,12 @@ function HandleStartCraft(recipeId) {
         startTime: Date.now(),
         endTime: Date.now() + (craftDuration * 1000),
         materials: recipe.materials.map(function(m) {
-            let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
-            let cName = m.cardName || m.name
+            let info = GetRecipeMaterialInfo(m)
             return {
-                type: isBark ? "bark" : "card",
-                name: isBark ? "Bark" : cName,
-                cardName: isBark ? null : cName,
-                amount: m.amount,
+                type: info.isBark ? "bark" : "card",
+                name: info.displayName,
+                cardName: info.cardName,
+                amount: info.required,
             }
         }),
     }
@@ -4145,24 +4279,17 @@ function HandleRefundCraft() {
     if (!activeCraft) return
 
     for (let [i, m] of pairs(activeCraft.materials)) {
-        let isBark = m.type === "bark" || m.name === "Bark" || m.cardName === "Bark"
-        let cardName = m.cardName || m.name
-        if (isBark) {
-            PlayerData.barks = (PlayerData.barks || 0) + m.amount
-        } else if (PlayerData.inventory[cardName]) {
-            PlayerData.inventory[cardName].count += m.amount
+        let info = GetRecipeMaterialInfo(m)
+        if (info.isBark) {
+            PlayerData.barks = (PlayerData.barks || 0) + info.required
+        } else if (PlayerData.inventory[info.cardName]) {
+            PlayerData.inventory[info.cardName].count += info.required
         } else {
-            let baseCard = null
-            for (let [k, c] of pairs(CardsList)) {
-                if (c.name === cardName) {
-                    baseCard = c
-                    break
-                }
-            }
+            let baseCard = GetCardByName(info.cardName)
             if (baseCard) {
-                PlayerData.inventory[cardName] = {
+                PlayerData.inventory[info.cardName] = {
                     cardData: baseCard,
-                    count: m.amount,
+                    count: info.required,
                     firstObtained: new Date(),
                 }
             }
@@ -4184,13 +4311,7 @@ function HandleClaimCraft() {
 
     if (activeCraft.resultType === "card" || activeCraft.resultCardName) {
         let cardName = activeCraft.resultCardName || activeCraft.name
-        let cardData = null
-        for (let [k, c] of pairs(CardsList)) {
-            if (c.name === cardName) {
-                cardData = c
-                break
-            }
-        }
+        let cardData = GetCardByName(cardName)
 
         let amount = activeCraft.resultAmount || 1
         if (cardData) {
@@ -4522,10 +4643,250 @@ function PopulateTagModal(tagId, fallbackName, fallbackType) {
     }
 }
 
+function ResolveMutationByName(mutationNameOrId) {
+    if (!mutationNameOrId || typeof MutationsList === "undefined" || !Array.isArray(MutationsList)) return null
+    let raw = String(mutationNameOrId).trim()
+    let clean = raw.replace(/^mutation-/, "").toLowerCase()
+
+    for (let i = 0; i < MutationsList.length; i++) {
+        let m = MutationsList[i]
+        if (m.name.toLowerCase() === clean || ("mutation-" + m.name.toLowerCase()) === raw.toLowerCase()) {
+            let tierIdx = i + 1
+            let totalTiers = MutationsList.length
+            let step = (typeof GetMutationStepInfo === "function") ? GetMutationStepInfo(i) : null
+            let prevTierName = i === 0 ? "Normal" : MutationsList[i - 1].name
+            let nextTierName = i < MutationsList.length - 1 ? MutationsList[i + 1].name : null
+
+            let compressCost = m.compressCost !== undefined ? m.compressCost : (step ? step.compressCost : 3)
+            let decompressYield = m.decompressYield !== undefined ? m.decompressYield : (step ? step.decompressYield : 2)
+
+            return {
+                name: m.name,
+                multiplier: m.multiplier,
+                icon: m.icon || "✨",
+                background: m.background,
+                textColor: m.textColor,
+                borderColor: m.borderColor,
+                glowColor: m.glowColor,
+                animated: Boolean(m.animated),
+                tierIndex: tierIdx,
+                totalTiers: totalTiers,
+                prevTierName: prevTierName,
+                nextTierName: nextTierName,
+                compressCost: compressCost,
+                decompressYield: decompressYield,
+                cssClass: "tag-mutation-" + m.name.toLowerCase(),
+            }
+        }
+    }
+    return null
+}
+
+function GetOwnedCardsByMutation(mutationName) {
+    let suffix = "-" + mutationName
+    let matching = []
+    let totalCopies = 0
+    let rarestCard = null
+
+    for (let cardName in PlayerData.inventory) {
+        let entry = PlayerData.inventory[cardName]
+        if (entry && entry.count > 0 && entry.cardData && entry.cardData.name.endsWith(suffix)) {
+            matching.push({
+                cardData: entry.cardData,
+                count: entry.count,
+            })
+            totalCopies += entry.count
+            if (!rarestCard || entry.cardData.rarity > rarestCard.rarity) {
+                rarestCard = entry.cardData
+            }
+        }
+    }
+
+    matching.sort(function(a, b) {
+        return b.cardData.rarity - a.cardData.rarity
+    })
+
+    return {
+        cards: matching,
+        uniqueCount: matching.length,
+        totalCopies: totalCopies,
+        rarestCard: rarestCard,
+    }
+}
+
+let MutationModalState = {
+    isOpen: false,
+    currentMutationName: null,
+}
+
+function PopulateMutationModal(mutationName) {
+    let meta = ResolveMutationByName(mutationName)
+    if (!meta) return
+
+    let badgeSlot = document.getElementById("mutation-modal-badge-slot")
+    let titleEl = document.getElementById("mutation-modal-title")
+    let multPill = document.getElementById("mutation-modal-mult-pill")
+    let subtitleEl = document.getElementById("mutation-modal-subtitle")
+    let metricMult = document.getElementById("mutation-metric-mult")
+    let metricTier = document.getElementById("mutation-metric-tier")
+    let metricCompress = document.getElementById("mutation-metric-compress")
+    let metricDecompress = document.getElementById("mutation-metric-decompress")
+    let appearanceText = document.getElementById("mutation-appearance-text")
+    let uniqueCountEl = document.getElementById("mutation-modal-unique-count")
+    let totalCopiesEl = document.getElementById("mutation-modal-total-copies")
+    let rarestEl = document.getElementById("mutation-modal-rarest")
+    let listEl = document.getElementById("mutation-modal-cards-list")
+
+    let tagObj = {
+        name: meta.name,
+        type: "mutation",
+        icon: meta.icon,
+        suffix: FormatNumber(meta.multiplier) + "×",
+        background: meta.background,
+        textColor: meta.textColor,
+        borderColor: meta.borderColor,
+        glowColor: meta.glowColor,
+        animated: meta.animated,
+        cssClass: meta.cssClass,
+    }
+
+    if (badgeSlot) {
+        badgeSlot.innerHTML = RenderCardTagBadgeHTML(tagObj)
+    }
+
+    if (titleEl) {
+        titleEl.textContent = `${meta.name} Mutation`
+    }
+    if (multPill) {
+        multPill.textContent = `×${FormatNumber(meta.multiplier)}`
+    }
+    if (subtitleEl) {
+        subtitleEl.textContent = `Tier ${meta.tierIndex} of ${meta.totalTiers} Mutation`
+    }
+
+    if (metricMult) {
+        metricMult.textContent = `×${FormatNumber(meta.multiplier)}`
+    }
+    if (metricTier) {
+        metricTier.textContent = `Tier ${meta.tierIndex} of ${meta.totalTiers}`
+    }
+    if (metricCompress) {
+        metricCompress.textContent = `${meta.compressCost}× ${meta.prevTierName} → 1× ${meta.name}`
+    }
+    if (metricDecompress) {
+        metricDecompress.textContent = `1× ${meta.name} → ${meta.decompressYield}× ${meta.prevTierName}`
+    }
+
+    if (appearanceText) {
+        let styleDesc = meta.animated
+            ? `Special animated shifting gradient with glowing ${meta.borderColor || 'neon'} borders.`
+            : `Metallic gradient with ${meta.textColor || 'vivid'} text and glowing accents.`
+        appearanceText.textContent = styleDesc
+    }
+
+    let ownedData = GetOwnedCardsByMutation(meta.name)
+    if (uniqueCountEl) {
+        uniqueCountEl.textContent = `🃏 Discovered: ${FormatNumber(ownedData.uniqueCount)} Cards`
+    }
+    if (totalCopiesEl) {
+        totalCopiesEl.textContent = `📦 Total Copies: ${FormatNumber(ownedData.totalCopies)}`
+    }
+    if (rarestEl) {
+        if (ownedData.rarestCard) {
+            rarestEl.textContent = `👑 Rarest: ${ownedData.rarestCard.name} (${FormatRarityText(ownedData.rarestCard.rarity)})`
+        } else {
+            rarestEl.textContent = `👑 Rarest: None`
+        }
+    }
+
+    if (listEl) {
+        listEl.innerHTML = ""
+        if (ownedData.cards.length === 0) {
+            let emptyEl = document.createElement("div")
+            emptyEl.className = "tag-modal-empty"
+            emptyEl.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 6px;">✨</div>
+                <div>No <strong>${meta.name}</strong> mutated cards discovered yet!</div>
+                <div style="font-size: 0.8rem; opacity: 0.75; margin-top: 4px;">
+                    Roll cards with your rollers, or compress ${meta.prevTierName} cards in the Presses tab!
+                </div>
+            `
+            listEl.appendChild(emptyEl)
+        } else {
+            for (let i = 0; i < ownedData.cards.length; i++) {
+                let { cardData, count } = ownedData.cards[i]
+                let rowEl = document.createElement("div")
+                rowEl.className = "tag-modal-card-item"
+                let frontTagsHtml = RenderCardTagsHTML(cardData, "front")
+                let backTagsHtml = RenderCardTagsHTML(cardData, "back")
+
+                rowEl.innerHTML = `
+                    <div class="tag-modal-card-thumb-wrap">
+                        <img src="${FormatImagePath(cardData.image)}" alt="${cardData.name}" class="tag-modal-card-thumb" draggable="false">
+                        ${frontTagsHtml ? `<div class="card-front-tags-overlay tag-modal-thumb-tags">${frontTagsHtml}</div>` : ""}
+                        <div class="card-title-overlay tag-modal-thumb-title">
+                            <span class="card-front-name">${cardData.name}</span>
+                        </div>
+                    </div>
+                    <div class="tag-modal-card-details">
+                        <div class="tag-modal-card-top">
+                            <h4 class="tag-modal-card-name">${cardData.name}</h4>
+                            <span class="tag-modal-card-owned">Owned: ×${FormatNumber(count)}</span>
+                        </div>
+                        <div class="tag-modal-card-rarity">⭐ Rarity: <strong>${FormatRarityText(cardData.rarity)}</strong></div>
+                        <div class="tag-modal-card-tags">${backTagsHtml}</div>
+                    </div>
+                `
+
+                rowEl.addEventListener("click", function() {
+                    CloseMutationModal()
+                    OpenCardModal(cardData)
+                })
+
+                listEl.appendChild(rowEl)
+            }
+        }
+    }
+}
+
+function OpenMutationModal(mutationName) {
+    if (!mutationName) return
+    let meta = ResolveMutationByName(mutationName)
+    if (!meta) return
+
+    MutationModalState.isOpen = true
+    MutationModalState.currentMutationName = meta.name
+
+    PopulateMutationModal(meta.name)
+
+    let modal = document.getElementById("mutation-modal")
+    if (modal) {
+        modal.classList.remove("hidden")
+    }
+    PlayGameSound("pop")
+}
+
+function CloseMutationModal() {
+    MutationModalState.isOpen = false
+    MutationModalState.currentMutationName = null
+    let modal = document.getElementById("mutation-modal")
+    if (modal) {
+        modal.classList.add("hidden")
+    }
+}
+
 function OpenTagModal(tagId, fallbackName, fallbackType) {
-    if (!tagId || fallbackType === "mutation" || String(tagId).startsWith("mutation-")) return
+    if (!tagId) return
+    if (fallbackType === "mutation" || String(tagId).startsWith("mutation-")) {
+        OpenMutationModal(fallbackName || tagId)
+        return
+    }
     let tagMeta = ResolveTagDefinitionById(tagId, fallbackName, fallbackType)
-    if (!tagMeta || tagMeta.type === "mutation") return
+    if (!tagMeta) return
+    if (tagMeta.type === "mutation") {
+        OpenMutationModal(tagMeta.name)
+        return
+    }
 
     TagModalState.isOpen = true
     TagModalState.currentTagId = tagMeta.id
@@ -4554,6 +4915,7 @@ function SetupTagLongPressInteractions() {
     let startX = 0
     let startY = 0
     let isPressing = false
+    let longPressTriggered = false
 
     function cancelTagPress() {
         if (pressTimer) {
@@ -4574,34 +4936,38 @@ function SetupTagLongPressInteractions() {
         let tagEl = e.target.closest(".card-tag-pill")
         if (!tagEl) return
 
+        if (tagEl.closest("#tag-modal-badge-slot") || tagEl.closest("#mutation-modal-badge-slot")) {
+            return
+        }
+
         let tagType = tagEl.getAttribute("data-tag-type")
         let tagId = tagEl.getAttribute("data-tag-id")
         let tagName = tagEl.getAttribute("data-tag-name") || tagEl.textContent
 
-        if (!tagId || tagType === "mutation") {
-            return
-        }
-
-        if (tagEl.closest("#tag-modal-badge-slot")) {
-            return
-        }
+        if (!tagId && !tagName) return
 
         e.stopPropagation()
         cancelTagPress()
 
         activeTagEl = tagEl
         isPressing = true
+        longPressTriggered = false
         startX = e.clientX
         startY = e.clientY
         activeTagEl.classList.add("pressing")
 
         pressTimer = setTimeout(function() {
             if (!isPressing || !activeTagEl) return
+            longPressTriggered = true
             let targetId = tagId
             let targetName = tagName
             let targetType = tagType
             cancelTagPress()
-            OpenTagModal(targetId, targetName, targetType)
+            if (targetType === "mutation" || (targetId && String(targetId).startsWith("mutation-"))) {
+                OpenMutationModal(targetName)
+            } else {
+                OpenTagModal(targetId, targetName, targetType)
+            }
         }, coreValues.interaction.longPressDuration * 1000)
     }, true)
 
@@ -4614,10 +4980,30 @@ function SetupTagLongPressInteractions() {
         }
     }, true)
 
-    document.addEventListener("pointerup", cancelTagPress, true)
+    document.addEventListener("pointerup", function(e) {
+        if (isPressing && activeTagEl && !longPressTriggered) {
+            let tagType = activeTagEl.getAttribute("data-tag-type")
+            let tagId = activeTagEl.getAttribute("data-tag-id")
+            let tagName = activeTagEl.getAttribute("data-tag-name") || activeTagEl.textContent
+
+            cancelTagPress()
+            e.stopPropagation()
+            e.preventDefault()
+
+            if (tagType === "mutation" || (tagId && String(tagId).startsWith("mutation-"))) {
+                OpenMutationModal(tagName)
+            } else {
+                OpenTagModal(tagId, tagName, tagType)
+            }
+            return
+        }
+        cancelTagPress()
+    }, true)
+
     document.addEventListener("pointercancel", cancelTagPress, true)
+
     document.addEventListener("contextmenu", function(e) {
-        if (e.target && typeof e.target.closest === "function" && e.target.closest(".card-tag-pill.card-tag-interactive")) {
+        if (e.target && typeof e.target.closest === "function" && e.target.closest(".card-tag-pill")) {
             e.preventDefault()
         }
     }, true)
@@ -4641,7 +5027,7 @@ function AttachCardInteractions(element, getCardData, allowTapFlip) {
 
     element.addEventListener("pointerdown", function(e) {
         if (e.button && e.button !== 0) return
-        if (e.target && typeof e.target.closest === "function" && e.target.closest('.card-tag-pill:not([data-tag-type="mutation"])')) {
+        if (e.target && typeof e.target.closest === "function" && e.target.closest(".card-tag-pill")) {
             return
         }
         let cardData = getCardData()
@@ -4671,6 +5057,10 @@ function AttachCardInteractions(element, getCardData, allowTapFlip) {
     })
 
     element.addEventListener("pointerup", function(e) {
+        if (e.target && typeof e.target.closest === "function" && e.target.closest(".card-tag-pill")) {
+            cancelPress()
+            return
+        }
         let wasDown = isPointerDown
         let wasLongPress = longPressTriggered
         cancelPress()
@@ -4687,6 +5077,968 @@ function AttachCardInteractions(element, getCardData, allowTapFlip) {
         e.preventDefault()
     })
 }
+
+// -------------------------------------------------------------
+// Game Encyclopedia & Wiki System
+// -------------------------------------------------------------
+
+let WikiState = {
+    activeCategory: "all",
+    searchQuery: "",
+    catalogTierFilter: "all",
+    catalogDiscoveredOnly: false,
+}
+
+function MatchWikiSearch(query, ...fields) {
+    if (!query) return true
+    let q = query.toLowerCase().trim()
+    if (!q) return true
+    for (let i = 0; i < fields.length; i++) {
+        let f = fields[i]
+        if (f !== undefined && f !== null && String(f).toLowerCase().includes(q)) {
+            return true
+        }
+    }
+    return false
+}
+
+function GetBaseCardsList() {
+    let base = []
+    let seen = {}
+    for (let i = 0; i < CardsList.length; i++) {
+        let c = CardsList[i]
+        if (!c || c.name === "Void") continue
+        if (c.mutationIndex && c.mutationIndex > 0) continue
+        let mut = GetCardMutation(c)
+        if (mut && mut.name !== "None") continue
+        if (!seen[c.name]) {
+            seen[c.name] = true
+            base.push(c)
+        }
+    }
+    return base
+}
+
+function GetAllWikiTags() {
+    let tagsMap = {}
+
+    if (typeof CardTagConfig !== "undefined" && CardTagConfig.presets) {
+        for (let key in CardTagConfig.presets) {
+            let p = CardTagConfig.presets[key]
+            let id = p.id || ("tag-" + key.toLowerCase())
+            tagsMap[id] = {
+                id: id,
+                name: p.name || key,
+                type: p.type || "custom",
+                description: p.description || "Thematic card attribute.",
+                icon: p.icon || "🏷️",
+                background: p.background,
+                textColor: p.textColor,
+                borderColor: p.borderColor,
+                glowColor: p.glowColor,
+                animated: p.animated,
+                cssClass: p.cssClass,
+            }
+        }
+    }
+
+    if (typeof RarityTiersList !== "undefined" && Array.isArray(RarityTiersList)) {
+        for (let i = 0; i < RarityTiersList.length; i++) {
+            let t = RarityTiersList[i]
+            let id = "tier-" + t.id
+            tagsMap[id] = {
+                id: id,
+                name: t.name,
+                type: "rarityTier",
+                description: `Cards falling in the ${t.name} rarity tier (${t.rangeLabel || ""}).`,
+                icon: t.icon || "⭐",
+                background: t.background,
+                textColor: t.textColor,
+                borderColor: t.borderColor,
+                glowColor: t.glowColor,
+                animated: t.animated,
+                cssClass: "tag-tier-" + t.id,
+            }
+        }
+    }
+
+    let baseCards = GetBaseCardsList()
+    for (let i = 0; i < baseCards.length; i++) {
+        let cardTags = GetCardTags(baseCards[i], "all")
+        for (let j = 0; j < cardTags.length; j++) {
+            let ct = cardTags[j]
+            if (ct && ct.type !== "mutation" && !tagsMap[ct.id]) {
+                tagsMap[ct.id] = {
+                    id: ct.id,
+                    name: ct.name,
+                    type: ct.type || "custom",
+                    description: ct.description || `Special ${ct.name} card tag.`,
+                    icon: ct.icon || "🏷️",
+                    background: ct.background,
+                    textColor: ct.textColor,
+                    borderColor: ct.borderColor,
+                    glowColor: ct.glowColor,
+                    animated: ct.animated,
+                    cssClass: ct.cssClass,
+                }
+            }
+        }
+    }
+
+    let result = []
+    for (let id in tagsMap) {
+        let tag = tagsMap[id]
+        let totalCount = 0
+        let discoveredCount = 0
+        for (let i = 0; i < baseCards.length; i++) {
+            let c = baseCards[i]
+            if (CardHasTag(c, tag.id)) {
+                totalCount++
+                if (PlayerData.inventory[c.name] && PlayerData.inventory[c.name].count > 0) {
+                    discoveredCount++
+                }
+            }
+        }
+        tag.totalCards = totalCount
+        tag.discoveredCards = discoveredCount
+        result.push(tag)
+    }
+
+    result.sort(function(a, b) {
+        return a.name.localeCompare(b.name)
+    })
+    return result
+}
+
+function OpenCardModalByName(cardName) {
+    if (!cardName) return
+    let card = GetCardByName(cardName)
+    if (card) {
+        OpenCardModal(card)
+    }
+}
+
+function SetWikiCategory(categoryName) {
+    WikiState.activeCategory = categoryName || "all"
+    let pills = document.querySelectorAll(".wiki-category-pill")
+    for (let i = 0; i < pills.length; i++) {
+        let cat = pills[i].getAttribute("data-wiki-cat")
+        pills[i].classList.toggle("active", cat === WikiState.activeCategory)
+    }
+    RenderWiki()
+}
+
+function SetWikiCatalogTier(tierId) {
+    WikiState.catalogTierFilter = tierId || "all"
+    RenderWiki()
+}
+
+function ToggleWikiDiscoveredOnly() {
+    WikiState.catalogDiscoveredOnly = !WikiState.catalogDiscoveredOnly
+    RenderWiki()
+}
+
+function ClearWikiSearch() {
+    WikiState.searchQuery = ""
+    let input = document.getElementById("wiki-search-input")
+    let clearBtn = document.getElementById("wiki-search-clear")
+    if (input) input.value = ""
+    if (clearBtn) clearBtn.classList.add("hidden")
+    RenderWiki()
+}
+
+function GenerateWikiMutationsHTML(searchQuery) {
+    let mutations = (typeof MutationsList !== "undefined" && Array.isArray(MutationsList)) ? MutationsList : []
+    let cardsHtml = ""
+    let matchCount = 0
+
+    for (let i = 0; i < mutations.length; i++) {
+        let m = mutations[i]
+        let meta = ResolveMutationByName(m.name)
+        if (!meta) continue
+
+        let searchPass = MatchWikiSearch(searchQuery, m.name, meta.prevTierName, `${m.multiplier}x`, `Tier ${meta.tierIndex}`)
+        if (!searchPass) continue
+        matchCount++
+
+        let owned = GetOwnedCardsByMutation(m.name)
+        let tagObj = {
+            name: m.name,
+            type: "mutation",
+            icon: m.icon || "✨",
+            suffix: FormatNumber(m.multiplier) + "×",
+            background: m.background,
+            textColor: m.textColor,
+            borderColor: m.borderColor,
+            glowColor: m.glowColor,
+            animated: m.animated,
+            cssClass: "tag-mutation-" + m.name.toLowerCase(),
+        }
+
+        cardsHtml += `
+            <div class="wiki-card">
+                <div class="wiki-card-header">
+                    <div>
+                        <div style="margin-bottom: 6px;">${RenderCardTagBadgeHTML(tagObj)}</div>
+                        <h4 class="wiki-card-title">${m.icon || "✨"} ${m.name}</h4>
+                    </div>
+                    <span class="wiki-section-badge">Tier ${meta.tierIndex}/${meta.totalTiers}</span>
+                </div>
+                <div class="wiki-card-sub" style="margin-top: 4px; color: ${m.borderColor || 'var(--text-soft)'};">
+                    Multiplier: ×${FormatNumber(m.multiplier)} Base Rarity
+                </div>
+                <div class="wiki-card-stats" style="margin: 10px 0;">
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Compress Recipe:</span>
+                        <span class="wiki-stat-val">${meta.compressCost}× ${meta.prevTierName} ➔ 1× ${m.name}</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Decompress Yield:</span>
+                        <span class="wiki-stat-val">1× ${m.name} ➔ ${meta.decompressYield}× ${meta.prevTierName}</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Discovered Cards:</span>
+                        <span class="wiki-stat-val">${FormatNumber(owned.uniqueCount)} (${FormatNumber(owned.totalCopies)} copies)</span>
+                    </div>
+                </div>
+                <button type="button" class="wiki-card-btn" onclick="OpenMutationModal('${m.name}')">
+                    🔍 Inspect ${m.name} Details
+                </button>
+            </div>
+        `
+    }
+
+    if (matchCount === 0) return ""
+
+    return `
+        <div class="wiki-section" data-wiki-section="mutations">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">✨</span>
+                    <div>
+                        <h3>Mutations &amp; Multipliers</h3>
+                        <p class="wiki-section-desc">Mutations drastically scale card rarity, appearance, and value. Roll them naturally or synthesize them in the Compressor.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">${mutations.length} Mutation Tiers</span>
+            </div>
+
+            <div class="wiki-formula-box">
+                <span class="wiki-formula-icon">🎲</span>
+                <div>
+                    <div><strong>Roll Drop Probability:</strong> <span class="wiki-formula-code">1 / (Base Rarity × Multiplier / Effective Luck)</span></div>
+                    <div style="font-size: 0.8rem; opacity: 0.85; margin-top: 2px;">
+                        Mutations multiply the card's effective rarity in the roll pool. High roller luck and boosters help you pull ultra-rare mutations like Nuclear (×10K), Galactic (×100K), and Robotic (×1M)!
+                    </div>
+                </div>
+            </div>
+
+            <div class="wiki-grid wiki-grid-3">
+                ${cardsHtml}
+            </div>
+
+            <div class="wiki-tip-card" style="margin-top: 14px;">
+                <span class="tip-icon">📦</span>
+                <div>
+                    <h4>Compressor &amp; Decompressor Mechanics</h4>
+                    <p>Unlocked at Level 3 in the Presses tab! Compress combines duplicate lower-tier cards into guaranteed next-tier mutated versions. Decompress splits a higher-tier card back into lower-tier cards. Use the "Keep 1 Copy" toggle to protect your collection.</p>
+                </div>
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiTagsHTML(searchQuery) {
+    let allTags = GetAllWikiTags()
+    let cardsHtml = ""
+    let matchCount = 0
+
+    for (let i = 0; i < allTags.length; i++) {
+        let t = allTags[i]
+        if (!MatchWikiSearch(searchQuery, t.name, t.type, t.description)) continue
+        matchCount++
+
+        let badgeHtml = RenderCardTagBadgeHTML({
+            name: t.name,
+            type: t.type,
+            icon: t.icon,
+            background: t.background,
+            textColor: t.textColor,
+            borderColor: t.borderColor,
+            glowColor: t.glowColor,
+            animated: t.animated,
+            cssClass: t.cssClass,
+        })
+
+        cardsHtml += `
+            <div class="wiki-card">
+                <div class="wiki-card-header">
+                    <div>
+                        <div style="margin-bottom: 6px;">${badgeHtml}</div>
+                        <h4 class="wiki-card-title">${t.icon || "🏷️"} ${t.name}</h4>
+                    </div>
+                    <span class="wiki-section-badge">${t.type}</span>
+                </div>
+                <p style="font-size: 0.82rem; color: var(--text-soft); margin: 6px 0 10px 0; min-height: 2.4em;">
+                    ${t.description}
+                </p>
+                <div class="wiki-card-stats" style="margin-bottom: 10px;">
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Matching Base Cards:</span>
+                        <span class="wiki-stat-val">${t.totalCards} cards</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Discovered by You:</span>
+                        <span class="wiki-stat-val">${t.discoveredCards} / ${t.totalCards}</span>
+                    </div>
+                </div>
+                <button type="button" class="wiki-card-btn" onclick="OpenTagModal('${t.id}', '${t.name}', '${t.type}')">
+                    🔍 View Matching Cards
+                </button>
+            </div>
+        `
+    }
+
+    if (matchCount === 0) return ""
+
+    return `
+        <div class="wiki-section" data-wiki-section="tags">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">🏷️</span>
+                    <div>
+                        <h3>Card Tags &amp; Classifications</h3>
+                        <p class="wiki-section-desc">Tags identify themes, generation styles, artists, and rarity tiers. Click any tag on cards across the game to view matching owned cards.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">${allTags.length} Total Tags</span>
+            </div>
+
+            <div class="wiki-grid wiki-grid-3">
+                ${cardsHtml}
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiCardsCatalogHTML(searchQuery) {
+    let baseCards = GetBaseCardsList()
+    let totalBase = baseCards.length
+    let discoveredCount = 0
+    for (let i = 0; i < baseCards.length; i++) {
+        let c = baseCards[i]
+        if (PlayerData.inventory[c.name] && PlayerData.inventory[c.name].count > 0) {
+            discoveredCount++
+        }
+    }
+
+    let cardsHtml = ""
+    let matchCount = 0
+
+    for (let i = 0; i < baseCards.length; i++) {
+        let card = baseCards[i]
+        let isDiscovered = Boolean(PlayerData.inventory[card.name] && PlayerData.inventory[card.name].count > 0)
+        let tier = GetCardRarityTier(card.rarity) || { name: "Common", id: "common", borderColor: "#94a3b8" }
+
+        if (WikiState.catalogTierFilter !== "all" && tier.id !== WikiState.catalogTierFilter) {
+            continue
+        }
+        if (WikiState.catalogDiscoveredOnly && !isDiscovered) {
+            continue
+        }
+
+        let searchTarget = isDiscovered
+            ? [card.name, tier.name, FormatRarityText(card.rarity), card.artist, card.description]
+            : [tier.name, "undiscovered", "hidden", "mystery"]
+
+        if (!MatchWikiSearch(searchQuery, ...searchTarget)) {
+            continue
+        }
+        matchCount++
+
+        if (isDiscovered) {
+            let frontTagsHtml = RenderCardTagsHTML(card, "front")
+            let safeName = card.name.replace(/'/g, "\\'")
+            cardsHtml += `
+                <div class="wiki-catalog-card discovered" onclick="OpenCardModalByName('${safeName}')" style="cursor: pointer;">
+                    <div class="wiki-catalog-thumb-wrap">
+                        <img src="${FormatImagePath(card.image)}" alt="${card.name}" class="wiki-catalog-thumb" draggable="false">
+                        <div class="card-holo-glare"></div>
+                        ${frontTagsHtml ? `<div class="card-front-tags-overlay wiki-catalog-thumb-tags">${frontTagsHtml}</div>` : ""}
+                    </div>
+                    <div class="wiki-catalog-card-info">
+                        <h4 class="wiki-catalog-card-name" title="${card.name}">${card.name}</h4>
+                        <div class="wiki-catalog-card-rarity">${FormatRarityText(card.rarity)}</div>
+                        <div style="font-size: 0.72rem; color: var(--text-soft); margin-top: 4px;">Tier: ${tier.name}</div>
+                    </div>
+                </div>
+            `
+        } else {
+            cardsHtml += `
+                <div class="wiki-catalog-card undiscovered" title="Undiscovered Card (${tier.name}) - Roll cards to discover!">
+                    <div class="wiki-catalog-thumb-wrap">
+                        <div class="wiki-catalog-silhouette-icon">❓</div>
+                    </div>
+                    <div class="wiki-catalog-card-info">
+                        <h4 class="wiki-catalog-card-name">??? (Undiscovered)</h4>
+                        <div class="wiki-catalog-card-rarity" style="color: ${tier.borderColor || '#94a3b8'};">⭐ Tier: ${tier.name}</div>
+                        <div style="font-size: 0.72rem; color: var(--text-soft); margin-top: 4px;">🔍 Roll with rollers to unlock!</div>
+                    </div>
+                </div>
+            `
+        }
+    }
+
+    let tierFiltersHtml = `
+        <button type="button" class="catalog-filter-btn ${WikiState.catalogTierFilter === 'all' ? 'active' : ''}" onclick="SetWikiCatalogTier('all')">
+            All Tiers
+        </button>
+    `
+    if (typeof RarityTiersList !== "undefined" && Array.isArray(RarityTiersList)) {
+        for (let i = 0; i < RarityTiersList.length; i++) {
+            let t = RarityTiersList[i]
+            let isActive = WikiState.catalogTierFilter === t.id
+            tierFiltersHtml += `
+                <button type="button" class="catalog-filter-btn ${isActive ? 'active' : ''}" onclick="SetWikiCatalogTier('${t.id}')">
+                    ${t.icon || '⭐'} ${t.name}
+                </button>
+            `
+        }
+    }
+
+    let tiersTableRows = ""
+    if (typeof RarityTiersList !== "undefined" && Array.isArray(RarityTiersList)) {
+        for (let i = 0; i < RarityTiersList.length; i++) {
+            let t = RarityTiersList[i]
+            let tierCards = baseCards.filter(c => {
+                let ct = GetCardRarityTier(c.rarity)
+                return ct && ct.id === t.id
+            })
+            let tierDiscovered = tierCards.filter(c => PlayerData.inventory[c.name] && PlayerData.inventory[c.name].count > 0).length
+            tiersTableRows += `
+                <tr>
+                    <td><strong>${t.icon || '⭐'} ${t.name}</strong></td>
+                    <td>${t.rangeLabel || '—'}</td>
+                    <td><span class="wiki-formula-code">1 / (Rarity ÷ Luck)</span></td>
+                    <td>${tierDiscovered} / ${tierCards.length} Cards</td>
+                </tr>
+            `
+        }
+    }
+
+    return `
+        <div class="wiki-section" data-wiki-section="cards">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">🃏</span>
+                    <div>
+                        <h3>Card Catalog &amp; Rarities</h3>
+                        <p class="wiki-section-desc">Browse all base cards in the universe. Undiscovered cards remain mysterious silhouettes until you find them.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">Discovered: ${discoveredCount} / ${totalBase} (${totalBase > 0 ? ((discoveredCount / totalBase) * 100).toFixed(0) : 0}%)</span>
+            </div>
+
+            <div class="wiki-table-wrap" style="margin-bottom: 16px;">
+                <table class="wiki-table">
+                    <thead>
+                        <tr>
+                            <th>Rarity Tier</th>
+                            <th>Rarity Range</th>
+                            <th>Drop Formula</th>
+                            <th>Your Collection</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tiersTableRows}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="wiki-catalog-controls">
+                <div class="wiki-catalog-filters">
+                    ${tierFiltersHtml}
+                </div>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer; color: var(--text-main);">
+                    <input type="checkbox" ${WikiState.catalogDiscoveredOnly ? "checked" : ""} onchange="ToggleWikiDiscoveredOnly()">
+                    <span>Show Discovered Only</span>
+                </label>
+            </div>
+
+            <div class="wiki-catalog-grid">
+                ${cardsHtml || `<div class="tag-modal-empty" style="grid-column: 1 / -1;">No cards found matching your current filter.</div>`}
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiRollersHTML(searchQuery) {
+    let items = (typeof ItemsList !== "undefined" && Array.isArray(ItemsList)) ? ItemsList : []
+    let rollers = items.filter(i => i.type === "roller")
+    let cardsHtml = ""
+    let matchCount = 0
+
+    for (let i = 0; i < rollers.length; i++) {
+        let r = rollers[i]
+        if (!MatchWikiSearch(searchQuery, r.name, r.description, `${r.luckMultiplier}x luck`, `${r.rollTime}s`)) continue
+        matchCount++
+
+        let recipe = (CraftingRecipes || []).find(rec => rec.resultItemId === r.id)
+        let acquisition = recipe ? `Craft at Workbench (${recipe.craftTime}s)` : `Default starter equipment`
+
+        cardsHtml += `
+            <div class="wiki-card">
+                <div class="wiki-card-header">
+                    <div>
+                        <h4 class="wiki-card-title">${r.icon || "🎲"} ${r.name}</h4>
+                        <div class="wiki-card-sub">${acquisition}</div>
+                    </div>
+                    <span class="wiki-section-badge">×${r.luckMultiplier || 1} Luck</span>
+                </div>
+                <p style="font-size: 0.82rem; color: var(--text-soft); margin: 6px 0 10px 0;">
+                    ${r.description || ""}
+                </p>
+                <div class="wiki-card-stats">
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Roll Cooldown:</span>
+                        <span class="wiki-stat-val">${r.rollTime || 2}s</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Max Cards / Roll:</span>
+                        <span class="wiki-stat-val">${r.maxCardsPerRoll || 1} Cards</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Cost per Roll:</span>
+                        <span class="wiki-stat-val">${r.rollCost || 1} Token${(r.rollCost || 1) > 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+            </div>
+        `
+    }
+
+    return `
+        <div class="wiki-section" data-wiki-section="rollers">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">🎲</span>
+                    <div>
+                        <h3>Rollers, Boosters &amp; Automation</h3>
+                        <p class="wiki-section-desc">Rollers are your primary tool for expanding your collection. Equip multiple rollers, attach autorollers, and socket boosters.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">Equipped Slots: ${PlayerData.maxRollerSlots || 1}</span>
+            </div>
+
+            <div class="wiki-grid wiki-grid-2">
+                ${cardsHtml}
+            </div>
+
+            <div class="wiki-formula-box" style="margin-top: 14px;">
+                <span class="wiki-formula-icon">🚀</span>
+                <div>
+                    <div><strong>Roll Booster Scaling:</strong> <span class="wiki-formula-code">Bonus Cards = floor(log2(Boosters + 1))</span></div>
+                    <div style="font-size: 0.8rem; opacity: 0.85; margin-top: 2px;">
+                        Each bonus card drawn in a single roll requires doubling your booster investment. Drag Roll Boosters onto equipped rollers to increase their capacity!
+                    </div>
+                </div>
+            </div>
+
+            <div class="wiki-table-wrap" style="margin-top: 10px;">
+                <table class="wiki-table">
+                    <thead>
+                        <tr>
+                            <th>Boosters Attached</th>
+                            <th>Bonus Cards Drawn</th>
+                            <th>Total Cards Per Roll (Basic Roller)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>0 Boosters</td><td>+0 Cards</td><td>3 Cards</td></tr>
+                        <tr><td>1 Booster</td><td>+1 Card</td><td>4 Cards</td></tr>
+                        <tr><td>3 Boosters</td><td>+2 Cards</td><td>5 Cards</td></tr>
+                        <tr><td>7 Boosters</td><td>+3 Cards</td><td>6 Cards</td></tr>
+                        <tr><td>15 Boosters</td><td>+4 Cards</td><td>7 Cards</td></tr>
+                        <tr><td>31 Boosters</td><td>+5 Cards</td><td>8 Cards</td></tr>
+                        <tr><td>63 Boosters</td><td>+6 Cards</td><td>9 Cards</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="wiki-tip-card" style="margin-top: 14px;">
+                <span class="tip-icon">🤖</span>
+                <div>
+                    <h4>Autoroller Operation</h4>
+                    <p>Purchase an Autoroller with Barks in the Shop or Items tab and drag it onto an equipped roller. The roller will automatically execute rolls every time its cooldown expires as long as you have enough tokens. You can pause or resume automation per roller anytime with the ⚡ toggle.</p>
+                </div>
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiProgressionHTML(searchQuery) {
+    let baseXp = (coreValues.level && coreValues.level.baseXp) || 10
+    let xpMult = (coreValues.level && coreValues.level.xpMultiplier) || 1.5
+
+    return `
+        <div class="wiki-section" data-wiki-section="progression">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">⭐</span>
+                    <div>
+                        <h3>Progression, Levels &amp; Resigns</h3>
+                        <p class="wiki-section-desc">Gain XP by discovering cards, level up to unlock new machines, and Resign for prestigious Barks.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">Current Level ${PlayerData.level || 1}</span>
+            </div>
+
+            <div class="wiki-grid wiki-grid-2">
+                <div class="wiki-card">
+                    <div class="wiki-card-header">
+                        <h4 class="wiki-card-title">📈 Leveling Mechanics</h4>
+                        <span class="wiki-section-badge">XP Formula</span>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--text-soft); margin: 6px 0;">
+                        Every card rolled yields XP proportional to its rarity: <span class="wiki-formula-code">XP = floor(Rarity ^ 0.5)</span>. Mutated cards give immense XP bursts!
+                    </p>
+                    <div class="wiki-card-stats">
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Level Threshold Formula:</span>
+                            <span class="wiki-stat-val">floor(${baseXp} × (Level ^ ${xpMult}))</span>
+                        </div>
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Level 3 Unlock:</span>
+                            <span class="wiki-stat-val">Compressor &amp; Decompressor</span>
+                        </div>
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Level 5 Unlock:</span>
+                            <span class="wiki-stat-val">Resign Press &amp; Barks Conversion</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wiki-card">
+                    <div class="wiki-card-header">
+                        <h4 class="wiki-card-title">👑 Resigns &amp; Barks (Prestige)</h4>
+                        <span class="wiki-section-badge">Prestige Power</span>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--text-soft); margin: 6px 0;">
+                        Resigning resets your current level and card collection back to fresh start in exchange for Barks and permanent buffs.
+                    </p>
+                    <div class="wiki-card-stats">
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Resign Frequency:</span>
+                            <span class="wiki-stat-val">Available Every 5 Levels</span>
+                        </div>
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Bark Conversion Rate:</span>
+                            <span class="wiki-stat-val">1,000 Diamonds = 1 Bark</span>
+                        </div>
+                        <div class="wiki-stat-row">
+                            <span class="wiki-stat-label">Bark Currency Uses:</span>
+                            <span class="wiki-stat-val">Autorollers, Roll Boosters, Rare Upgrades</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiCraftingHTML(searchQuery) {
+    let recipes = (typeof CraftingRecipes !== "undefined" && Array.isArray(CraftingRecipes)) ? CraftingRecipes : []
+    let rowsHtml = ""
+
+    for (let i = 0; i < recipes.length; i++) {
+        let r = recipes[i]
+        let matList = (r.materials || []).map(m => `${m.amount}× ${m.cardName || m.name}`).join(", ")
+        if (!MatchWikiSearch(searchQuery, r.name, r.description, matList)) continue
+
+        rowsHtml += `
+            <tr>
+                <td><strong>${r.icon || '🔨'} ${r.name}</strong></td>
+                <td><span style="font-size: 0.8rem; color: var(--text-soft);">${matList}</span></td>
+                <td>${r.craftTime}s</td>
+                <td><span class="wiki-section-badge">${r.resultType || 'item'}</span></td>
+            </tr>
+        `
+    }
+
+    return `
+        <div class="wiki-section" data-wiki-section="crafting">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">🔨</span>
+                    <div>
+                        <h3>Crafting Bench &amp; Presses</h3>
+                        <p class="wiki-section-desc">Combine duplicate cards to create new cards, advanced rollers, and items. 100% risk-free refunds!</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">${recipes.length} Blueprints</span>
+            </div>
+
+            <div class="wiki-tip-card" style="margin-bottom: 14px;">
+                <span class="tip-icon">🛡️</span>
+                <div>
+                    <h4>100% Risk-Free Crafting Refund Guarantee</h4>
+                    <p>You can cancel an active crafting project at any time with zero penalty. All contributed ingredient cards are immediately refunded directly into your inventory. You will never lose materials by changing your mind!</p>
+                </div>
+            </div>
+
+            <div class="wiki-table-wrap">
+                <table class="wiki-table">
+                    <thead>
+                        <tr>
+                            <th>Blueprint</th>
+                            <th>Required Materials</th>
+                            <th>Craft Time</th>
+                            <th>Result Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiShopHTML(searchQuery) {
+    let upgrades = (typeof ShopUpgradesList !== "undefined" && Array.isArray(ShopUpgradesList)) ? ShopUpgradesList : []
+    let cardsHtml = ""
+
+    for (let i = 0; i < upgrades.length; i++) {
+        let u = upgrades[i]
+        if (!MatchWikiSearch(searchQuery, u.name, u.description, u.category)) continue
+
+        let curLvl = (PlayerData.upgrades && PlayerData.upgrades[u.id]) || 0
+
+        cardsHtml += `
+            <div class="wiki-card">
+                <div class="wiki-card-header">
+                    <div>
+                        <h4 class="wiki-card-title">${u.icon || '🛒'} ${u.name}</h4>
+                        <div class="wiki-card-sub">Category: ${u.category || 'upgrades'}</div>
+                    </div>
+                    <span class="wiki-section-badge">Level ${curLvl}/${u.maxLevel || '∞'}</span>
+                </div>
+                <p style="font-size: 0.82rem; color: var(--text-soft); margin: 6px 0 10px 0;">
+                    ${u.description || ""}
+                </p>
+                <div class="wiki-card-stats">
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Base Cost:</span>
+                        <span class="wiki-stat-val">${u.basePrice || 50} 💎</span>
+                    </div>
+                    <div class="wiki-stat-row">
+                        <span class="wiki-stat-label">Cost Scaling:</span>
+                        <span class="wiki-stat-val">+${((u.compoundRate || 0.2) * 100).toFixed(0)}% per level</span>
+                    </div>
+                </div>
+            </div>
+        `
+    }
+
+    return `
+        <div class="wiki-section" data-wiki-section="shop">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">🛒</span>
+                    <div>
+                        <h3>Upgrade Shop</h3>
+                        <p class="wiki-section-desc">Spend Diamonds and Barks on permanent upgrades to accelerate your token generation, luck, and card revenue.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">${upgrades.length} Permanent Upgrades</span>
+            </div>
+
+            <div class="wiki-grid wiki-grid-3">
+                ${cardsHtml}
+            </div>
+        </div>
+    `
+}
+
+function GenerateWikiGuidesHTML(searchQuery) {
+    return `
+        <div class="wiki-section" data-wiki-section="guides">
+            <div class="wiki-section-header">
+                <div class="wiki-section-title-wrap">
+                    <span class="wiki-section-icon">💡</span>
+                    <div>
+                        <h3>Tutorials &amp; Strategy Guides</h3>
+                        <p class="wiki-section-desc">Step-by-step master walkthroughs and pro tips to optimize your journey from beginner to card tycoon.</p>
+                    </div>
+                </div>
+                <span class="wiki-section-badge">Master Guides</span>
+            </div>
+
+            <div class="wiki-grid wiki-grid-3">
+                <div class="wiki-card">
+                    <h4 class="wiki-card-title">🌱 Phase 1: Beginner Walkthrough</h4>
+                    <p style="font-size: 0.84rem; color: var(--text-soft); line-height: 1.5; margin: 8px 0;">
+                        1. Equip your Basic Roller from the Items tab into Slot 1.<br>
+                        2. Roll cards to earn XP and level up.<br>
+                        3. Use the Diamond Press on duplicate cards to earn Diamonds.<br>
+                        4. Invest initial Diamonds into Token Capacity &amp; Drop Rate in the Shop.
+                    </p>
+                </div>
+
+                <div class="wiki-card">
+                    <h4 class="wiki-card-title">⚙️ Phase 2: Mid-Game Automation</h4>
+                    <p style="font-size: 0.84rem; color: var(--text-soft); line-height: 1.5; margin: 8px 0;">
+                        1. Craft duplicate cards into higher-rarity cards or new Rollers at the Crafting Bench.<br>
+                        2. Buy an Autoroller (1 Bark) and attach it to your primary roller.<br>
+                        3. Unlock additional roller slots to roll multiple rollers simultaneously.<br>
+                        4. Keep 1 Copy protected in Presses so you never squish unique discoveries.
+                    </p>
+                </div>
+
+                <div class="wiki-card">
+                    <h4 class="wiki-card-title">👑 Phase 3: End-Game Domination</h4>
+                    <p style="font-size: 0.84rem; color: var(--text-soft); line-height: 1.5; margin: 8px 0;">
+                        1. Stack Roll Boosters onto your best rollers for multi-card pulls.<br>
+                        2. Resign every 5 levels to build a vast treasury of Barks.<br>
+                        3. Synthesize your duplicate mutated cards in the Compressor towards Galactic (×100K) and Robotic (×1M)!
+                    </p>
+                </div>
+            </div>
+
+            <div class="wiki-tip-card" style="margin-top: 14px;">
+                <span class="tip-icon">💡</span>
+                <div>
+                    <h4>Interactive Card &amp; Tag Popups</h4>
+                    <p>You can click or long-press any Mutation pill or Tag badge anywhere in the game (on cards, inside modals, in the roll showcase, or in sidebar legends) to open an instant breakdown of that attribute, its multipliers, and all owned matching cards in your collection!</p>
+                </div>
+            </div>
+        </div>
+    `
+}
+
+function RenderWiki() {
+    let contentContainer = document.getElementById("wiki-content")
+    if (!contentContainer) return
+
+    let cat = WikiState.activeCategory || "all"
+    let query = WikiState.searchQuery || ""
+    let html = ""
+
+    if (cat === "all") {
+        let sections = [
+            GenerateWikiMutationsHTML(query),
+            GenerateWikiTagsHTML(query),
+            GenerateWikiCardsCatalogHTML(query),
+            GenerateWikiRollersHTML(query),
+            GenerateWikiProgressionHTML(query),
+            GenerateWikiCraftingHTML(query),
+            GenerateWikiShopHTML(query),
+            GenerateWikiGuidesHTML(query),
+        ].filter(Boolean)
+
+        if (sections.length > 0) {
+            html = sections.join("")
+        } else {
+            html = `
+                <div class="tag-modal-empty" style="padding: 40px 20px; text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 8px;">🔍</div>
+                    <h3 style="margin-bottom: 6px; color: var(--text-main);">No Encyclopedia Results</h3>
+                    <p style="color: var(--text-soft); font-size: 0.9rem;">
+                        No wiki entries match <strong>"${query}"</strong>. Try a different search term or clear the filter.
+                    </p>
+                    <button type="button" class="wiki-card-btn" style="margin-top: 14px; display: inline-block;" onclick="ClearWikiSearch()">
+                        Clear Search
+                    </button>
+                </div>
+            `
+        }
+    } else if (cat === "mutations") {
+        html = GenerateWikiMutationsHTML(query)
+    } else if (cat === "tags") {
+        html = GenerateWikiTagsHTML(query)
+    } else if (cat === "cards") {
+        html = GenerateWikiCardsCatalogHTML(query)
+    } else if (cat === "rollers") {
+        html = GenerateWikiRollersHTML(query)
+    } else if (cat === "progression") {
+        html = GenerateWikiProgressionHTML(query)
+    } else if (cat === "crafting") {
+        html = GenerateWikiCraftingHTML(query)
+    } else if (cat === "shop") {
+        html = GenerateWikiShopHTML(query)
+    } else if (cat === "guides") {
+        html = GenerateWikiGuidesHTML(query)
+    }
+
+    if (!html) {
+        html = `
+            <div class="tag-modal-empty" style="padding: 40px 20px; text-align: center;">
+                <div style="font-size: 2.5rem; margin-bottom: 8px;">🔍</div>
+                <h3 style="margin-bottom: 6px; color: var(--text-main);">No Results in this Category</h3>
+                <p style="color: var(--text-soft); font-size: 0.9rem;">
+                    No entries match <strong>"${query}"</strong> under the current section.
+                </p>
+                <button type="button" class="wiki-card-btn" style="margin-top: 14px; display: inline-block;" onclick="ClearWikiSearch()">
+                    Clear Search
+                </button>
+            </div>
+        `
+    }
+
+    contentContainer.innerHTML = html
+
+    let badge = document.getElementById("wiki-search-count-badge")
+    if (badge) {
+        if (query) {
+            badge.textContent = `Showing results for "${query}"`
+        } else if (cat === "all") {
+            badge.textContent = "Displaying all encyclopedia topics"
+        } else {
+            let catName = cat.charAt(0).toUpperCase() + cat.slice(1)
+            badge.textContent = `Displaying ${catName} section`
+        }
+    }
+}
+
+function SetupWikiInteractions() {
+    let searchInput = document.getElementById("wiki-search-input")
+    let searchClear = document.getElementById("wiki-search-clear")
+    let navContainer = document.getElementById("wiki-categories-nav")
+
+    if (searchInput) {
+        searchInput.addEventListener("input", function() {
+            let val = searchInput.value.trim()
+            WikiState.searchQuery = val
+            if (searchClear) {
+                searchClear.classList.toggle("hidden", val.length === 0)
+            }
+            RenderWiki()
+        })
+    }
+
+    if (searchClear) {
+        searchClear.addEventListener("click", ClearWikiSearch)
+    }
+
+    if (navContainer) {
+        navContainer.addEventListener("click", function(e) {
+            let pill = e.target.closest(".wiki-category-pill")
+            if (!pill) return
+            let cat = pill.getAttribute("data-wiki-cat")
+            if (cat) {
+                SetWikiCategory(cat)
+                PlayGameSound("pop")
+            }
+        })
+    }
+}
+
+// Global browser exposures
+window.OpenCardModalByName = OpenCardModalByName
+window.SetWikiCategory = SetWikiCategory
+window.SetWikiCatalogTier = SetWikiCatalogTier
+window.ToggleWikiDiscoveredOnly = ToggleWikiDiscoveredOnly
+window.ClearWikiSearch = ClearWikiSearch
 
 let DragDropState = {
     activePayload: null,
@@ -5020,9 +6372,28 @@ function SetupMiddleMouseScroll(containerEl) {
     }, { passive: false })
 }
 
+function SetTextIfChanged(el, text) {
+    if (el && el.textContent !== text) {
+        el.textContent = text
+    }
+}
+
 function SwitchInventoryTab(tabName) {
     let targetTab = tabName === "items" ? "items" : "cards"
     SwitchView(targetTab)
+}
+
+function GetEquippedRollersSignature() {
+    let parts = [PlayerData.maxRollerSlots]
+    for (let i = 0; i < PlayerData.maxRollerSlots; i++) {
+        let r = PlayerData.equippedRollers[i]
+        if (!r) {
+            parts.push("empty")
+        } else {
+            parts.push(r.instanceId + ":" + r.itemId + ":" + (r.boosters || 0) + ":" + (r.hasAutoroller ? 1 : 0))
+        }
+    }
+    return parts.join("|")
 }
 
 function RenderEquippedRollers() {
@@ -5035,13 +6406,20 @@ function RenderEquippedRollers() {
     let maxSlots = PlayerData.maxRollerSlots
 
     if (slotsBadge) {
-        slotsBadge.textContent = equippedCount + " / " + maxSlots + " Equipped"
+        SetTextIfChanged(slotsBadge, equippedCount + " / " + maxSlots + " Equipped")
     }
     if (equippedSummary) {
-        equippedSummary.textContent = "⚙️ Equipped: " + equippedCount + " / " + maxSlots
+        SetTextIfChanged(equippedSummary, "⚙️ Equipped: " + equippedCount + " / " + maxSlots)
     }
 
     if (!slotsContainer) return
+
+    let currentSig = GetEquippedRollersSignature()
+    if (slotsContainer._lastSignature === currentSig && slotsContainer.children.length === maxSlots) {
+        RenderRollerButtons()
+        return
+    }
+    slotsContainer._lastSignature = currentSig
     slotsContainer.innerHTML = ""
 
     for (let slotIndex = 0; slotIndex < maxSlots; slotIndex++) {
@@ -5472,19 +6850,25 @@ function RenderInventory(options) {
 
 function UpdateTopBarUI() {
     let rollCost = coreValues.roll.cost
-    document.getElementById("token-count").textContent = FormatNumber(PlayerData.tokens) + " / " + FormatNumber(GetEffectiveTokenCapacity())
-    document.getElementById("diamond-count").textContent = FormatNumber(PlayerData.diamonds)
+    SetTextIfChanged(document.getElementById("token-count"), FormatNumber(PlayerData.tokens) + " / " + FormatNumber(GetEffectiveTokenCapacity()))
+    SetTextIfChanged(document.getElementById("diamond-count"), FormatNumber(PlayerData.diamonds))
     let barkEl = document.getElementById("bark-count")
     if (barkEl) {
-        barkEl.textContent = FormatNumber(PlayerData.barks || 0)
+        SetTextIfChanged(barkEl, FormatNumber(PlayerData.barks || 0))
     }
-    document.getElementById("rolls-count").textContent = FormatNumber(PlayerData.totalRolls)
+    SetTextIfChanged(document.getElementById("rolls-count"), FormatNumber(PlayerData.totalRolls))
 
     let reqXp = GetRequiredXp(PlayerData.level)
     let xpPercent = math.min(100, (PlayerData.xp / reqXp) * 100)
-    document.getElementById("level-badge").textContent = "⭐ Level " + FormatNumber(PlayerData.level)
-    document.getElementById("xp-text").textContent = FormatNumber(PlayerData.xp) + " / " + FormatNumber(reqXp) + " XP"
-    document.getElementById("xp-fill").style.width = xpPercent + "%"
+    SetTextIfChanged(document.getElementById("level-badge"), "⭐ Level " + FormatNumber(PlayerData.level))
+    SetTextIfChanged(document.getElementById("xp-text"), FormatNumber(PlayerData.xp) + " / " + FormatNumber(reqXp) + " XP")
+    let xpFill = document.getElementById("xp-fill")
+    if (xpFill) {
+        let pctStr = xpPercent + "%"
+        if (xpFill.style.width !== pctStr) {
+            xpFill.style.width = pctStr
+        }
+    }
 
     let equippedRollers = GetEquippedRollers()
     let hasRoller = equippedRollers.length > 0
@@ -5496,11 +6880,11 @@ function UpdateTopBarUI() {
         let canRoll = hasRoller && PlayerData.tokens >= rollCost && !PlayerData.isCooldown
         rollButton.disabled = !canRoll
         if (!hasRoller) {
-            rollButtonText.textContent = "⚠️ Equip a Roller"
+            SetTextIfChanged(rollButtonText, "⚠️ Equip a Roller")
         } else if (PlayerData.isCooldown) {
-            rollButtonText.textContent = "⏳ Recharging..."
+            SetTextIfChanged(rollButtonText, "⏳ Recharging...")
         } else {
-            rollButtonText.textContent = "🎲 Roll (" + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "") + ")"
+            SetTextIfChanged(rollButtonText, "🎲 Roll (" + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "") + ")")
         }
     }
 
@@ -5513,11 +6897,11 @@ function UpdateTopBarUI() {
         if (!hasAutomated) {
             autoRollBtn.disabled = true
             autoRollBtn.classList.remove("active")
-            autoRollBtn.textContent = "🤖 Auto-Roll: No Autoroller"
+            SetTextIfChanged(autoRollBtn, "🤖 Auto-Roll: No Autoroller")
         } else {
             autoRollBtn.disabled = false
             autoRollBtn.classList.toggle("active", isAutoActive)
-            autoRollBtn.textContent = "🤖 Auto-Roll: " + (isAutoActive ? "ON" : "OFF")
+            SetTextIfChanged(autoRollBtn, "🤖 Auto-Roll: " + (isAutoActive ? "ON" : "OFF"))
         }
     }
 
@@ -5638,11 +7022,17 @@ function UpdateUI(options) {
     if (PlayerData.activeView === "crafting") {
         RenderCrafting()
     }
+    if (PlayerData.activeView === "wiki") {
+        RenderWiki()
+    }
     if (isCards) {
         RenderInventory(options)
     }
     if (TagModalState.isOpen && TagModalState.currentTagId) {
         PopulateTagModal(TagModalState.currentTagId)
+    }
+    if (MutationModalState.isOpen && MutationModalState.currentMutationName) {
+        PopulateMutationModal(MutationModalState.currentMutationName)
     }
 }
 
@@ -5687,6 +7077,10 @@ function ResetGameProgress() {
         buttonsRow.removeAttribute("data-signature")
         buttonsRow.removeAttribute("data-mode")
     }
+    let slotsContainer = document.getElementById("equipped-rollers-slots")
+    if (slotsContainer) {
+        delete slotsContainer._lastSignature
+    }
 
     let stageWrap = document.getElementById("roll-stage-wrap")
     let display = document.getElementById("rolled-card-display")
@@ -5724,12 +7118,14 @@ function ResetGameProgress() {
 
     CloseCardModal()
     CloseTagModal()
+    CloseMutationModal()
     SaveGame()
     UpdateUI()
 }
 
 function Init() {
     CardsList = GenerateCardMutations(CardsList, MutationsList)
+    BuildCardsLookupMap()
     LoadGame()
     ApplySettings()
 
@@ -5821,6 +7217,13 @@ function Init() {
     if (navSettings) {
         navSettings.addEventListener("click", function() {
             SwitchView("settings")
+            CloseMobileSidebar()
+        })
+    }
+    let navWiki = document.getElementById("nav-wiki")
+    if (navWiki) {
+        navWiki.addEventListener("click", function() {
+            SwitchView("wiki")
             CloseMobileSidebar()
         })
     }
@@ -5984,6 +7387,21 @@ function Init() {
         })
     }
 
+    let mutationModalClose = document.getElementById("mutation-modal-close")
+    let mutationModalOverlay = document.getElementById("mutation-modal")
+    if (mutationModalClose) {
+        mutationModalClose.addEventListener("click", CloseMutationModal)
+    }
+    if (mutationModalOverlay) {
+        mutationModalOverlay.addEventListener("click", function(e) {
+            if (e.target === mutationModalOverlay || (e.target.classList && e.target.classList.contains("modal-wrapper"))) {
+                CloseMutationModal()
+            }
+        })
+    }
+
+    SetupWikiInteractions()
+
     let swipeStartX = 0
     if (modalViewport) {
         modalViewport.addEventListener("pointerdown", function(e) {
@@ -6004,6 +7422,12 @@ function Init() {
     }
 
     window.addEventListener("keydown", function(e) {
+        if (MutationModalState.isOpen) {
+            if (e.key === "Escape") {
+                CloseMutationModal()
+            }
+            return
+        }
         if (TagModalState.isOpen) {
             if (e.key === "Escape") {
                 CloseTagModal()
@@ -6030,6 +7454,8 @@ function Init() {
         UpdateTokenGeneration(delta)
     }, coreValues.tokens.drop.interval * 1000)
 
+    let autoRollIntervalMs = (coreValues.intervals && coreValues.intervals.autoRollCheckMs) ||
+        (((coreValues.roll && coreValues.roll.autoRoll && coreValues.roll.autoRoll.checkInterval) || 0.25) * 1000)
     setInterval(function() {
         EnsureRollerSlotsNormalized()
         for (let slotIndex = 0; slotIndex < PlayerData.maxRollerSlots; slotIndex++) {
@@ -6047,13 +7473,14 @@ function Init() {
                 }
             }
         }
-    }, ((coreValues.roll && coreValues.roll.autoRoll && coreValues.roll.autoRoll.checkInterval) || 0.25) * 1000)
+    }, autoRollIntervalMs)
 
+    let craftIntervalMs = (coreValues.intervals && coreValues.intervals.craftCheckMs) || 250
     setInterval(function() {
         if (PlayerData.activeCraft && PlayerData.activeView === "crafting") {
             RenderCrafting()
         }
-    }, 250)
+    }, craftIntervalMs)
 
     StartCooldownTicker()
 }

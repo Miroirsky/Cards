@@ -831,5 +831,22 @@ const coreValues = {
         moveThreshold: 12,
         slideDuration: 0.28,
     },
+    storage: {
+        key: "cards_game_save_v1",
+    },
+    audio: {
+        defaultVolume: 0.1,
+        sfxEnabled: true,
+    },
+    stage: {
+        legendaryShakeMs: 750,
+        rareShakeMs: 450,
+        particleDurationMs: 950,
+    },
+    intervals: {
+        autoRollCheckMs: 250,
+        craftCheckMs: 250,
+        cooldownTickMs: 100,
+    },
 }
 
