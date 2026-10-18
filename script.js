@@ -457,6 +457,8 @@ function GenerateCardMutations(baseCards, mutations) {
             image: cardData.image,
             tags: baseTags,
             effects: baseEffects,
+            designer: cardData.designer,
+            rollable: cardData.rollable !== undefined ? cardData.rollable : true,
             baseName: cardData.name,
             baseRarity: effectiveBaseRarity,
             baseIndex: baseIdx,
@@ -476,6 +478,8 @@ function GenerateCardMutations(baseCards, mutations) {
                 image: baseCard.image,
                 tags: baseTags ? baseTags.slice() : undefined,
                 effects: baseEffects ? baseEffects.slice() : undefined,
+                designer: baseCard.designer,
+                rollable: baseCard.rollable,
                 baseName: baseCard.name,
                 baseRarity: effectiveBaseRarity,
                 baseIndex: baseIdx,
@@ -1250,7 +1254,7 @@ function Roll(list, luck, maxCards) {
     let rolledCards = []
 
     for (let [i, cardData] of pairs(targetList)) {
-        if (!cardData || cardData.name === "Void" || cardData.rarity <= 0) continue
+        if (!cardData || cardData.name === "Void" || cardData.rarity <= 0 || cardData.rollable === false) continue
 
         let chance = cardData.rarity
         chance /= effectiveLuck
@@ -1506,11 +1510,20 @@ const IMAGE_PATH_ALIASES = {
     "Assets/Cards/Lava.png": "Assets/Cards/AI/Lava.png",
     "Assets/Cards/Poke Balls.png": "Assets/Cards/Poke Ball.png",
     "Assets/Cards/Ice Spikes.png": "Assets/Cards/Ice Spikes.PNG",
+    "Assets/Cards/Thunder.png": "Assets/Cards/Thunder.PNG",
+    "Assets/Cards/Star Platnium.png": "Assets/Cards/Star Platinium.png",
+    "Assets/Cards/Magma.png": "Assets/Cards/AI/Lava.png",
+    "Assets/Cards/AI/Magma.png": "Assets/Cards/AI/Lava.png",
+    "Assets/Cards/Neptune.png": "Assets/Cards/AI/Uranus.png",
+    "Assets/Cards/AI/Neptune.png": "Assets/Cards/AI/Uranus.png",
 }
 
 function FormatImagePath(path) {
     if (!path) return ""
     let normalized = path.replace(/\\/g, "/")
+    if (normalized.startsWith("Cards-Icons/")) {
+        normalized = "Assets/Cards/" + normalized.substring("Cards-Icons/".length)
+    }
     return IMAGE_PATH_ALIASES[normalized] || normalized
 }
 
@@ -3791,6 +3804,15 @@ function PopulateModalCard(cardData, index, total) {
     modalQuantity.textContent = FormatNumber(entry.count)
     modalDate.textContent = FormatDate(entry.firstObtained)
     modalBadge.textContent = (index + 1) + " / " + total
+
+    let modalDesigner = document.getElementById("modal-card-designer")
+    let modalDesignerItem = document.getElementById("modal-designer-item")
+    if (modalDesigner) {
+        modalDesigner.textContent = cardData.designer || "-"
+    }
+    if (modalDesignerItem) {
+        modalDesignerItem.style.display = cardData.designer ? "" : "none"
+    }
 
     RenderCardTagsInto(modalMutationTag, cardData, "front")
     RenderCardTagsInto(modalCardTags, cardData, "back")
