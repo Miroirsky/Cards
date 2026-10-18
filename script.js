@@ -2135,6 +2135,8 @@ function SwitchView(viewName) {
         RenderPressMenu()
     } else if (viewName === "shop") {
         RenderShop()
+    } else if (viewName === "crafting") {
+        RenderCrafting()
     }
 
     if (showRollPanel) {
@@ -2609,6 +2611,307 @@ function RenderShop() {
 
         gridEl.appendChild(autoCard)
     }
+}
+
+function FormatCraftCountdown(totalSeconds) {
+    let s = math.max(0, math.floor(totalSeconds))
+    let m = math.floor(s / 60)
+    let remS = s % 60
+    return (m < 10 ? "0" + m : m) + ":" + (remS < 10 ? "0" + remS : remS)
+}
+
+function FormatCraftTime(totalSeconds) {
+    let s = Number(totalSeconds) || 60
+    if (s === 60) return "1 min (60s)"
+    if (s < 60) return s + "s"
+    let m = math.floor(s / 60)
+    let remS = s % 60
+    return m + "m" + (remS > 0 ? " " + remS + "s" : "")
+}
+
+function GetCraftingRecipes() {
+    if (coreValues.crafting && Array.isArray(coreValues.crafting.recipes)) {
+        return coreValues.crafting.recipes
+    }
+    if (typeof CraftingRecipes !== "undefined" && Array.isArray(CraftingRecipes)) {
+        return CraftingRecipes
+    }
+    return []
+}
+
+function RenderCrafting() {
+    let workbenchContent = document.getElementById("crafting-bench-content")
+    let statusPill = document.getElementById("crafting-status-pill")
+    let recipesGrid = document.getElementById("crafting-recipes-grid")
+    let recipeCountBadge = document.getElementById("recipe-count-badge")
+
+    let recipes = GetCraftingRecipes()
+    if (recipeCountBadge) {
+        recipeCountBadge.textContent = recipes.length + (recipes.length === 1 ? " Recipe" : " Recipes")
+    }
+
+    let activeCraft = PlayerData.activeCraft
+
+    if (statusPill) {
+        if (!activeCraft) {
+            statusPill.className = "crafting-status-pill idle"
+            statusPill.textContent = "Idle"
+        } else {
+            let isReady = Date.now() >= activeCraft.endTime
+            if (isReady) {
+                statusPill.className = "crafting-status-pill ready"
+                statusPill.textContent = "Ready to Claim! ✨"
+            } else {
+                statusPill.className = "crafting-status-pill active"
+                statusPill.textContent = "Crafting in Progress ⚙️"
+            }
+        }
+    }
+
+    if (workbenchContent) {
+        if (!activeCraft) {
+            workbenchContent.innerHTML = `
+                <div class="workbench-idle-state">
+                    <div class="workbench-idle-icon">🔨</div>
+                    <div class="workbench-idle-text">
+                        <h4>Workbench is Idle</h4>
+                        <p>Select a recipe blueprint below to begin crafting. Only 1 active craft is permitted at a time.</p>
+                    </div>
+                </div>
+            `
+        } else {
+            let totalDuration = activeCraft.duration || 60
+            let remainingMs = math.max(0, activeCraft.endTime - Date.now())
+            let remainingSec = math.ceil(remainingMs / 1000)
+            let progressPct = math.min(100, math.max(0, ((totalDuration - (remainingMs / 1000)) / totalDuration) * 100))
+            let isReady = remainingMs <= 0
+
+            workbenchContent.innerHTML = `
+                <div class="active-craft-card ${isReady ? 'ready' : 'in-progress'}">
+                    <div class="active-craft-top">
+                        <div class="active-craft-icon">${activeCraft.icon || "🎲"}</div>
+                        <div class="active-craft-details">
+                            <div class="active-craft-title">${activeCraft.name}</div>
+                            <div class="active-craft-meta">
+                                ${isReady
+                                    ? '<span class="craft-ready-tag">✨ Crafting Complete! Ready to Claim</span>'
+                                    : `<span class="craft-time-tag">⏱️ ${FormatCraftCountdown(remainingSec)} remaining</span>`
+                                }
+                            </div>
+                        </div>
+                        <div class="active-craft-actions">
+                            ${isReady
+                                ? `<button type="button" id="craft-claim-btn" class="craft-claim-btn">
+                                    ✨ Claim ${activeCraft.name}!
+                                </button>`
+                                : `<button type="button" id="craft-refund-btn" class="craft-refund-btn" title="Cancel crafting and return all materials">
+                                    ↩️ Refund &amp; Cancel
+                                </button>`
+                            }
+                        </div>
+                    </div>
+                    <div class="craft-progress-track">
+                        <div class="craft-progress-fill" style="width: ${isReady ? 100 : progressPct}%"></div>
+                    </div>
+                    <div class="active-craft-materials">
+                        <span class="active-materials-label">Committed Materials:</span>
+                        <div class="active-materials-pills">
+                            ${activeCraft.materials.map(m => `
+                                <span class="committed-mat-pill">🃏 ${m.amount}× ${m.cardName}</span>
+                            `).join("")}
+                        </div>
+                    </div>
+                </div>
+            `
+
+            let refundBtn = workbenchContent.querySelector("#craft-refund-btn")
+            if (refundBtn) {
+                refundBtn.addEventListener("click", HandleRefundCraft)
+            }
+            let claimBtn = workbenchContent.querySelector("#craft-claim-btn")
+            if (claimBtn) {
+                claimBtn.addEventListener("click", HandleClaimCraft)
+            }
+        }
+    }
+
+    if (recipesGrid) {
+        recipesGrid.innerHTML = ""
+        let isBusy = Boolean(activeCraft)
+
+        for (let [i, recipe] of pairs(recipes)) {
+            let canCraft = true
+            let materialsHtml = recipe.materials.map(function(m) {
+                let owned = (PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0
+                let hasEnough = owned >= m.amount
+                if (!hasEnough) {
+                    canCraft = false
+                }
+                return `
+                    <div class="recipe-mat-item ${hasEnough ? 'satisfied' : 'missing'}">
+                        <span class="recipe-mat-check">${hasEnough ? '✓' : '✗'}</span>
+                        <span class="recipe-mat-name">${m.cardName}</span>
+                        <span class="recipe-mat-count">${FormatNumber(owned)} / ${FormatNumber(m.amount)}</span>
+                    </div>
+                `
+            }).join("")
+
+            let buttonText = ""
+            let buttonDisabled = false
+            let buttonClass = "recipe-craft-btn"
+
+            if (isBusy) {
+                buttonText = "⏳ Workbench Busy"
+                buttonDisabled = true
+            } else if (!canCraft) {
+                buttonText = "⚠️ Missing Materials"
+                buttonDisabled = true
+            } else {
+                buttonText = "🔨 Craft " + recipe.name + " (" + FormatCraftTime(recipe.craftTime) + ")"
+                buttonDisabled = false
+                buttonClass += " ready-to-craft"
+            }
+
+            let cardEl = document.createElement("div")
+            cardEl.className = "crafting-recipe-card" + (canCraft && !isBusy ? " can-craft" : "")
+            cardEl.innerHTML = `
+                <div class="recipe-card-header">
+                    <div class="recipe-card-icon">${recipe.icon || "🎲"}</div>
+                    <div class="recipe-card-title-wrap">
+                        <h4 class="recipe-card-title">${recipe.name}</h4>
+                        <span class="recipe-card-time">⏱️ Craft Time: ${FormatCraftTime(recipe.craftTime)}</span>
+                    </div>
+                </div>
+                <p class="recipe-card-desc">${recipe.description || ""}</p>
+                <div class="recipe-materials-box">
+                    <span class="recipe-materials-title">Required Materials:</span>
+                    <div class="recipe-materials-list">
+                        ${materialsHtml}
+                    </div>
+                </div>
+                <div class="recipe-card-actions">
+                    <button type="button" class="${buttonClass}" data-recipe-id="${recipe.id}" ${buttonDisabled ? "disabled" : ""}>
+                        ${buttonText}
+                    </button>
+                </div>
+            `
+
+            let craftBtn = cardEl.querySelector(".recipe-craft-btn")
+            if (craftBtn && !buttonDisabled) {
+                craftBtn.addEventListener("click", function() {
+                    HandleStartCraft(recipe.id)
+                })
+            }
+
+            recipesGrid.appendChild(cardEl)
+        }
+    }
+}
+
+function HandleStartCraft(recipeId) {
+    if (PlayerData.activeCraft) {
+        SetRollStatusMessage("⚠️ Workbench is already crafting! Only 1 active craft is allowed at a time.", true)
+        return
+    }
+
+    let recipes = GetCraftingRecipes()
+    let recipe = null
+    for (let [i, r] of pairs(recipes)) {
+        if (r.id === recipeId) {
+            recipe = r
+            break
+        }
+    }
+    if (!recipe) return
+
+    for (let [i, m] of pairs(recipe.materials)) {
+        let owned = (PlayerData.inventory[m.cardName] && PlayerData.inventory[m.cardName].count) || 0
+        if (owned < m.amount) {
+            SetRollStatusMessage("⚠️ Not enough " + m.cardName + "! Need " + (m.amount - owned) + " more.", true)
+            return
+        }
+    }
+
+    for (let [i, m] of pairs(recipe.materials)) {
+        PlayerData.inventory[m.cardName].count -= m.amount
+        if (PlayerData.inventory[m.cardName].count <= 0) {
+            delete PlayerData.inventory[m.cardName]
+        }
+    }
+
+    let craftDuration = Number(recipe.craftTime) || 60
+    PlayerData.activeCraft = {
+        recipeId: recipe.id,
+        name: recipe.name,
+        resultItemId: recipe.resultItemId,
+        resultType: recipe.resultType || "roller",
+        icon: recipe.icon || "🎲",
+        duration: craftDuration,
+        startTime: Date.now(),
+        endTime: Date.now() + (craftDuration * 1000),
+        materials: recipe.materials.map(function(m) {
+            return { cardName: m.cardName, amount: m.amount }
+        }),
+    }
+
+    PlayGameSound("pop")
+    SaveGame()
+    UpdateUI()
+}
+
+function HandleRefundCraft() {
+    let activeCraft = PlayerData.activeCraft
+    if (!activeCraft) return
+
+    for (let [i, m] of pairs(activeCraft.materials)) {
+        if (PlayerData.inventory[m.cardName]) {
+            PlayerData.inventory[m.cardName].count += m.amount
+        } else {
+            let baseCard = null
+            for (let [k, c] of pairs(CardsList)) {
+                if (c.name === m.cardName) {
+                    baseCard = c
+                    break
+                }
+            }
+            if (baseCard) {
+                PlayerData.inventory[m.cardName] = {
+                    cardData: baseCard,
+                    count: m.amount,
+                    firstObtained: new Date(),
+                }
+            }
+        }
+    }
+
+    PlayerData.activeCraft = null
+    PlayGameSound("pop")
+    SaveGame()
+    UpdateUI()
+}
+
+function HandleClaimCraft() {
+    let activeCraft = PlayerData.activeCraft
+    if (!activeCraft) return
+    if (Date.now() < activeCraft.endTime) {
+        return
+    }
+
+    let newItem = CreateItemInstance(activeCraft.resultItemId)
+    if (newItem) {
+        table.insert(PlayerData.itemsInventory, newItem)
+    }
+
+    PlayerData.activeCraft = null
+    PlayGameSound("rare")
+
+    let benchContent = document.getElementById("crafting-bench-content")
+    if (benchContent) {
+        SpawnParticleBurst(benchContent, "rare")
+    }
+
+    SaveGame()
+    UpdateUI()
 }
 
 function PopulateModalCard(cardData, index, total) {
@@ -3898,6 +4201,9 @@ function UpdateUI() {
     if (PlayerData.activeView === "shop") {
         RenderShop()
     }
+    if (PlayerData.activeView === "crafting") {
+        RenderCrafting()
+    }
     if (isCards) {
         RenderInventory()
     }
@@ -3914,6 +4220,7 @@ function ResetGameProgress() {
     PlayerData.xp = 0
     PlayerData.totalRolls = 0
     PlayerData.autoRollEnabled = false
+    PlayerData.activeCraft = null
     PlayerData.inventoryTab = "cards"
     PlayerData.pressPercent = (coreValues.presses && coreValues.presses.defaultPercentage) || 100
     PlayerData.pressKeepOne = Boolean(coreValues.presses && coreValues.presses.defaultKeepOne)
@@ -4302,6 +4609,12 @@ function Init() {
             }
         }
     }, ((coreValues.roll && coreValues.roll.autoRoll && coreValues.roll.autoRoll.checkInterval) || 0.25) * 1000)
+
+    setInterval(function() {
+        if (PlayerData.activeCraft && PlayerData.activeView === "crafting") {
+            RenderCrafting()
+        }
+    }, 250)
 }
 
 window.addEventListener("DOMContentLoaded", Init)
