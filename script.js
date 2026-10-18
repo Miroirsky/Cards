@@ -2,6 +2,7 @@ const math = {
     min: Math.min,
     max: Math.max,
     floor: Math.floor,
+    ceil: Math.ceil,
     sqrt: Math.sqrt,
     pow: Math.pow,
     random: function(min, max) {
@@ -1718,6 +1719,222 @@ function PressAllEligibleCards(triggerEl) {
     UpdateUI()
 }
 
+// ===================== Compressor / Decompressor =====================
+// Inspired by rng.js: cards climb (or descend) the mutation ladder one tier at a time.
+// Tier 0 = Normal card, tier N = MutationsList[N - 1].
+
+function GetCompressorConfig() {
+    let cfg = coreValues.compressor || {}
+    return {
+        unlockLevel: cfg.unlockLevel !== undefined ? cfg.unlockLevel : 3,
+        compressFactor: cfg.compressFactor !== undefined ? cfg.compressFactor : 2.5,
+        decompressFactor: cfg.decompressFactor !== undefined ? cfg.decompressFactor : 0.5,
+        minCompressCost: cfg.minCompressCost !== undefined ? cfg.minCompressCost : 3,
+    }
+}
+
+function IsCompressorUnlocked() {
+    return PlayerData.level >= GetCompressorConfig().unlockLevel
+}
+
+function GetCardDataByName(cardName) {
+    for (let [i, c] of pairs(CardsList)) {
+        if (c.name === cardName) return c
+    }
+    return null
+}
+
+function GetCardTierIndex(cardData) {
+    if (!cardData) return 0
+    if (typeof cardData.mutationIndex === "number") return cardData.mutationIndex
+    for (let [i, mutationData] of pairs(MutationsList)) {
+        if (cardData.name.endsWith("-" + mutationData.name)) return Number(i) + 1
+    }
+    return 0
+}
+
+function GetCardBaseName(cardData) {
+    if (cardData.baseName) return cardData.baseName
+    let tier = GetCardTierIndex(cardData)
+    if (tier <= 0) return cardData.name
+    let suffix = "-" + MutationsList[tier - 1].name
+    return cardData.name.slice(0, cardData.name.length - suffix.length)
+}
+
+function GetTierLabel(tierIdx) {
+    if (tierIdx <= 0) return "Normal"
+    let m = MutationsList[tierIdx - 1]
+    return m ? m.name : "Normal"
+}
+
+function GetCardAtTier(baseName, tierIdx) {
+    if (tierIdx < 0 || tierIdx > MutationsList.length) return null
+    let name = tierIdx === 0 ? baseName : baseName + "-" + MutationsList[tierIdx - 1].name
+    return GetCardDataByName(name)
+}
+
+// Step info for going from tier `lowerTier` to `lowerTier + 1`
+function GetMutationStepInfo(lowerTier) {
+    if (lowerTier < 0 || lowerTier >= MutationsList.length) return null
+    let cfg = GetCompressorConfig()
+    let upper = MutationsList[lowerTier]
+    let lowerMult = lowerTier === 0 ? 1 : MutationsList[lowerTier - 1].multiplier
+    let ratio = upper.multiplier / lowerMult
+    let compressCost = upper.compressCost !== undefined
+        ? upper.compressCost
+        : math.max(cfg.minCompressCost, math.ceil(ratio * cfg.compressFactor - 1e-9))
+    let decompressYield = upper.decompressYield !== undefined
+        ? upper.decompressYield
+        : math.max(1, math.floor(ratio * cfg.decompressFactor + 1e-9))
+    return {
+        lowerTier: lowerTier,
+        upperTier: lowerTier + 1,
+        ratio: ratio,
+        compressCost: compressCost,
+        decompressYield: decompressYield,
+    }
+}
+
+function GetCompressTarget(cardData) {
+    if (!cardData || cardData.rarity <= 0) return null
+    let tier = GetCardTierIndex(cardData)
+    let step = GetMutationStepInfo(tier)
+    if (!step) return null
+    let result = GetCardAtTier(GetCardBaseName(cardData), tier + 1)
+    if (!result) return null
+    return { source: cardData, result: result, cost: step.compressCost, step: step }
+}
+
+function GetDecompressTarget(cardData) {
+    if (!cardData || cardData.rarity <= 0) return null
+    let tier = GetCardTierIndex(cardData)
+    if (tier <= 0) return null
+    let step = GetMutationStepInfo(tier - 1)
+    if (!step) return null
+    let result = GetCardAtTier(GetCardBaseName(cardData), tier - 1)
+    if (!result) return null
+    return { source: cardData, result: result, yield: step.decompressYield, step: step }
+}
+
+function GetCompressorUsableCount(cardName) {
+    let entry = PlayerData.inventory[cardName]
+    let count = entry ? math.max(0, math.floor(entry.count || 0)) : 0
+    return PlayerData.pressKeepOne ? math.max(0, count - 1) : count
+}
+
+function AddCardAmountToInventory(cardData, amount) {
+    if (!cardData || amount <= 0) return
+    if (!PlayerData.inventory[cardData.name]) {
+        PlayerData.inventory[cardData.name] = {
+            cardData: cardData,
+            count: 0,
+            firstObtained: new Date(),
+        }
+    }
+    PlayerData.inventory[cardData.name].count += amount
+}
+
+function RemoveCardAmountFromInventory(cardName, amount) {
+    let entry = PlayerData.inventory[cardName]
+    if (!entry) return
+    entry.count -= amount
+    if (entry.count <= 0) {
+        delete PlayerData.inventory[cardName]
+    }
+}
+
+// Returns number of result cards produced (0 if nothing happened)
+function ApplyCompress(cardData, times) {
+    let target = GetCompressTarget(cardData)
+    if (!target) return 0
+    let maxTimes = math.floor(GetCompressorUsableCount(cardData.name) / target.cost)
+    let doTimes = math.min(maxTimes, times === "max" ? maxTimes : math.max(0, math.floor(times)))
+    if (doTimes <= 0) return 0
+    RemoveCardAmountFromInventory(cardData.name, doTimes * target.cost)
+    AddCardAmountToInventory(target.result, doTimes)
+    return doTimes
+}
+
+function ApplyDecompress(cardData, times) {
+    let target = GetDecompressTarget(cardData)
+    if (!target) return 0
+    let maxTimes = GetCompressorUsableCount(cardData.name)
+    let doTimes = math.min(maxTimes, times === "max" ? maxTimes : math.max(0, math.floor(times)))
+    if (doTimes <= 0) return 0
+    RemoveCardAmountFromInventory(cardData.name, doTimes)
+    AddCardAmountToInventory(target.result, doTimes * target.yield)
+    return doTimes * target.yield
+}
+
+function FinishCompressorAction(triggerEl, message) {
+    PlayGameSound("rare")
+    if (triggerEl) SpawnParticleBurst(triggerEl, "rare")
+    if (message) SetRollStatusMessage(message, false)
+
+    if (ModalState.isOpen) {
+        let remaining = GetDiscoveredCards()
+        if (remaining.length === 0) {
+            CloseCardModal()
+        } else {
+            ModalState.currentIndex = math.min(ModalState.currentIndex, remaining.length - 1)
+            PopulateModalCard(remaining[ModalState.currentIndex], ModalState.currentIndex, remaining.length)
+        }
+    }
+
+    SaveGame()
+    UpdateUI()
+}
+
+function CompressCard(cardData, times, triggerEl) {
+    if (!IsCompressorUnlocked()) return
+    let target = GetCompressTarget(cardData)
+    let produced = ApplyCompress(cardData, times)
+    if (produced <= 0 || !target) return
+    FinishCompressorAction(triggerEl, `📦 Compressed ${FormatNumber(produced * target.cost)}× ${cardData.name} ➔ ${FormatNumber(produced)}× ${target.result.name}!`)
+}
+
+function DecompressCard(cardData, times, triggerEl) {
+    if (!IsCompressorUnlocked()) return
+    let target = GetDecompressTarget(cardData)
+    let produced = ApplyDecompress(cardData, times)
+    if (produced <= 0 || !target) return
+    FinishCompressorAction(triggerEl, `🔨 Decompressed ${FormatNumber(produced / target.yield)}× ${cardData.name} ➔ ${FormatNumber(produced)}× ${target.result.name}!`)
+}
+
+// Bulk actions are single-level: plan from a snapshot first so results don't cascade further up/down.
+function CompressAllEligible(triggerEl) {
+    if (!IsCompressorUnlocked()) return
+    let plan = []
+    for (let [i, cardData] of pairs(GetDiscoveredCards())) {
+        let target = GetCompressTarget(cardData)
+        if (!target) continue
+        let times = math.floor(GetCompressorUsableCount(cardData.name) / target.cost)
+        if (times > 0) table.insert(plan, { cardData: cardData, times: times })
+    }
+    let totalProduced = 0
+    for (let [i, p] of pairs(plan)) {
+        totalProduced += ApplyCompress(p.cardData, p.times)
+    }
+    if (totalProduced <= 0) return
+    FinishCompressorAction(triggerEl, `📦 Compress All complete! Produced ${FormatNumber(totalProduced)} higher-tier card${totalProduced === 1 ? "" : "s"}.`)
+}
+
+function DecompressAllEligible(triggerEl) {
+    if (!IsCompressorUnlocked()) return
+    let plan = []
+    for (let [i, cardData] of pairs(GetDiscoveredCards())) {
+        if (!GetDecompressTarget(cardData)) continue
+        let times = GetCompressorUsableCount(cardData.name)
+        if (times > 0) table.insert(plan, { cardData: cardData, times: times })
+    }
+    let totalProduced = 0
+    for (let [i, p] of pairs(plan)) {
+        totalProduced += ApplyDecompress(p.cardData, p.times)
+    }
+    if (totalProduced <= 0) return
+    FinishCompressorAction(triggerEl, `🔨 Decompress All complete! Produced ${FormatNumber(totalProduced)} lower-tier card${totalProduced === 1 ? "" : "s"}.`)
+}
+
 function UpdateTokenGeneration(delta) {
     let effectiveDropRate = GetEffectiveTokenDropRate()
     let effectiveCapacity = GetEffectiveTokenCapacity()
@@ -2798,6 +3015,193 @@ function RenderResignPress(contentContainer, activePress) {
     contentContainer.appendChild(pressCard)
 }
 
+function BuildMutationPillHtml(cardData) {
+    let tier = GetCardTierIndex(cardData)
+    if (tier <= 0) {
+        return `<span class="compressor-tier-pill compressor-tier-normal">Normal</span>`
+    }
+    let m = MutationsList[tier - 1]
+    let style = `background: ${m.background}; color: ${m.textColor || "#fff"}; border-color: ${m.borderColor || "transparent"}; box-shadow: 0 0 10px ${m.glowColor || "transparent"};`
+    return `<span class="compressor-tier-pill${m.animated ? " animated" : ""}" style="${style}">${m.icon || ""} ${m.name}</span>`
+}
+
+function RenderCompressorPress(contentContainer, activePress, mode) {
+    let isCompress = mode === "compress"
+    let cfg = GetCompressorConfig()
+
+    let header = document.createElement("div")
+    header.className = "compressor-header"
+    header.innerHTML = `
+        <div class="compressor-header-icon">${activePress.icon || (isCompress ? "📦" : "🔨")}</div>
+        <div class="compressor-header-text">
+            <h3>${activePress.name}</h3>
+            <p>${activePress.description}</p>
+        </div>
+    `
+    contentContainer.appendChild(header)
+
+    if (!IsCompressorUnlocked()) {
+        let lockedBox = document.createElement("div")
+        lockedBox.className = "press-coming-soon"
+        lockedBox.innerHTML = `
+            <div class="soon-badge">🔒 Locked</div>
+            <h3>Reach Level ${cfg.unlockLevel}</h3>
+            <p>The ${activePress.name} unlocks at level ${cfg.unlockLevel}. You are currently level ${PlayerData.level}.</p>
+        `
+        contentContainer.appendChild(lockedBox)
+        return
+    }
+
+    // Tier ladder: shows every conversion rate along the mutation chain
+    let ladder = document.createElement("div")
+    ladder.className = "compressor-ladder"
+    let ladderHtml = `<span class="compressor-ladder-title">${isCompress ? "Compression Rates" : "Decompression Rates"}:</span><div class="compressor-ladder-steps">`
+    for (let t = 0; t < MutationsList.length; t++) {
+        let step = GetMutationStepInfo(t)
+        if (!step) continue
+        let rate = isCompress
+            ? `${FormatNumber(step.compressCost)} ${GetTierLabel(t)} ➔ 1 ${GetTierLabel(t + 1)}`
+            : `1 ${GetTierLabel(t + 1)} ➔ ${FormatNumber(step.decompressYield)} ${GetTierLabel(t)}`
+        ladderHtml += `<span class="compressor-ladder-step">${rate}</span>`
+    }
+    ladderHtml += `</div>`
+    ladder.innerHTML = ladderHtml
+    contentContainer.appendChild(ladder)
+
+    // Gather eligible entries
+    let entries = []
+    let totalOps = 0
+    let totalProduced = 0
+    for (let [i, cardData] of pairs(GetDiscoveredCards())) {
+        let usable = GetCompressorUsableCount(cardData.name)
+        if (isCompress) {
+            let target = GetCompressTarget(cardData)
+            if (!target) continue
+            let times = math.floor(usable / target.cost)
+            if (times <= 0) continue
+            entries.push({ cardData: cardData, target: target, times: times, produced: times })
+            totalOps += times * target.cost
+            totalProduced += times
+        } else {
+            let target = GetDecompressTarget(cardData)
+            if (!target || usable <= 0) continue
+            entries.push({ cardData: cardData, target: target, times: usable, produced: usable * target.yield })
+            totalOps += usable
+            totalProduced += usable * target.yield
+        }
+    }
+
+    // Controls bar
+    let controlsBar = document.createElement("div")
+    controlsBar.className = "press-controls-bar"
+
+    let optionsWrap = document.createElement("div")
+    optionsWrap.className = "press-options-wrap"
+
+    let keepOneBtn = document.createElement("button")
+    keepOneBtn.type = "button"
+    keepOneBtn.className = "press-keep1-btn" + (PlayerData.pressKeepOne ? " active" : "")
+    keepOneBtn.textContent = "🛡️ Keep 1: " + (PlayerData.pressKeepOne ? "ON" : "OFF")
+    keepOneBtn.addEventListener("click", function() {
+        PlayerData.pressKeepOne = !PlayerData.pressKeepOne
+        PlayGameSound("pop")
+        SaveGame()
+        RenderPressMenu()
+    })
+    optionsWrap.appendChild(keepOneBtn)
+
+    let allBtn = document.createElement("button")
+    allBtn.type = "button"
+    allBtn.className = "press-all-master-btn compressor-all-btn" + (isCompress ? "" : " decompress")
+    allBtn.disabled = entries.length === 0
+    if (isCompress) {
+        allBtn.textContent = entries.length > 0
+            ? `📦 Compress All (${FormatNumber(totalOps)} cards ➔ ${FormatNumber(totalProduced)})`
+            : "📦 Compress All (0 Eligible)"
+    } else {
+        allBtn.textContent = entries.length > 0
+            ? `🔨 Decompress All (${FormatNumber(totalOps)} cards ➔ ${FormatNumber(totalProduced)})`
+            : "🔨 Decompress All (0 Eligible)"
+    }
+    allBtn.addEventListener("click", function() {
+        if (isCompress) CompressAllEligible(allBtn)
+        else DecompressAllEligible(allBtn)
+    })
+
+    controlsBar.appendChild(optionsWrap)
+    controlsBar.appendChild(allBtn)
+    contentContainer.appendChild(controlsBar)
+
+    if (entries.length === 0) {
+        let emptyEl = document.createElement("div")
+        emptyEl.className = "press-empty"
+        emptyEl.textContent = isCompress
+            ? "No cards available to compress right now. Collect more duplicates of a card to compress them into a higher mutation!"
+            : "No mutated cards available to decompress right now."
+        contentContainer.appendChild(emptyEl)
+        return
+    }
+
+    let listEl = document.createElement("div")
+    listEl.className = "press-card-list"
+
+    for (let [i, e] of pairs(entries)) {
+        let cardData = e.cardData
+        let target = e.target
+        let ownedCount = (PlayerData.inventory[cardData.name] && PlayerData.inventory[cardData.name].count) || 0
+        let resultOwned = (PlayerData.inventory[target.result.name] && PlayerData.inventory[target.result.name].count) || 0
+        let formula = isCompress
+            ? `${FormatNumber(target.cost)} ➔ 1`
+            : `1 ➔ ${FormatNumber(target.yield)}`
+        let oneLabel = isCompress
+            ? `Compress ${FormatNumber(target.cost)} ➔ 1`
+            : `Decompress 1 ➔ ${FormatNumber(target.yield)}`
+        let maxLabel = isCompress
+            ? `Max (×${FormatNumber(e.times)} ➔ ${FormatNumber(e.produced)})`
+            : `Max (×${FormatNumber(e.times)} ➔ ${FormatNumber(e.produced)})`
+
+        let row = document.createElement("div")
+        row.className = "press-card-row compressor-row"
+        row.innerHTML = `
+            <div class="press-card-left">
+                <img src="${FormatImagePath(cardData.image)}" alt="${cardData.name}" class="press-card-thumb" draggable="false">
+                <div class="press-card-info">
+                    <h4>
+                        ${cardData.name}
+                        <span class="press-card-count">x${FormatNumber(ownedCount)}</span>
+                    </h4>
+                    <div class="compressor-transform">
+                        ${BuildMutationPillHtml(cardData)}
+                        <span class="compressor-formula">${formula}</span>
+                        ${BuildMutationPillHtml(target.result)}
+                        <span class="compressor-result-owned">(own ${FormatNumber(resultOwned)})</span>
+                    </div>
+                    <span class="press-card-yield">Rarity: ${FormatRarityText(cardData.rarity)} ➔ ${FormatRarityText(target.result.rarity)}</span>
+                </div>
+            </div>
+            <div class="press-card-actions">
+                <button class="press-sell-btn compressor-btn compress-one">${oneLabel}</button>
+                <button class="press-sell-btn compressor-btn compress-max" ${e.times > 1 ? "" : "disabled"}>${maxLabel}</button>
+            </div>
+        `
+
+        let oneBtn = row.querySelector(".compress-one")
+        oneBtn.addEventListener("click", function() {
+            if (isCompress) CompressCard(cardData, 1, oneBtn)
+            else DecompressCard(cardData, 1, oneBtn)
+        })
+        let maxBtn = row.querySelector(".compress-max")
+        maxBtn.addEventListener("click", function() {
+            if (isCompress) CompressCard(cardData, "max", maxBtn)
+            else DecompressCard(cardData, "max", maxBtn)
+        })
+
+        listEl.appendChild(row)
+    }
+
+    contentContainer.appendChild(listEl)
+}
+
 function RenderPressMenu() {
     let tabsContainer = document.getElementById("press-tabs")
     let contentContainer = document.getElementById("press-content")
@@ -2835,6 +3239,11 @@ function RenderPressMenu() {
 
     if (activePress.id === "resignPress") {
         RenderResignPress(contentContainer, activePress)
+        return
+    }
+
+    if (activePress.id === "compressor" || activePress.id === "decompressor") {
+        RenderCompressorPress(contentContainer, activePress, activePress.id === "compressor" ? "compress" : "decompress")
         return
     }
 

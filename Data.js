@@ -428,15 +428,15 @@ const PressesList = [
         id: "compressor",
         name: "Compressor",
         icon: "📦",
-        description: "Compress multiple common cards into higher-rarity variants.",
-        comingSoon: true,
+        description: "Compress multiple copies of a card into its next mutation tier (e.g. 25 Rainbow ➔ 1 Shiny).",
+        comingSoon: false,
     },
     {
         id: "decompressor",
         name: "Decompressor",
         icon: "🔨",
-        description: "Break down rare cards into multiple lower-rarity cards.",
-        comingSoon: true,
+        description: "Break a mutated card down into several copies of its previous mutation tier (e.g. 1 Shiny ➔ 5 Rainbow).",
+        comingSoon: false,
     },
 ]
 
@@ -804,6 +804,19 @@ const coreValues = {
         percentages: [10, 25, 50, 75, 100],
         defaultPercentage: 100,
         defaultKeepOne: false,
+    },
+    // Compressor / Decompressor (inspired by rng.js: 25 ➔ 1 compress, 1 ➔ 5 decompress)
+    // Each step follows the MutationsList order: Normal ➔ Bronze ➔ Silver ➔ ... ➔ Robotic.
+    // Costs scale with the multiplier jump between two tiers:
+    //   compressCost    = max(minCompressCost, ceil(stepRatio * compressFactor))
+    //   decompressYield = max(1, floor(stepRatio * decompressFactor))
+    // So a ×10 jump (Rainbow ➔ Shiny) costs 25 and decompresses into 5, exactly like rng.js.
+    // A mutation can override with `compressCost` / `decompressYield` fields.
+    compressor: {
+        unlockLevel: 3,
+        compressFactor: 2.5,
+        decompressFactor: 0.5,
+        minCompressCost: 3,
     },
     shop: {
         currency: "diamonds",

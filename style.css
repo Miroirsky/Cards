@@ -2269,6 +2269,149 @@ body:not(.no-bouncy) .press-card-row:hover {
     box-shadow: none;
 }
 
+/* Compressor / Decompressor */
+.compressor-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.compressor-header-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: var(--bg-panel-inner);
+    border: 2px solid var(--border-chunky);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.7rem;
+    flex-shrink: 0;
+}
+
+.compressor-header-text h3 {
+    font-family: "Fredoka", sans-serif;
+    font-size: 1.25rem;
+    margin-bottom: 2px;
+}
+
+.compressor-header-text p {
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+.compressor-ladder {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    background: var(--bg-panel-inner);
+    border: 2px dashed var(--border-chunky);
+    border-radius: 14px;
+}
+
+.compressor-ladder-title {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--text-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.compressor-ladder-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.compressor-ladder-step {
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-chunky);
+    background: var(--bg-panel);
+    white-space: nowrap;
+}
+
+.compressor-transform {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 3px 0 4px;
+}
+
+.compressor-tier-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+    background-size: 200% 200%;
+}
+
+.compressor-tier-pill.animated {
+    animation: compressorPillShift 3s linear infinite;
+}
+
+.compressor-tier-normal {
+    background: var(--bg-panel);
+    border-color: var(--border-chunky);
+    color: var(--text-main);
+}
+
+@keyframes compressorPillShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.compressor-formula {
+    font-family: "Fredoka", sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.compressor-result-owned {
+    font-size: 0.74rem;
+    color: var(--text-soft);
+    font-weight: 700;
+}
+
+.compressor-btn {
+    border-color: rgba(52, 152, 219, 0.55);
+    background: rgba(52, 152, 219, 0.16);
+    box-shadow: 0 4px 0 rgba(41, 128, 185, 0.4);
+}
+
+.compressor-btn:hover:not(:disabled) {
+    background: rgba(52, 152, 219, 0.32);
+}
+
+.compressor-all-btn.decompress {
+    background: linear-gradient(135deg, #16a085, #1abc9c);
+}
+
+@media (max-width: 720px) {
+    .compressor-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .compressor-row .press-card-actions {
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+}
+
 /* Settings View Panel */
 .settings-panel {
     display: flex;
