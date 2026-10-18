@@ -1039,7 +1039,7 @@ const CardTagResolvers = [
             id: "mutation-" + mutation.name.toLowerCase(),
             name: mutation.name,
             icon: mutation.icon,
-            suffix: mutation.multiplier + "×",
+            suffix: FormatNumber(mutation.multiplier) + "×",
             background: mutation.background,
             textColor: mutation.textColor,
             borderColor: mutation.borderColor,
@@ -1443,10 +1443,61 @@ function GetDiscoveredCards() {
 }
 
 function FormatNumber(value, decimals) {
+    if (value === undefined || value === null || value === "" || isNaN(Number(value))) {
+        return "0"
+    }
+    let num = Number(value)
+    if (num === 0) return "0"
+
+    let isNegative = num < 0
+    let absVal = Math.abs(num)
     let places = decimals !== undefined ? decimals : 2
-    let factor = math.pow(10, places)
-    let rounded = Math.round(value * factor) / factor
-    return rounded.toString()
+
+    if (absVal < 1000) {
+        let factor = Math.pow(10, places)
+        let rounded = Math.round(absVal * factor) / factor
+        return (isNegative ? "-" : "") + rounded.toString()
+    }
+
+    const suffixes = [
+        { threshold: 1e18, suffix: "Qi" },
+        { threshold: 1e15, suffix: "Qa" },
+        { threshold: 1e12, suffix: "T" },
+        { threshold: 1e9, suffix: "B" },
+        { threshold: 1e6, suffix: "M" },
+        { threshold: 1e3, suffix: "K" },
+    ]
+
+    for (let i = 0; i < suffixes.length; i++) {
+        let { threshold, suffix } = suffixes[i]
+        if (absVal >= threshold) {
+            let scaled = absVal / threshold
+            let decPlaces = places
+            if (scaled >= 100) {
+                decPlaces = Math.min(places, 1)
+            }
+            let factor = Math.pow(10, decPlaces)
+            let rounded = Math.round(scaled * factor) / factor
+
+            // Handle edge case where rounding pushes it up to next tier (e.g. 999.95K -> 1M)
+            if (rounded >= 1000 && i > 0) {
+                let nextSuffix = suffixes[i - 1].suffix
+                let nextScaled = rounded / 1000
+                let nextRounded = Math.round(nextScaled * 10) / 10
+                return (isNegative ? "-" : "") + nextRounded.toString() + nextSuffix
+            }
+
+            return (isNegative ? "-" : "") + rounded.toString() + suffix
+        }
+    }
+
+    let factor = Math.pow(10, places)
+    let rounded = Math.round(absVal * factor) / factor
+    return (isNegative ? "-" : "") + rounded.toString()
+}
+
+function FormatCompactNumber(value, decimals) {
+    return FormatNumber(value, decimals)
 }
 
 const IMAGE_PATH_ALIASES = {
@@ -2365,15 +2416,12 @@ function RenderRolledCards(rolledCardsInput, totalGainedXp) {
         let cardXp = GetCardXp(cardData)
         let mutation = GetCardMutation(cardData)
 
-        let rarityTier = "common"
-        if (cardData.rarity >= 1000 || (mutation && mutation.name !== "None")) {
-            rarityTier = "legendary"
-        } else if (cardData.rarity >= 200) {
-            rarityTier = "epic"
-        } else if (cardData.rarity >= 50) {
-            rarityTier = "rare"
-        } else if (cardData.rarity >= 10) {
-            rarityTier = "uncommon"
+        let tierObj = GetCardRarityTier(cardData.rarity)
+        let rarityTier = tierObj ? tierObj.id : "common"
+        if (mutation && mutation.name !== "None") {
+            if (!tierObj || tierObj.id === "common" || tierObj.id === "uncommon" || tierObj.id === "rare") {
+                rarityTier = "legendary"
+            }
         }
 
         let itemEl = document.createElement("div")
@@ -2549,7 +2597,7 @@ function RenderSidebarMutationsLegend() {
         item.innerHTML = `
             <span class="legend-swatch mutation-${mutationData.name.toLowerCase()}" ${swatchStyle}></span>
             <span class="legend-name">${mutationData.name}</span>
-            <span class="legend-mult">${mutationData.multiplier}×</span>
+            <span class="legend-mult">${FormatNumber(mutationData.multiplier)}×</span>
         `
         legendContainer.appendChild(item)
     }
@@ -2713,8 +2761,8 @@ function RenderResignPress(contentContainer, activePress) {
                 </button>
                 ${maxConvertPossible > 1 ? `
                     <button type="button" id="press-convert-max-btn" class="resign-action-btn max-btn can-afford">
-                        <span>🌟 Press All (${maxConvertPossible} Resigns)</span>
-                        <small>Yields +${maxConvertPossible} Barks for ${FormatNumber(maxConvertPossible * diamondsPerBark)} 💎</small>
+                        <span>🌟 Press All (${FormatNumber(maxConvertPossible)} Resigns)</span>
+                        <small>Yields +${FormatNumber(maxConvertPossible)} Barks for ${FormatNumber(maxConvertPossible * diamondsPerBark)} 💎</small>
                     </button>
                 ` : ''}
             </div>
@@ -2856,7 +2904,7 @@ function RenderPressMenu() {
     pressAllBtn.className = "press-all-master-btn"
     pressAllBtn.disabled = totalEligibleCards <= 0
     if (totalEligibleCards > 0) {
-        pressAllBtn.textContent = "💎 Press All (" + PlayerData.pressPercent + "% • x" + totalEligibleCards + " • +" + FormatNumber(totalEligibleDiamonds) + ")"
+        pressAllBtn.textContent = "💎 Press All (" + PlayerData.pressPercent + "% • x" + FormatNumber(totalEligibleCards) + " • +" + FormatNumber(totalEligibleDiamonds) + ")"
     } else {
         pressAllBtn.textContent = "💎 Press All (" + PlayerData.pressPercent + "% • 0 Eligible)"
     }
@@ -2893,14 +2941,14 @@ function RenderPressMenu() {
                 <div class="press-card-info">
                     <h4>
                         ${cardData.name}
-                        <span class="press-card-count">x${entry.count}</span>
+                        <span class="press-card-count">x${FormatNumber(entry.count)}</span>
                     </h4>
                     <span class="press-card-yield">Rarity: ${FormatRarityText(cardData.rarity)} • +${FormatNumber(diamondValue)} Diamonds each</span>
                 </div>
             </div>
             <div class="press-card-actions">
                 <button class="press-sell-btn sell-one" ${canPressOne ? "" : "disabled"}>Press 1 (+${FormatNumber(diamondValue)})</button>
-                <button class="press-sell-btn sell-all" ${rowPressQty > 0 ? "" : "disabled"}>Press ${PlayerData.pressPercent}% (x${rowPressQty} • +${FormatNumber(diamondValue * rowPressQty)})</button>
+                <button class="press-sell-btn sell-all" ${rowPressQty > 0 ? "" : "disabled"}>Press ${PlayerData.pressPercent}% (x${FormatNumber(rowPressQty)} • +${FormatNumber(diamondValue * rowPressQty)})</button>
             </div>
         `
 
@@ -3739,8 +3787,8 @@ function PopulateModalCard(cardData, index, total) {
         modalRarity.textContent = baseRarityText
     }
 
-    modalMutation.textContent = mutation.name + " (" + mutation.multiplier + "×)"
-    modalQuantity.textContent = entry.count
+    modalMutation.textContent = mutation.name + " (" + FormatNumber(mutation.multiplier) + "×)"
+    modalQuantity.textContent = FormatNumber(entry.count)
     modalDate.textContent = FormatDate(entry.firstObtained)
     modalBadge.textContent = (index + 1) + " / " + total
 
@@ -3937,10 +3985,10 @@ function PopulateTagModal(tagId, fallbackName, fallbackType) {
     }
 
     if (uniqueCountEl) {
-        uniqueCountEl.textContent = "🃏 Base Cards: " + ownedMatching.length
+        uniqueCountEl.textContent = "🃏 Base Cards: " + FormatNumber(ownedMatching.length)
     }
     if (totalCopiesEl) {
-        totalCopiesEl.textContent = "📦 Total Copies: " + totalCopies
+        totalCopiesEl.textContent = "📦 Total Copies: " + FormatNumber(totalCopies)
     }
     if (rarestEl) {
         if (ownedMatching.length > 0) {
@@ -3981,7 +4029,7 @@ function PopulateTagModal(tagId, fallbackName, fallbackType) {
             <div class="tag-modal-card-details">
                 <div class="tag-modal-card-top">
                     <h4 class="tag-modal-card-name">${cardData.name}</h4>
-                    <span class="tag-modal-card-owned">Owned: x${count}</span>
+                    <span class="tag-modal-card-owned">Owned: x${FormatNumber(count)}</span>
                 </div>
                 <div class="tag-modal-card-rarity">✨ Rarity: <strong>${FormatRarityText(cardData.rarity)}</strong></div>
                 <div class="tag-modal-card-tags">${backTagsHtml}</div>
@@ -4564,13 +4612,13 @@ function RenderEquippedRollers() {
                     <div class="roller-slot-icon">${rollerDef.icon || "🎲"}</div>
                     <div class="roller-slot-info">
                         <div class="roller-slot-stats">🍀 ×${FormatNumber(luckMult)} Luck • 🃏 Up to ${maxCards} Cards${bonusCards > 0 ? ` (+${bonusCards} 🚀)` : ""}</div>
-                        <div class="roller-slot-stats">⏱️ ${FormatNumber(duration)}s cooldown • 🪙 ${rollCost} Token${rollCost > 1 ? "s" : ""}</div>
+                        <div class="roller-slot-stats">⏱️ ${FormatNumber(duration)}s cooldown • 🪙 ${FormatNumber(rollCost)} Token${rollCost > 1 ? "s" : ""}</div>
                     </div>
                 </div>
                 <div class="roller-slot-controls">
                     <button type="button" class="roll-button roller-slot-roll-btn ${onCooldown ? "cooling-down" : ""}" data-roller-roll-slot="${slotIndex}" ${(!canAfford || onCooldown) ? "disabled" : ""}>
                         <span class="btn-gloss"></span>
-                        <span class="roll-button-text">${onCooldown ? "⏳ Recharging..." : (canAfford ? ("🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")") : ("🎲 Need " + rollCost + " Tokens"))}</span>
+                        <span class="roll-button-text">${onCooldown ? "⏳ Recharging..." : (canAfford ? ("🎲 Roll (" + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "") + ")") : ("🎲 Need " + FormatNumber(rollCost) + " Tokens"))}</span>
                         <span class="roll-cooldown-bar"></span>
                     </button>
                     <button type="button" class="auto-roll-button roller-slot-auto-btn ${hasAuto ? (autoOn ? "active" : "") : "locked"}" data-roller-auto-slot="${slotIndex}" ${!hasAuto ? "disabled" : ""}>
@@ -4663,10 +4711,10 @@ function RenderItemsInventory() {
 
     let storedCount = Array.isArray(PlayerData.itemsInventory) ? PlayerData.itemsInventory.length : 0
     if (itemsOwnedBadge) {
-        itemsOwnedBadge.textContent = "📦 Stored Items: " + storedCount
+        itemsOwnedBadge.textContent = "📦 Stored Items: " + FormatNumber(storedCount)
     }
     if (tabItemsCount) {
-        tabItemsCount.textContent = String(storedCount)
+        tabItemsCount.textContent = FormatNumber(storedCount)
     }
 
     if (!grid) return
@@ -4786,10 +4834,10 @@ function RenderInventory() {
     let ownedCardsData = GetDiscoveredCards()
 
     if (uniqueCountEl) {
-        uniqueCountEl.textContent = "🃏 Discovered: " + ownedCardsData.length + " / " + CardsList.length
+        uniqueCountEl.textContent = "🃏 Discovered: " + FormatNumber(ownedCardsData.length) + " / " + FormatNumber(CardsList.length)
     }
     if (tabCardsCount) {
-        tabCardsCount.textContent = String(ownedCardsData.length)
+        tabCardsCount.textContent = FormatNumber(ownedCardsData.length)
     }
 
     if (ownedCardsData.length > 0) {
@@ -4834,7 +4882,7 @@ function RenderInventory() {
                 <div class="card-face card-back ${mutation.cssClass}">
                     ${backTagsHtml ? `<div class="card-back-tags">${backTagsHtml}</div>` : ""}
                     <div class="card-back-rarity">${FormatRarityText(cardData.rarity)}</div>
-                    <div class="card-back-quantity">Owned: ${entry.count}</div>
+                    <div class="card-back-quantity">Owned: ${FormatNumber(entry.count)}</div>
                 </div>
             </div>
             <div class="hold-progress"></div>
@@ -4856,11 +4904,11 @@ function UpdateTopBarUI() {
     if (barkEl) {
         barkEl.textContent = FormatNumber(PlayerData.barks || 0)
     }
-    document.getElementById("rolls-count").textContent = PlayerData.totalRolls
+    document.getElementById("rolls-count").textContent = FormatNumber(PlayerData.totalRolls)
 
     let reqXp = GetRequiredXp(PlayerData.level)
     let xpPercent = math.min(100, (PlayerData.xp / reqXp) * 100)
-    document.getElementById("level-badge").textContent = "⭐ Level " + PlayerData.level
+    document.getElementById("level-badge").textContent = "⭐ Level " + FormatNumber(PlayerData.level)
     document.getElementById("xp-text").textContent = FormatNumber(PlayerData.xp) + " / " + FormatNumber(reqXp) + " XP"
     document.getElementById("xp-fill").style.width = xpPercent + "%"
 
@@ -4878,7 +4926,7 @@ function UpdateTopBarUI() {
         } else if (PlayerData.isCooldown) {
             rollButtonText.textContent = "⏳ Recharging..."
         } else {
-            rollButtonText.textContent = "🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")"
+            rollButtonText.textContent = "🎲 Roll (" + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "") + ")"
         }
     }
 
@@ -4928,9 +4976,9 @@ function RenderRollerButtons() {
                 if (onCooldown) {
                     btnText.textContent = "⏳ Recharging..."
                 } else if (!canAfford) {
-                    btnText.textContent = "🎲 Need " + rollCost + " Token" + (rollCost > 1 ? "s" : "")
+                    btnText.textContent = "🎲 Need " + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "")
                 } else {
-                    btnText.textContent = "🎲 Roll (" + rollCost + " Token" + (rollCost > 1 ? "s" : "") + ")"
+                    btnText.textContent = "🎲 Roll (" + FormatNumber(rollCost) + " Token" + (rollCost > 1 ? "s" : "") + ")"
                 }
             }
             if (onCooldown && !rollBtn.classList.contains("cooling-down")) {

@@ -86,6 +86,36 @@ const MutationsList = [
         glowColor: "rgba(253, 224, 71, 0.8)",
         animated: true,
     },
+    {
+        name: "Nuclear",
+        multiplier: 10000,
+        icon: "☢️",
+        background: "linear-gradient(135deg, #052e16 0%, #15803d 25%, #22c55e 50%, #a3e635 75%, #ecfccb 100%)",
+        textColor: "#052e16",
+        borderColor: "#bef264",
+        glowColor: "rgba(163, 230, 53, 0.85)",
+        animated: true,
+    },
+    {
+        name: "Galactic",
+        multiplier: 100000,
+        icon: "🌌",
+        background: "linear-gradient(135deg, #090014 0%, #3b0764 25%, #7e22ce 50%, #ec4899 75%, #38bdf8 100%)",
+        textColor: "#ffffff",
+        borderColor: "#f472b6",
+        glowColor: "rgba(192, 132, 252, 0.85)",
+        animated: true,
+    },
+    {
+        name: "Robotic",
+        multiplier: 1000000,
+        icon: "🤖",
+        background: "linear-gradient(135deg, #020617 0%, #0f172a 25%, #0284c7 50%, #06b6d4 75%, #a5f3fc 100%)",
+        textColor: "#082f49",
+        borderColor: "#67e8f9",
+        glowColor: "rgba(6, 182, 212, 0.9)",
+        animated: true,
+    },
 ]
 
 const RarityTiersList = [

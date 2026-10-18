@@ -1076,6 +1076,40 @@ body:not(.no-bouncy) .stat-pill:hover {
     }
 }
 
+.rolled-card-item.rarity-tier-mythic {
+    border-color: #fda4af;
+    box-shadow: var(--shadow-card), 0 0 40px rgba(225, 29, 72, 0.75), 0 0 70px rgba(236, 72, 153, 0.5);
+    animation: mythicAuraPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes mythicAuraPulse {
+    0%, 100% {
+        border-color: #fda4af;
+        box-shadow: var(--shadow-card), 0 0 36px rgba(225, 29, 72, 0.7), 0 0 65px rgba(236, 72, 153, 0.45);
+    }
+    50% {
+        border-color: #f43f5e;
+        box-shadow: var(--shadow-card), 0 0 48px rgba(244, 63, 94, 0.9), 0 0 85px rgba(168, 85, 247, 0.6);
+    }
+}
+
+.rolled-card-item.rarity-tier-divine {
+    border-color: #ffffff;
+    box-shadow: var(--shadow-card), 0 0 45px rgba(253, 224, 71, 0.9), 0 0 80px rgba(244, 114, 182, 0.65), 0 0 100px rgba(56, 189, 248, 0.45);
+    animation: divineAuraPulse 2s ease-in-out infinite;
+}
+
+@keyframes divineAuraPulse {
+    0%, 100% {
+        border-color: #ffffff;
+        box-shadow: var(--shadow-card), 0 0 40px rgba(253, 224, 71, 0.85), 0 0 75px rgba(244, 114, 182, 0.6);
+    }
+    50% {
+        border-color: #fef08a;
+        box-shadow: var(--shadow-card), 0 0 55px rgba(253, 224, 71, 1), 0 0 95px rgba(56, 189, 248, 0.8), 0 0 120px rgba(236, 72, 153, 0.7);
+    }
+}
+
 .rolled-card-item.is-best-pull {
     border-color: var(--token-gold);
     box-shadow:
@@ -2934,6 +2968,118 @@ body:not(.no-bouncy) .inventory-card:hover {
         inset 0 0 28px rgba(255, 255, 255, 0.95),
         0 0 24px rgba(253, 224, 71, 0.65);
 }
+
+.mutation-nuclear {
+    background: linear-gradient(
+        135deg,
+        #052e16 0%,
+        #15803d 20%,
+        #22c55e 40%,
+        #a3e635 60%,
+        #16a34a 80%,
+        #052e16 100%
+    );
+    background-size: 250% 250%;
+    animation: nuclearPulse 2.8s ease infinite;
+    color: #052e16;
+    border: 3px solid #bef264;
+    box-shadow:
+        inset 0 0 26px rgba(190, 242, 100, 0.7),
+        0 0 28px rgba(34, 197, 94, 0.75);
+    text-shadow: 0 0 8px rgba(163, 230, 53, 0.6);
+}
+
+.mutation-nuclear .card-back-mutation {
+    background: rgba(5, 46, 22, 0.8);
+    color: #bef264;
+    border: 1px solid #bef264;
+}
+
+@keyframes nuclearPulse {
+    0%, 100% {
+        background-position: 0% 50%;
+        box-shadow: inset 0 0 22px rgba(190, 242, 100, 0.6), 0 0 22px rgba(34, 197, 94, 0.65);
+    }
+    50% {
+        background-position: 100% 50%;
+        box-shadow: inset 0 0 34px rgba(190, 242, 100, 0.9), 0 0 34px rgba(163, 230, 53, 0.9);
+    }
+}
+
+.mutation-galactic {
+    background: linear-gradient(
+        135deg,
+        #090014 0%,
+        #3b0764 20%,
+        #7e22ce 40%,
+        #ec4899 60%,
+        #38bdf8 80%,
+        #1e1b4b 100%
+    );
+    background-size: 260% 260%;
+    animation: galacticShift 3.6s ease infinite;
+    color: #ffffff;
+    border: 3px solid #f472b6;
+    box-shadow:
+        inset 0 0 30px rgba(236, 72, 153, 0.6),
+        0 0 32px rgba(126, 34, 206, 0.8);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.mutation-galactic .card-back-mutation {
+    background: rgba(15, 6, 35, 0.8);
+    color: #f472b6;
+    border: 1px solid #c084fc;
+}
+
+@keyframes galacticShift {
+    0%, 100% {
+        background-position: 0% 50%;
+        box-shadow: inset 0 0 26px rgba(236, 72, 153, 0.55), 0 0 28px rgba(126, 34, 206, 0.7);
+    }
+    50% {
+        background-position: 100% 50%;
+        box-shadow: inset 0 0 38px rgba(244, 114, 182, 0.85), 0 0 42px rgba(56, 189, 248, 0.85);
+    }
+}
+
+.mutation-robotic {
+    background: linear-gradient(
+        135deg,
+        #020617 0%,
+        #0f172a 20%,
+        #0369a1 40%,
+        #06b6d4 60%,
+        #38bdf8 80%,
+        #e2e8f0 100%
+    );
+    background-size: 240% 240%;
+    animation: roboticScan 2.4s ease infinite;
+    color: #082f49;
+    border: 3px solid #67e8f9;
+    box-shadow:
+        inset 0 0 32px rgba(103, 232, 249, 0.75),
+        0 0 34px rgba(6, 182, 212, 0.85);
+    text-shadow: 0 0 6px rgba(103, 232, 249, 0.7);
+}
+
+.mutation-robotic .card-back-mutation {
+    background: rgba(2, 6, 23, 0.85);
+    color: #67e8f9;
+    border: 1px solid #38bdf8;
+}
+
+@keyframes roboticScan {
+    0%, 100% {
+        background-position: 0% 50%;
+        box-shadow: inset 0 0 26px rgba(103, 232, 249, 0.7), 0 0 26px rgba(6, 182, 212, 0.75);
+    }
+    50% {
+        background-position: 100% 50%;
+        box-shadow: inset 0 0 40px rgba(103, 232, 249, 0.95), 0 0 42px rgba(56, 189, 248, 0.95);
+    }
+}
+
 
 /* Long-Press Progress Bar */
 .hold-progress {
